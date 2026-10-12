@@ -32,14 +32,19 @@ began as are superseded. Change the specs here, in the same commit as the code t
 - **Job hash** = SHA-256 over flattened source + axitime/libaxitl version + resolved `now` (when used) + the
   SHA-256 of each illustration and custom font fetched through `resolve`.
   Job log filename = source basename + last 6 hex chars of the hash; `plot` verifies the full hash.
-- **Crop marks:** crosshairs every 50 cm, drawn in pencil by the renderer; not part of the language.
-- Paper stock is always larger than the finished size; all ink stays inside the finished length and width.
+- **Crop marks:** crosshairs every 50 cm, drawn in `2H-pencil` by the renderer; not part of the language. They are
+  centred on both finished edges (arms 2.5mm), so the trim cuts through them.
+- Paper stock is always larger than the finished size; all ink stays inside the finished length and width, except
+  crop marks, which cross the finished edges by 2.5mm (so stock needs at least that much spare each side).
 
 ## Repo layout and commands
 - uv workspace, Python 3.12: `libaxitl/` (the library, no hardware dependencies) and `axitime/` (the CLI host).
-- `uv sync` to set up; `uv run pytest` to run all tests; `uv run axitime check <file.axitl> [--now DATE]`
-  (runs parse and layout).
-- Layout's spacing constants (insets, gaps, tick sizes) all live in `LayoutStyle` in `libaxitl/layout.py`.
+- `uv sync` to set up; `uv run pytest` to run all tests.
+- `uv run axitime check|list-pens|render <file.axitl> [--now DATE]`; `render -o DIR` writes a preview and one SVG
+  per pen (window with `--start-offset`/`--length` or `--from`/`--to`).
+- To look at output, render it and export a PNG with Inkscape:
+  `/Applications/Inkscape.app/Contents/MacOS/inkscape x.svg --export-type=png --export-dpi=100`.
+- Spacing constants live in `LayoutStyle` (`libaxitl/layout.py`) and `DrawStyle` (`libaxitl/draw.py`).
 - Built-in fonts live in `libaxitl/src/libaxitl/fonts/data/` (copied from Inkscape's Hershey Text
   `svg_fonts`, with their licence notices). Keep `HERSHEY-NOTICE.txt` and `OFL.txt` beside them.
 

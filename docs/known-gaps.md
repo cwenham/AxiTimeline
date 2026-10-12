@@ -16,46 +16,47 @@ Already resolved, so not listed:
 - poles running through bars and their labels (settled 2026-10-12: poles are broken around other ink, and the
   new `time_label` lets an author date an event exactly; language spec §§3.11, 8);
 - per-pen ink length (settled 2026-10-12: measured by render, interpreter spec "Layout engine");
+- the SVG coordinate and unit convention (settled 2026-10-12: 1 user unit = 1mm, interpreter spec "SVG
+  conventions"), and crop marks centred on the finished edges (settled 2026-10-12, interpreter spec "Crop
+  marks");
 - event flags drawn over lower-priority bars (settled 2026-10-12: bars are fixed obstacles for flags,
   language spec §8.2).
 
-## Found while building layout
+## Found while building layout and render
 
-### 1. Layout spacing values are provisional
+### 1. Layout and drawing spacing values are provisional
 The spec asks for "a small margin" in several places without numbers. They are all in one place,
 `LayoutStyle` in `libaxitl/layout.py`: bar inset 1mm, label inset 1.5mm, gap between lane neighbours 1.5mm,
 flag gap 1mm, flag clearance 1mm, stagger gap 0.5mm, collision padding 0.4mm, illustration gap 1.5mm, ticks
 1mm/2mm, tick labels at 0.75 × `font_size`, time label gap 0.4mm, 0.75mm left either side where a pole is broken,
-and pieces of broken pole shorter than 1mm left out. They need checking on paper once render exists.
+and pieces of broken pole shorter than 1mm left out. The drawing values are in `DrawStyle` in
+`libaxitl/draw.py` (cap depth 1.5mm, hatching 2mm, solid 0.4mm, fills 0.75mm clear of labels, crop arms 2.5mm).
+All of them need checking on paper.
 
-## Needed before the renderer is final
+## Needed before plot
 
-### 2. SVG coordinate/unit convention
-Neither spec says what one SVG user unit is. `pyaxidraw` needs output that maps to real millimetres. Suggest:
-`width`/`height` attributes in `mm` and a `viewBox` in millimetres (1 user unit = 1 mm), stated explicitly in
-the interpreter spec, with the window/bleed/crop-mark geometry all expressed in the same units.
+### 2. Illustration content constraints (implemented, to confirm)
+Illustrations are inlined author SVGs that a pen will physically draw. As implemented: every shape is drawn as its
+outline; text, embedded images, `<use>` references and foreign objects are left out; filled shapes are drawn as
+outlines; and `check` reports each of these as a warning (interpreter spec, "How the renderer draws"). Confirm
+this, or say that illustrations should be the author's responsibility with no warnings.
 
-### 3. Illustration content constraints
-Illustrations are inlined author SVGs that a pen will physically draw. Nothing says they must be stroke-only
-vector art. Filled shapes, embedded rasters, text elements, clip paths, etc. cannot be plotted as intended.
-Decide: document as the author's responsibility, or have `check` warn on SVG features that do not plot.
-(The parser now extracts each illustration's intrinsic width/height for the aspect ratio, §3.5.)
-
-### 4. Exact job-hash serialisation
+### 3. Exact job-hash serialisation
 The job hash input is now: flattened source + version + resolved `now` + the SHA-256 of each illustration and
 custom font (interpreter spec "Job log"). The flattened text itself is now canonical (interpreter spec "Public
 shape"). Still to fix: separators between the parts, the order the resource hashes go in, and how `now` is
-written as text, so two implementations or two platforms cannot produce different hashes for the same job.
+written as text, so two implementations or two platforms cannot produce different hashes for the same job. This now blocks `plot`: `axitime render` writes per-pen
+files with every other metadata field, but no job hash until this is settled.
 
 ## Operational / hardware-adjacent
 
-### 5. Safe abort during `plot`
+### 4. Safe abort during `plot`
 The job log has a "cancelled" outcome, but nothing says what the hardware does on Ctrl+C, a serial error or a
 crash: raise the pen, idle the motors, leave the transport where it is. This is basic safety, separate from
 the deliberately deferred motion-feasibility question. Needs at least a stated behaviour (signal handler that
 lifts the pen and releases motors, then writes the log entry).
 
-### 6. Plotter travel envelope
+### 5. Plotter travel envelope
 Already in the interpreter spec's Open Questions: `check` must flag a `width` the hardware cannot reach, but
 nothing says where axitime learns the envelope (config file, CLI flag, built-in AxiDraw SE/A3 default).
 
@@ -131,3 +132,7 @@ reading, not a settled decision: confirm it (and move it into the spec) or corre
 - Side choice for events (§6.1) still compares base poles, which only count higher-priority bars. Since flags
   are now lifted clear of every bar (§8.2), an event can land on the side where its flag then has to climb
   higher. Comparing the lifted lengths instead would be a small change if it turns out to matter on paper.
+
+**Render (`libaxitl/draw.py`, `libaxitl/render.py`)**
+- A `group` is drawn as a bracket open on the side facing its members (outward from the baseline).
+- Preview colours approximate each pen on screen (pencils in greys, softer grades darker); on paper the pen decides.

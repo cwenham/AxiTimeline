@@ -1,8 +1,8 @@
-"""Minimal SVG path handling for stroke-font glyphs.
+"""SVG path handling for glyphs and illustrations.
 
-Paths are normalised to absolute ``M``, ``L``, ``C`` and ``Z`` commands, which is all the bundled fonts use
-and all a pen plotter needs. Relative commands, ``H``/``V``, and the smooth and quadratic curve forms are
-converted on the way in. Elliptical arcs (``A``) are rejected rather than approximated.
+Paths are normalised to absolute ``M``, ``L``, ``C`` and ``Z`` commands. Relative commands, ``H``/``V``, the
+smooth and quadratic curve forms and elliptical arcs are all converted on the way in (arcs and quadratics
+exactly or to within a hair, as cubic Béziers). For the plotter, :func:`flatten` turns curves into polylines.
 """
 
 from __future__ import annotations
@@ -49,15 +49,36 @@ def parse_path(d: str) -> tuple[Segment, ...]:
         elif cmd is None:
             raise PathError("path data must start with a command")
         upper = cmd.upper()
+        rel = cmd.islower()
         if upper == "A":
-            raise PathError("elliptical arc commands (A) are not supported in glyphs")
+            vals = []
+            while len(vals) < 7:
+                if i >= len(tokens) or tokens[i].isalpha():
+                    raise PathError(f"command {cmd} is missing arguments")
+                tok = tokens[i]
+                if len(vals) in (3, 4):  # flags are one character each and may run into what follows
+                    if tok[0] not in "01":
+                        raise PathError("arc flags must be 0 or 1")
+                    vals.append(float(tok[0]))
+                    if len(tok) > 1:
+                        tokens[i] = tok[1:]
+                        continue
+                else:
+                    vals.append(float(tok))
+                i += 1
+            rx, ry, angle, large, sweep, x, y = vals
+            if rel:
+                x, y = cx + x, cy + y
+            out.extend(arc_to_cubics(cx, cy, rx, ry, angle, bool(large), bool(sweep), x, y))
+            cx, cy = x, y
+            last_cmd, last_ctrl = "A", None
+            continue
         n = _ARG_COUNTS[upper]
         args = tokens[i : i + n]
         if len(args) < n or any(a.isalpha() for a in args):
             raise PathError(f"command {cmd} is missing arguments")
         vals = [float(a) for a in args]
         i += n
-        rel = cmd.islower()
         if upper == "M":
             x, y = (cx + vals[0], cy + vals[1]) if rel else (vals[0], vals[1])
             out.append(("M", x, y))
@@ -170,3 +191,129 @@ def to_path_data(segments: Iterable[Segment]) -> str:
         else:
             parts.append(seg[0] + " " + " ".join(format_number(v) for v in seg[1:]))
     return " ".join(parts)
+
+
+def arc_to_cubics(
+    x1: float, y1: float, rx: float, ry: float, angle: float, large: bool, sweep: bool, x2: float, y2: float
+) -> list[Segment]:
+    """An SVG elliptical arc as cubic Bézier segments (SVG 1.1 implementation notes, F.6.5)."""
+    if (x1, y1) == (x2, y2):
+        return []
+    rx, ry = abs(rx), abs(ry)
+    if rx == 0 or ry == 0:
+        return [("L", x2, y2)]
+    phi = math.radians(angle)
+    cos_p, sin_p = math.cos(phi), math.sin(phi)
+    dx, dy = (x1 - x2) / 2, (y1 - y2) / 2
+    x1p, y1p = cos_p * dx + sin_p * dy, -sin_p * dx + cos_p * dy
+    scale = x1p * x1p / (rx * rx) + y1p * y1p / (ry * ry)
+    if scale > 1:  # radii too small to reach: scale them up just enough
+        rx, ry = rx * math.sqrt(scale), ry * math.sqrt(scale)
+    num = rx * rx * ry * ry - rx * rx * y1p * y1p - ry * ry * x1p * x1p
+    den = rx * rx * y1p * y1p + ry * ry * x1p * x1p
+    coef = math.sqrt(max(0.0, num / den)) if den else 0.0
+    if large == sweep:
+        coef = -coef
+    cxp, cyp = coef * rx * y1p / ry, -coef * ry * x1p / rx
+    cx = cos_p * cxp - sin_p * cyp + (x1 + x2) / 2
+    cy = sin_p * cxp + cos_p * cyp + (y1 + y2) / 2
+
+    def angle_between(ux: float, uy: float, vx: float, vy: float) -> float:
+        return math.atan2(ux * vy - uy * vx, ux * vx + uy * vy)
+
+    ux, uy = (x1p - cxp) / rx, (y1p - cyp) / ry
+    vx, vy = (-x1p - cxp) / rx, (-y1p - cyp) / ry
+    theta = angle_between(1, 0, ux, uy)
+    delta = angle_between(ux, uy, vx, vy)
+    if not sweep and delta > 0:
+        delta -= 2 * math.pi
+    elif sweep and delta < 0:
+        delta += 2 * math.pi
+    pieces = max(1, math.ceil(abs(delta) / (math.pi / 2) - 1e-9))
+    step = delta / pieces
+    t = 4 / 3 * math.tan(step / 4)
+
+    def on_ellipse(px: float, py: float) -> tuple[float, float]:
+        return cx + rx * cos_p * px - ry * sin_p * py, cy + rx * sin_p * px + ry * cos_p * py
+
+    out: list[Segment] = []
+    for k in range(pieces):
+        a1, a2 = theta + k * step, theta + (k + 1) * step
+        c1 = on_ellipse(math.cos(a1) - t * math.sin(a1), math.sin(a1) + t * math.cos(a1))
+        c2 = on_ellipse(math.cos(a2) + t * math.sin(a2), math.sin(a2) - t * math.cos(a2))
+        end = (x2, y2) if k == pieces - 1 else on_ellipse(math.cos(a2), math.sin(a2))
+        out.append(("C", *c1, *c2, *end))
+    return out
+
+
+# An affine transform (a, b, c, d, e, f), as in SVG: x' = a·x + c·y + e, y' = b·x + d·y + f.
+Matrix = tuple[float, float, float, float, float, float]
+IDENTITY: Matrix = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+
+
+def multiply(outer: Matrix, inner: Matrix) -> Matrix:
+    """The transform that applies ``inner`` first, then ``outer``."""
+    a1, b1, c1, d1, e1, f1 = outer
+    a2, b2, c2, d2, e2, f2 = inner
+    return (
+        a1 * a2 + c1 * b2,
+        b1 * a2 + d1 * b2,
+        a1 * c2 + c1 * d2,
+        b1 * c2 + d1 * d2,
+        a1 * e2 + c1 * f2 + e1,
+        b1 * e2 + d1 * f2 + f1,
+    )
+
+
+def apply_matrix(segments: Iterable[Segment], m: Matrix) -> tuple[Segment, ...]:
+    """Transform a path. Exact for Béziers, since an affine map of the control points maps the curve."""
+    a, b, c, d, e, f = m
+    out: list[Segment] = []
+    for seg in segments:
+        if seg[0] == "Z":
+            out.append(seg)
+            continue
+        coords = seg[1:]
+        mapped: list[float] = []
+        for k in range(0, len(coords), 2):
+            x, y = coords[k], coords[k + 1]
+            mapped.extend((a * x + c * y + e, b * x + d * y + f))
+        out.append((seg[0], *mapped))
+    return tuple(out)
+
+
+Point = tuple[float, float]
+
+
+def flatten(segments: Iterable[Segment], max_piece: float = 0.5) -> list[list[Point]]:
+    """Polylines that follow a path: curves are cut into straight pieces no longer than about ``max_piece``."""
+    lines: list[list[Point]] = []
+    current: list[Point] = []
+    start: Point | None = None
+    cx = cy = 0.0
+    for seg in segments:
+        kind = seg[0]
+        if kind == "M":
+            if len(current) > 1:
+                lines.append(current)
+            cx, cy = seg[1], seg[2]
+            current, start = [(cx, cy)], (cx, cy)
+        elif kind == "L":
+            cx, cy = seg[1], seg[2]
+            current.append((cx, cy))
+        elif kind == "C":
+            _, x1, y1, x2, y2, x, y = seg
+            control = math.dist((cx, cy), (x1, y1)) + math.dist((x1, y1), (x2, y2)) + math.dist((x2, y2), (x, y))
+            pieces = max(1, min(64, math.ceil(control / max_piece)))
+            for k in range(1, pieces + 1):
+                t = k / pieces
+                current.append((_cubic_at(cx, x1, x2, x, t), _cubic_at(cy, y1, y2, y, t)))
+            cx, cy = x, y
+        elif start is not None:  # Z
+            current.append(start)
+            cx, cy = start
+            lines.append(current)
+            current = [start]
+    if len(current) > 1:
+        lines.append(current)
+    return lines

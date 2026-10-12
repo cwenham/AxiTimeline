@@ -20,7 +20,7 @@ def test_check_passes_on_the_examples(capsys):
 def test_check_json_report(capsys):
     assert main(["check", "--json", str(EXAMPLES / "industrial.axitl")]) == EXIT_OK
     report = json.loads(capsys.readouterr().out)
-    assert report["ok"] is True and report["stages"] == ["parse", "layout"]
+    assert report["ok"] is True and report["stages"] == ["parse", "layout", "draw"]
     assert report["summary"]["entities"] == {"person": 3, "event": 2, "span": 3, "group": 2}
     assert report["summary"]["pens"]["HB-pencil"] == 1
     kinds = {(r["kind"], Path(r["name"]).name) for r in report["summary"]["resources"]}
@@ -109,3 +109,70 @@ def test_layout_errors_come_with_the_parse_warnings(tmp_path, capsys):
     report = json.loads(capsys.readouterr().out)
     assert [d["code"] for d in report["diagnostics"]] == ["duplicate-entity", "no-room"]
     assert report["layout"] is None
+
+
+# -- list-pens and render ---------------------------------------------------------------------------------
+
+import xml.etree.ElementTree as ET  # noqa: E402
+
+JOB = "{urn:axitimeline:job:1}job"
+
+
+def test_list_pens(capsys):
+    assert main(["list-pens", "--now", "2026", str(EXAMPLES / "industrial.axitl")]) == EXIT_OK
+    lines = capsys.readouterr().out.splitlines()
+    assert [line.split()[0] for line in lines] == [
+        "black", "red", "orange", "green", "violet", "grey", "HB-pencil", "2H-pencil", "total",
+    ]
+    assert lines[0].split()[1].endswith("m") and "strokes" in lines[0]
+
+
+def test_list_pens_json(capsys):
+    assert main(["list-pens", "--json", str(EXAMPLES / "chernobyl.axitl")]) == EXIT_OK
+    report = json.loads(capsys.readouterr().out)
+    assert [p["pen"] for p in report["pens"]] == ["black", "2H-pencil"]
+    assert all(p["length_mm"] > 0 and p["strokes"] > 0 for p in report["pens"])
+
+
+def test_render_writes_a_preview_and_one_file_per_pen(tmp_path, capsys):
+    assert main(["render", "--now", "2026", "-o", str(tmp_path), str(EXAMPLES / "industrial.axitl")]) == EXIT_OK
+    names = sorted(p.name for p in tmp_path.iterdir())
+    assert names == sorted(
+        f"industrial-{n}.svg"
+        for n in ("preview", "black", "red", "orange", "green", "violet", "grey", "HB-pencil", "2H-pencil")
+    )
+    red = ET.parse(tmp_path / "industrial-red.svg").getroot()
+    job = red.find("{http://www.w3.org/2000/svg}metadata/" + JOB)
+    assert (job.get("pen"), job.get("source"), job.get("now")) == ("red", "industrial.axitl", "2026")
+    assert red.get("viewBox") == ET.parse(tmp_path / "industrial-preview.svg").getroot().get("viewBox")
+    assert "rendered the whole job, 4m" in capsys.readouterr().out
+
+
+def test_render_a_physical_window(tmp_path, capsys):
+    args = ["render", "--preview-only", "-o", str(tmp_path), "--start-offset", "137cm", "--length", "20cm"]
+    assert main(args + [str(EXAMPLES / "chernobyl.axitl")]) == EXIT_OK
+    root = ET.parse(tmp_path / "chernobyl-preview.svg").getroot()
+    assert root.get("viewBox") == "1368 -2.5 204 215"  # 2mm bleed at both cuts
+    assert "rendered 1.37m to 1.57m of 2m" in capsys.readouterr().out
+
+
+def test_render_a_calendar_window(tmp_path, capsys):
+    args = ["render", "--preview-only", "-o", str(tmp_path), "--from", "1986-04-26T01", "--to", "1986-04-26T01"]
+    assert main(args + ["--bleed", "0", str(EXAMPLES / "chernobyl.axitl")]) == EXIT_OK
+    job = ET.parse(tmp_path / "chernobyl-preview.svg").getroot().find("{http://www.w3.org/2000/svg}metadata/" + JOB)
+    start, end = float(job.get("window-start-mm")), float(job.get("window-end-mm"))
+    assert end - start == pytest.approx(125.0, abs=0.01)  # one hour at 125mm an hour
+
+
+@pytest.mark.parametrize(
+    "extra, message",
+    [
+        (["--start-offset", "10cm", "--from", "1986-04-26"], "not both"),
+        (["--from", "1990", "--to", "1991"], "don't overlap"),
+        (["--bleed", "two"], "--bleed"),
+        (["--start-offset", "3m"], "outside the job"),
+    ],
+)
+def test_render_usage_errors(tmp_path, capsys, extra, message):
+    assert main(["render", "-o", str(tmp_path), *extra, str(EXAMPLES / "chernobyl.axitl")]) == EXIT_USAGE
+    assert message in capsys.readouterr().err

@@ -97,7 +97,7 @@ def test_custom_svg_font():
         ("<svg", "not readable"),
         ('<svg xmlns="http://www.w3.org/2000/svg"/>', "no SVG <font>"),
         ('<svg xmlns="http://www.w3.org/2000/svg"><font><glyph unicode="a"/></font></svg>', "no drawable"),
-        ('<svg xmlns="http://www.w3.org/2000/svg"><font><glyph unicode="a" d="M0 0 A 1 1 0 0 1 2 2"/></font></svg>', "arc"),
+        ('<svg xmlns="http://www.w3.org/2000/svg"><font><glyph unicode="a" d="M0 0 L x"/></font></svg>', "unreadable"),
     ],
 )
 def test_unusable_custom_fonts(content, fragment):

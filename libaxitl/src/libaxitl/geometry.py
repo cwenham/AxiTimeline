@@ -34,3 +34,65 @@ class Box:
 
     def overlaps(self, other: Box) -> bool:
         return self.overlap_area(other) > 0
+
+
+Point = tuple[float, float]
+
+
+def _inside_interval(p: Point, q: Point, box: Box) -> tuple[float, float] | None:
+    """The stretch t0..t1 (0 ≤ t ≤ 1) of the segment p→q that lies inside ``box`` (Liang–Barsky)."""
+    t0, t1 = 0.0, 1.0
+    dx, dy = q[0] - p[0], q[1] - p[1]
+    for pk, qk in ((-dx, p[0] - box.x0), (dx, box.x1 - p[0]), (-dy, p[1] - box.y0), (dy, box.y1 - p[1])):
+        if pk == 0:
+            if qk < 0:
+                return None
+        elif pk < 0:
+            t0 = max(t0, qk / pk)
+        else:
+            t1 = min(t1, qk / pk)
+    return (t0, t1) if t0 < t1 else None
+
+
+def _at(p: Point, q: Point, t: float) -> Point:
+    return (p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t)
+
+
+def _split(polyline: list[Point] | tuple[Point, ...], box: Box, keep_inside: bool) -> list[list[Point]]:
+    pieces: list[list[Point]] = []
+    current: list[Point] = []
+
+    def end_piece() -> None:
+        nonlocal current
+        if len(current) > 1:
+            pieces.append(current)
+        current = []
+
+    for p, q in zip(polyline, polyline[1:], strict=False):
+        interval = _inside_interval(p, q, box)
+        if interval is None:
+            parts = [] if keep_inside else [(0.0, 1.0)]
+        elif keep_inside:
+            parts = [interval]
+        else:
+            parts = [(a, b) for a, b in ((0.0, interval[0]), (interval[1], 1.0)) if b > a]
+        for a, b in parts:
+            start, end = _at(p, q, a), _at(p, q, b)
+            if not current or current[-1] != start:
+                end_piece()
+                current = [start]
+            current.append(end)
+        if not parts or parts[-1][1] < 1.0:
+            end_piece()
+    end_piece()
+    return pieces
+
+
+def keep_inside(polyline: list[Point] | tuple[Point, ...], box: Box) -> list[list[Point]]:
+    """The parts of a polyline inside ``box``."""
+    return _split(polyline, box, keep_inside=True)
+
+
+def cut_out(polyline: list[Point] | tuple[Point, ...], box: Box) -> list[list[Point]]:
+    """The parts of a polyline outside ``box``: how ink is kept from running through other ink."""
+    return _split(polyline, box, keep_inside=False)
