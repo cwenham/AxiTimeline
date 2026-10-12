@@ -45,6 +45,9 @@ began as are superseded. Change the specs here, in the same commit as the code t
 - `uv run axitime plot <file-pen.svg> [--simulate|--dry-run]` plots one per-pen SVG; the job log goes beside it.
   Plotter settings: `~/.config/axitime/plotter.toml` (see `axitime/config.py`). pyaxidraw is optional and only
   imported for a real plot; tests use a simulated plotter and a fake pyaxidraw.
+- On the machine that drives the AxiDraw, install with `uv sync --extra axidraw` (a plain `uv sync` removes it).
+  The AxiDraw API isn't on PyPI; one of its wheels is vendored (`vendor/README.md` explains why). On a new
+  machine uv may rewrite one `axidrawinternal` metadata line in `uv.lock`; that's expected and harmless.
 - To look at output, render it and export a PNG with Inkscape:
   `/Applications/Inkscape.app/Contents/MacOS/inkscape x.svg --export-type=png --export-dpi=100`.
 - Spacing constants live in `LayoutStyle` (`libaxitl/layout.py`) and `DrawStyle` (`libaxitl/draw.py`).

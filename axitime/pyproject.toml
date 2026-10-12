@@ -5,6 +5,10 @@ description = "Command-line host for libaxitl: check, list-pens, render and plot
 requires-python = ">=3.12"
 dependencies = ["libaxitl"]
 
+[project.optional-dependencies]
+# The AxiDraw Python API (pyaxidraw), from Evil Mad Scientist; only needed to drive a real plotter.
+axidraw = ["axicli @ https://cdn.evilmadscientist.com/dl/ad/public/AxiDraw_API.zip", "axidrawinternal"]
+
 [project.scripts]
 axitime = "axitime.cli:main"
 

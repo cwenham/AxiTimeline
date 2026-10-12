@@ -3,6 +3,8 @@
 The AxiDraw is replaced by a simulated plotter and the operator by scripted answers.
 """
 
+import sys
+
 import pytest
 
 from axitime import cli
@@ -233,6 +235,7 @@ def test_a_page_wider_than_the_plotter_reaches(job, tmp_path, capsys):
 
 
 def test_without_pyaxidraw_plot_says_how_to_install_it(job, monkeypatch, capsys):
+    monkeypatch.setitem(sys.modules, "pyaxidraw", None)  # as if it weren't installed
     monkeypatch.setattr(cli, "ask", lambda prompt: "red")
     assert plot(job) == 2
-    assert "pip install https://cdn.evilmadscientist.com" in capsys.readouterr().err
+    assert "uv sync --extra axidraw" in capsys.readouterr().err

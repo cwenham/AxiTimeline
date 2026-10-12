@@ -5,8 +5,14 @@ description = "Workspace root for libaxitl and axitime (pen-plotter timelines on
 requires-python = ">=3.12"
 dependencies = ["libaxitl", "axitime"]
 
+[project.optional-dependencies]
+axidraw = ["axitime[axidraw]"]  # uv sync --extra axidraw: what a real plot needs
+
 [tool.uv]
 package = false
+# The AxiDraw API's setup.py names axidrawinternal by a temporary path; use the vendored copy instead
+# (vendor/README.md).
+override-dependencies = ["axidrawinternal"]
 
 [tool.uv.workspace]
 members = ["libaxitl", "axitime"]
@@ -14,6 +20,7 @@ members = ["libaxitl", "axitime"]
 [tool.uv.sources]
 libaxitl = { workspace = true }
 axitime = { workspace = true }
+axidrawinternal = { path = "vendor/axidrawinternal-3.9.6-py2.py3-none-any.whl" }
 
 [dependency-groups]
 dev = ["pytest>=8"]

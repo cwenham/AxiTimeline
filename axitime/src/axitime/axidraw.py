@@ -9,7 +9,7 @@ from __future__ import annotations
 from .config import PlotterConfig
 from .plotting import Cancelled, PlotError, Point
 
-INSTALL = "python -m pip install https://cdn.evilmadscientist.com/dl/ad/public/AxiDraw_API.zip"
+INSTALL = "uv sync --extra axidraw (in the AxiTimeline folder)"
 _UNITS_MM = 2
 _MODEL_SE_A3 = 2  # "AxiDraw V3/A3 or SE/A3"
 _PAUSE_BUTTON, _LOST_USB = 102, 104
