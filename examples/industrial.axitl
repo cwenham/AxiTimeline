@@ -1,0 +1,24 @@
+// Exercises includes, multi-line declarations, groups, pens, fills, fonts and illustrations.
+timeline
+    start=1600
+    end=now
+    length=4m
+    width=210
+    baseline=low
+    lane_height=8mm
+    font="HersheySans1"
+    font_size=4mm
+
+include "common/wars.axitl"
+    priority=-2
+    side=below
+
+^!!person "Isaac Newton (d. 20 Mar 1726 O.S.)" 1642-1727 red illustration(illustrations/apple.svg height=16mm)
+
+!group "Industrial Revolution" 1760-1840 orange fill=diagonal {
+  !!person "James Watt" 1736-1819
+  !!event  "Newcomen engine" 1712 HB-pencil
+}
+
+person "Ada Lovelace" 1815-1852 violet font="EMSReadability"
+span   "Brontë sisters publishing" 1846-1849 green   // ë is in the font; no warning

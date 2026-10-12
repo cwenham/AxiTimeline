@@ -1,0 +1,5 @@
+!!group "World War II" 1939-1945 red fill=diagonal {
+  !event "Germany invades Poland" 1939-09-01   // trailing comment
+  span "Blitz" 1940-09-07/1941-05-11 grey
+}
+span "Cold War" 1947-1991 grey fill=crosshatch

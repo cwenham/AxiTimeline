@@ -1,0 +1,24 @@
+[project]
+name = "axitimeline"
+version = "0.1.0"
+description = "Workspace root for libaxitl and axitime (pen-plotter timelines on rolls of paper)"
+requires-python = ">=3.12"
+dependencies = ["libaxitl", "axitime"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["libaxitl", "axitime"]
+
+[tool.uv.sources]
+libaxitl = { workspace = true }
+axitime = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["libaxitl/tests", "axitime/tests"]
+# Default (prepend) import mode: test file names must be unique across both packages. Don't switch to
+# importlib mode: it registers the libaxitl/ workspace directory as a module and shadows the real package.
