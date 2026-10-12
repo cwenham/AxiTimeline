@@ -2,7 +2,9 @@
 
 `axidrawinternal-3.9.6-py2.py3-none-any.whl` is copied unmodified from Evil Mad Scientist's AxiDraw Python API
 3.9.6 (`https://cdn.evilmadscientist.com/dl/ad/public/AxiDraw_API.zip`, `prebuilt_dependencies/`). It is
-licensed under the GNU GPL v2, like the rest of the AxiDraw software; the wheel contains its Python source.
+licensed under the GNU GPL v2, like the rest of the AxiDraw software; the wheel contains its Python source,
+and the licence text is in `LICENSE-GPL-2.0.txt` (copied from the same zip, `pyaxidraw/LICENSE.txt`). The rest of
+this repository is under its own licence (`LICENSE`); this wheel stays under the GPL.
 
 Why it's here: the AxiDraw API (`axicli`, which provides `pyaxidraw`) isn't on PyPI, and its `setup.py` points
 at this wheel by a temporary file path inside the unpacked zip. A uv lockfile would record that path from one
