@@ -11,6 +11,7 @@ from libaxitl.dates import (
     days_from_civil,
     parse_date,
     parse_when,
+    time_label_text,
 )
 
 DAY = 86400
@@ -166,3 +167,31 @@ def test_ranges_must_not_end_before_they_start():
 def test_malformed_ranges(text):
     with pytest.raises(DateError):
         parse_when(text)
+
+
+# -- time labels (§3.11) ---------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "date, mode, text",
+    [
+        ("1939-09-01", "year", "1939"),
+        ("1939-09-01", "month", "1939-09"),
+        ("1939-09-01", "day", "1939-09-01"),
+        ("1986-04-26T01:23:44", "hour", "01:00"),
+        ("1986-04-26T01:23:44", "min", "01:23"),
+        ("1986-04-26T01:23:44", "sec", "01:23:44"),
+        ("1986-04-26T01:23:44", "date", "1986-04-26 01:23:44"),
+        ("44BC-03-15", "date", "44BC-03-15"),
+        ("44BC-03-15", "year", "44BC"),
+        # never more precise than the date as written
+        ("1986-04-26T01:23", "sec", "01:23"),
+        ("1939-09-01", "sec", "1939-09-01"),
+        ("1939", "day", "1939"),
+        # times are shown as written, without timezone conversion
+        ("1986-04-26T14:00:00+03:00", "sec", "14:00:00"),
+        ("1986-04-26T14:00:00+03:00", "date", "1986-04-26 14:00:00+03:00"),
+    ],
+)
+def test_time_label_text(date, mode, text):
+    assert time_label_text(parse_date(date), mode) == text

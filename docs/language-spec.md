@@ -6,7 +6,7 @@ Status: working draft, reflecting all decisions taken in design discussion so fa
 
 This file (`docs/language-spec.md` in the AxiTimeline repo) is the **canonical copy** of this spec, and changes are made here alongside the code. The claude.ai artifact it began as is superseded.
 
-History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), and event identity for duplicates (§5).
+History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), and flags kept clear of bars (§8.2).
 
 ## 1. System overview
 
@@ -21,7 +21,7 @@ The software architecture — `libaxitl` (parse → layout → render) and the `
 ## 3. Compact line syntax
 
 ``` text
-[side][priority]keyword "Label" daterange [pen] [fill=style] [font=name] [font_size=Xmm] [illustration(file.svg)]
+[side][priority]keyword "Label" daterange [pen] [fill=style] [font=name] [font_size=Xmm] [time_label=precision] [illustration(file.svg)]
 ```
 
 Example:
@@ -107,7 +107,7 @@ event "First explosion" 1986-04-26T01:23:44
 - **Grid-aligned and lane-reserving**: height is rounded up to a whole number of lanes (`ceil(height_mm / lane_height)`), and that many contiguous lanes are reserved on the parent's side via the generalized band-packing search (§7), so illustrations never overlap bars or each other
   - **Banded parent** (`person`/`span`/`group`): placed in Phase A (§6), left edge aligned with the bar's start, with the search starting immediately outward from the parent's own lane, so it sits as close to its parent as space allows
   - **Event parent**, which has no lane: placed in Phase B once the event's side is known (§6.1), immediately beside the pole (with a small gap) on whichever side has more free space, with the search starting from lane 0
-- Never crossed by an event pole (genuine ink collision): an illustration in a pole's path is nudged **horizontally** (§8.1), the minimum distance needed, and only to a position where its whole lane band is still free. If no such position exists, it stays put, the overlap is accepted, and a named build warning is emitted (not fatal)
+- Never crossed by an event pole (genuine ink collision): an illustration in a pole's path is nudged **horizontally** (§8.1), the minimum distance needed, and only to a position where its whole lane band is still free. If no such position exists, it stays put, the pole is broken where it passes the illustration (§8), and a named build warning is emitted (not fatal)
 - Kept inside the finished length (§4.1): an illustration that would overhang either end of the paper is shifted inward, under the same free-lane constraint
 
 ### 3.6 Open-ended entities and `now`
@@ -195,6 +195,20 @@ timeline
 - Comment lines (§3.9) inside a block are skipped and do **not** terminate it, so parameters can be annotated or temporarily commented out in place
 - The discriminator that keeps this unambiguous against a `group`'s indented body is the `key=value` shape: a group's children always begin with a keyword or a `!`/`-`/`^`/`v` symbol, never with `key=`, so an indented line starting `key=` can only ever be a continuation. Inside `{ }` braces, indentation stays purely cosmetic
 - The same rule applies to any declaration taking `key=value` parameters, so a long `include` line can be broken up the same way
+
+### 3.11 Time labels (events)
+
+``` text
+timeline ... time_label=sec
+!event "First explosion" 1986-04-26T01:23:44
+event "Germany invades Poland" 1939-09-01 time_label=day
+```
+
+- An event's flag can carry a second, smaller line under its label giving the event's date or time: `time_label=none|date|year|month|day|hour|min|sec`. It lets the reader place an event exactly, which matters most when its pole is broken (§8) or it sits far from a labelled tick; whether an event needs one is left to the author (added 2026-10-12)
+- Settable on `timeline` (the document default), on a `group` (passed to the events inside it) and on an `event`, with the same inheritance-with-override pattern as `font` (§3.8). `time_label=none` switches off an inherited one. Default: `none`. Giving it on a `person` or `span` is a parse error, since they have no flag
+- Formats follow the tick labels (§10.2): `year` → `1939`, `month` → `1939-09`, `day` → `1939-09-01`; `hour`, `min` and `sec` give the time of day: `01:00`, `01:23`, `01:23:44`. `date` gives the date exactly as written, at its own precision, with a space in place of the `T`: `1986-04-26 01:23:44`, `44BC-03-15`
+- A time label never claims more precision than the event's date has: `sec` on an event written to the minute gives `01:23`, and `hour` on a date written to the day gives the day, `1986-04-26`. Times are shown as written, without timezone conversion
+- Drawn in the event's font at three-quarters of its `font_size`, aligned with the label on the pole's side. Together the label and time label make up the flag (§8.2)
 
 ## 4. `timeline` directive (top-level only)
 
@@ -301,7 +315,9 @@ Applies to `person`, `span`, `group` — collectively called **banded entities**
 
 ## 8. Events — poles, not bands
 
-`event` entities are **not** placed via lane packing. They are drawn as a straight line ("pole") extending away from the baseline, with the label at the far end ("flag").
+`event` entities are **not** placed via lane packing. They are drawn as a straight line ("pole") extending away from the baseline, with the label (and any time label, §3.11) at the far end ("flag").
+
+**Broken poles** (added 2026-10-12). A pole is never drawn through other ink. Wherever it would cross a bar (anywhere inside its outline, whatever its fill), a bar's label, an illustration, a tick label or another event's flag, it is interrupted with a small gap either side and resumes beyond. The stretch beside its own flag is never broken, so the flag stays attached to its pole. A broken pole is normal and not a warning; an author who wants the reader to be sure of an event's date gives it a time label (§3.11).
 
 ### 8.1 Pole length (base)
 
@@ -312,19 +328,19 @@ pole_length = max(outer_edge(B) for B in banded entities on same side,
               (or base_minimum_length if none)
 ```
 
-- Only *higher-priority* banded entities force extension
-- Poles **may** cross span shading (fine — thin ink over light fill); spans require no geometric avoidance
+- Only *higher-priority* banded entities set this base length. A flag is then lifted clear of every bar beneath it, whatever its priority (§8.2), so the base length is a floor, not the final length
+- A pole passes bars of any priority, but is broken where it crosses them rather than drawn through them (§8)
 - Poles must **not** cross illustrations (genuine ink collision) — the illustration is nudged sideways instead, minimum distance needed, preferring the direction with more free space, and only to a position where its whole lane band is still free (§3.5)
-- If no such position exists, the overlap is accepted and a named build warning is emitted (not fatal)
+- If no such position exists, the illustration stays put, the pole is broken where it passes it, and a named build warning is emitted (not fatal)
 - A base pole that can't fit on the event's side drives §6.1 to choose the other side; if it fits on neither, that's a fatal layout error (§4.1)
 
 ### 8.2 Label-collision resolution (runs after all base pole lengths are known)
 
 By default a flag points toward later dates; near the far end of the paper it points inward instead (§4.1).
 
-Group conflicting event labels (bounding-box overlap) into clusters via x-sweep. Bar labels (§7) and illustrations are **fixed obstacles** in this check: an event flag overlapping either counts as a conflict to resolve, but only the event moves — the obstacle never does. Within each cluster:
+Group conflicting event labels (bounding-box overlap) into clusters via x-sweep. Bars (their whole outline, whatever their priority or fill: settled 2026-10-12), bar labels (§7) and illustrations are **fixed obstacles** in this check: an event flag overlapping any of them counts as a conflict to resolve, but only the event moves — the obstacle never does. Within each cluster:
 
-1.  **Stagger by priority** — highest-priority event gets the tallest pole in the cluster; each subsequent (descending priority) steps down by at least one label-height. A pole's length is never reduced below its §8.1 base/clearance floor — if a lower-priority event's clearance floor exceeds its staircase step, the floor wins. Poles are also lengthened where needed to lift a flag clear of a fixed obstacle.
+1.  **Stagger by priority** — highest-priority event gets the tallest pole in the cluster; each subsequent (descending priority) steps down by at least one flag-height (its label plus any time label). A pole's length is never reduced below its §8.1 base/clearance floor — if a lower-priority event's clearance floor exceeds its staircase step, the floor wins. Poles are also lengthened where needed to lift a flag clear of a fixed obstacle.
 2.  **If staggering doesn't fully resolve it** — flip flag orientation (left/right of the pole tip) for cluster members, starting with the **lowest**-priority event first, rechecking after each flip, stopping as soon as the cluster is resolved. A flip that would point a flag off either end of the paper is never made (§4.1).
 3.  **If still unresolved** (paper edge or extreme density) — proceed with best achieved separation, emit a named build warning identifying the conflicting events. Not fatal.
 

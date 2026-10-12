@@ -37,7 +37,9 @@ began as are superseded. Change the specs here, in the same commit as the code t
 
 ## Repo layout and commands
 - uv workspace, Python 3.12: `libaxitl/` (the library, no hardware dependencies) and `axitime/` (the CLI host).
-- `uv sync` to set up; `uv run pytest` to run all tests; `uv run axitime check <file.axitl>`.
+- `uv sync` to set up; `uv run pytest` to run all tests; `uv run axitime check <file.axitl> [--now DATE]`
+  (runs parse and layout).
+- Layout's spacing constants (insets, gaps, tick sizes) all live in `LayoutStyle` in `libaxitl/layout.py`.
 - Built-in fonts live in `libaxitl/src/libaxitl/fonts/data/` (copied from Inkscape's Hershey Text
   `svg_fonts`, with their licence notices). Keep `HERSHEY-NOTICE.txt` and `OFL.txt` beside them.
 

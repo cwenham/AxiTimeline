@@ -199,6 +199,31 @@ class DateValue:
         return text
 
 
+_TIME_LABEL_PRECISION = {
+    "year": Precision.YEAR,
+    "month": Precision.MONTH,
+    "day": Precision.DAY,
+    "hour": Precision.HOUR,
+    "min": Precision.MINUTE,
+    "sec": Precision.SECOND,
+}
+
+
+def time_label_text(value: DateValue, mode: str) -> str:
+    """An event's time label (§3.11) for ``mode`` (date, year, month, day, hour, min or sec).
+
+    Never more precise than the date as written, and shown as written (no timezone conversion): year to day
+    give the date, hour to sec the time of day, and ``date`` the whole date with a space in place of the T.
+    """
+    if mode == "date":
+        return str(value).replace("T", " ")
+    precision = min(_TIME_LABEL_PRECISION[mode], value.precision)
+    if precision <= Precision.DAY:
+        return str(replace(value, precision=precision, offset_minutes=None))
+    clock = f"{value.hour:02d}:{value.minute if precision >= Precision.MINUTE else 0:02d}"
+    return clock + (f":{value.second:02d}" if precision is Precision.SECOND else "")
+
+
 @dataclass(frozen=True)
 class DateRange:
     """A ranged entity's dates. ``end`` is None for an open (ongoing) entity written ``1953-`` or ``1953-04-01/``."""

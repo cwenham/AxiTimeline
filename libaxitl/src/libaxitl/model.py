@@ -44,6 +44,19 @@ class OpenEndStyle(Enum):
     SINE = "sine"
 
 
+class TimeLabel(Enum):
+    """An event's time label (§3.11): which part of its date to write under its flag."""
+
+    NONE = "none"
+    DATE = "date"  # the date exactly as written
+    YEAR = "year"
+    MONTH = "month"
+    DAY = "day"
+    HOUR = "hour"
+    MIN = "min"
+    SEC = "sec"
+
+
 class Fill(Enum):
     NONE = "none"
     SOLID = "solid"
@@ -77,6 +90,7 @@ class Entity:
     fill: Fill
     font: str  # effective font: a key into TimelineDocument.fonts
     font_size_mm: float  # effective font size (the em)
+    time_label: TimeLabel  # effective, for an event; for a group, what its members inherit; NONE for bars
     illustration: Illustration | None
     children: tuple[Entity, ...]  # groups only
     member_of: str | None  # the label of the enclosing group (metadata only)
@@ -106,6 +120,7 @@ class TimelineSettings:
     open_end_style: OpenEndStyle
     font: str
     font_size_mm: float
+    time_label: TimeLabel
     location: SourceLocation
 
     @property

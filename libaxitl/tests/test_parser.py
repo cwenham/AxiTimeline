@@ -3,6 +3,7 @@
 import pytest
 
 from libaxitl import AxitlError, Baseline, DateRange, DateValue, Fill, Kind, OpenEndStyle, Side, parse
+from libaxitl.model import TimeLabel
 
 T = "timeline start=1900 end=2000 length=2m width=210\n"
 APPLE = '<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="40mm"><path d="M0 0 L 1 1"/></svg>'
@@ -273,3 +274,46 @@ def test_parsing_is_deterministic(make_files):
     assert first.flattened_text == second.flattened_text
     assert first.document == second.document
     assert first.resources == second.resources
+
+
+# -- time labels (§3.11) ----------------------------------------------------------------------------------
+
+
+def test_time_label_is_inherited_like_font():
+    source = T.replace("width=210", "width=210 time_label=year") + (
+        'event "plain" 1901\n'
+        'group "G" 1900-1950 time_label=day {\n'
+        '  event "inherits" 1910-05-01\n'
+        '  event "switched off" 1911 time_label=none\n'
+        '  group "inner" 1920-1930 {\n'
+        '    event "deep" 1925-03-02 time_label=date\n'
+        '    event "deep default" 1926\n'
+        '  }\n'
+        '  span "bar" 1912-1913\n'
+        "}\n"
+    )
+    doc = parse(source).document
+    assert doc.timeline.time_label is TimeLabel.YEAR
+    labels = {e.label: e.time_label for e in doc.walk()}
+    assert labels["plain"] is TimeLabel.YEAR
+    assert (labels["G"], labels["inherits"], labels["switched off"]) == (TimeLabel.DAY, TimeLabel.DAY, TimeLabel.NONE)
+    assert (labels["deep"], labels["deep default"]) == (TimeLabel.DATE, TimeLabel.DAY)
+    assert labels["bar"] is TimeLabel.NONE  # bars have no flag
+    assert parse(T).document.timeline.time_label is TimeLabel.NONE
+
+
+@pytest.mark.parametrize("line", ['person "p" 1900-1950 time_label=year', 'span "s" 1900-1950 time_label=day'])
+def test_time_label_on_a_bar_is_an_error(line):
+    with pytest.raises(AxitlError, match="applies to events"):
+        parse(T + line + "\n")
+
+
+def test_bad_time_label():
+    with pytest.raises(AxitlError, match="time_label= takes one of none, date, year, month, day, hour, min, sec"):
+        parse(T + 'event "e" 1950 time_label=minute\n')
+
+
+def test_a_time_label_the_font_cant_draw_is_a_warning(make_files):
+    result = parse(T + 'event "a" 1920 font="hand.svg" time_label=year\n', make_files({"hand.svg": HAND_FONT}))
+    messages = [d.message for d in result.diagnostics]
+    assert any("for the time label of event" in m and "U+0031" in m for m in messages)  # the font has no "1"

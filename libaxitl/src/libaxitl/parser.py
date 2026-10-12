@@ -15,7 +15,7 @@ from lark import Token, Tree
 from lark.exceptions import UnexpectedCharacters, UnexpectedInput, UnexpectedToken
 
 from . import grammar
-from .dates import DateError, DateRange, DateValue, parse_date, parse_when
+from .dates import DateError, DateRange, DateValue, parse_date, parse_when, time_label_text
 from .diagnostics import AxitlError, Diagnostic, Diagnostics, SourceLocation
 from .fetch import Fetcher, Resolver, Resource, no_resolver, relative_name
 from .fonts import BUILTIN_FONTS, DEFAULT_FONT, Font, FontError, load_builtin_font, parse_svg_font
@@ -28,6 +28,7 @@ from .model import (
     Kind,
     OpenEndStyle,
     Side,
+    TimeLabel,
     TimelineDocument,
     TimelineSettings,
 )
@@ -47,9 +48,9 @@ _TIMELINE_KEYS = (
     "start", "end", "length", "scale", "width", "baseline",
     "lane_height", "above_lane_height", "below_lane_height",
     "baseline_offset", "above_baseline_offset", "below_baseline_offset",
-    "ticks", "tick_label_every", "open_end_style", "font", "font_size",
+    "ticks", "tick_label_every", "open_end_style", "font", "font_size", "time_label",
 )
-_ENTITY_KEYS = ("fill", "font", "font_size")
+_ENTITY_KEYS = ("fill", "font", "font_size", "time_label")
 _UNCLOSED_GROUP = "this group's { body is never closed with }"
 
 
@@ -211,6 +212,7 @@ class _Builder:
             DEFAULT_PEN,
             settings.font if settings else DEFAULT_FONT,
             settings.font_size_mm if settings else DEFAULT_FONT_SIZE_MM,
+            settings.time_label if settings else TimeLabel.NONE,
         )
         entities = [
             e for c in tree.children if c.data == "entity" if (e := self.entity(c, context, None)) is not None
@@ -307,6 +309,7 @@ class _Builder:
         font_size = self.length("font_size", *p["font_size"]) if "font_size" in p else DEFAULT_FONT_SIZE_MM
         baseline = choice("baseline", Baseline, Baseline.MIDDLE)
         open_end_style = choice("open_end_style", OpenEndStyle, OpenEndStyle.SAWTOOTH)
+        time_label = choice("time_label", TimeLabel, TimeLabel.NONE)
 
         if start is None or width is None or (length is None and scale is None) or font is None or font_size is None:
             return None
@@ -326,12 +329,13 @@ class _Builder:
             open_end_style=open_end_style,
             font=font,
             font_size_mm=font_size,
+            time_label=time_label,
             location=location,
         )
 
     # -- entities -----------------------------------------------------------------------------------------
 
-    def entity(self, node: Tree, context: tuple[str, str, float], group: str | None) -> Entity | None:
+    def entity(self, node: Tree, context: tuple[str, str, float, TimeLabel], group: str | None) -> Entity | None:
         location = self.loc(node)
         head, label_token, *items = node.children
         body = items.pop() if items and isinstance(items[-1], Tree) and items[-1].data == "body" else None
@@ -403,10 +407,28 @@ class _Builder:
                 except ValueError:
                     options = ", ".join(f.value for f in Fill)
                     self.sink.error("bad-value", f"fill= takes one of {options}, not '{text}'", where)
-        inherited_pen, inherited_font, inherited_size = context
+        inherited_pen, inherited_font, inherited_size, inherited_time_label = context
         font = self.font(*p["font"]) if "font" in p else inherited_font
         font_size = self.length("font_size", *p["font_size"]) if "font_size" in p else inherited_size
         pen = pen or inherited_pen
+        time_label = inherited_time_label
+        if "time_label" in p:
+            text, where = p["time_label"]
+            if kind in (Kind.PERSON, Kind.SPAN):
+                self.sink.error(
+                    "bad-value",
+                    f"time_label= applies to events (set it on a group to give the events inside it one), "
+                    f"not {_a(kind.value)}",
+                    where,
+                )
+            else:
+                try:
+                    time_label = TimeLabel(text)
+                except ValueError:
+                    options = ", ".join(t.value for t in TimeLabel)
+                    self.sink.error("bad-value", f"time_label= takes one of {options}, not '{text}'", where)
+        if kind in (Kind.PERSON, Kind.SPAN):
+            time_label = TimeLabel.NONE  # bars have no flag, and pass nothing on
 
         children: list[Entity] = []
         if body is not None:
@@ -417,7 +439,8 @@ class _Builder:
                 if child.data == "timeline":
                     self.sink.error("nested-timeline", "a timeline declaration can't be inside a group", self.loc(child))
                     continue
-                built = self.entity(child, (pen, font or inherited_font, font_size or inherited_size), label)
+                inherited = (pen, font or inherited_font, font_size or inherited_size, time_label)
+                built = self.entity(child, inherited, label)
                 if built is not None:
                     children.append(built)
 
@@ -433,6 +456,7 @@ class _Builder:
             fill=fill,
             font=font,
             font_size_mm=font_size,
+            time_label=time_label,
             illustration=illustration,
             children=tuple(children),
             member_of=group,
@@ -523,7 +547,11 @@ class _Builder:
                 font = self.fonts.get(e.font)
                 if font is None:
                     continue
-                for r in drawable_text(font, e.label)[1]:
+                texts = [("", e.label)]
+                if e.kind is Kind.EVENT and e.time_label is not TimeLabel.NONE:
+                    texts.append(("the time label of ", time_label_text(e.when, e.time_label.value)))
+                replacements = [(what, r) for what, text in texts for r in drawable_text(font, text)[1]]
+                for what, r in replacements:
                     code = f"U+{ord(r.original):04X}"
                     char = code if r.original.isspace() or not r.original.isprintable() else f"{r.original} ({code})"
                     if r.replacement == "":
@@ -534,7 +562,7 @@ class _Builder:
                         drawn = f"drawing {r.replacement} instead"
                     self.sink.warning(
                         "missing-glyph",
-                        f'font {e.font} has no {char} for {e.kind.value} "{e.label}"; {drawn}',
+                        f'font {e.font} has no {char} for {what}{e.kind.value} "{e.label}"; {drawn}',
                         e.location,
                     )
 
