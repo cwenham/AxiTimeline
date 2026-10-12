@@ -49,6 +49,7 @@ class RenderOptions:
     window: tuple[float, float] | None = None  # (start, length) along the roll in mm; None for the whole job
     bleed_mm: float = 0.0  # how far strokes run past an edge that is a cut in the middle of the job
     metadata: Mapping[str, str] = field(default_factory=dict)  # host fields for <metadata>: job hash and so on
+    metadata_entries: tuple[tuple[str, Mapping[str, str]], ...] = ()  # host elements inside it: files and so on
     stroke_width_mm: float = 0.3  # for viewing on screen only
 
 
@@ -159,19 +160,30 @@ def render(layout: ResolvedLayout, options: RenderOptions | None = None, *, draw
         "bleed-start-mm": format_number(page.bleed_start),
         "bleed-end-mm": format_number(page.bleed_end),
         "libaxitl-version": __version__,
+        "job-length-mm": format_number(drawing.length_mm),
     }
     for key, value in options.metadata.items():
         if not _FIELD.match(key) or key in fields:
             raise RenderError(f"'{key}' can't be used as a metadata field")
         fields[key] = str(value)
     attributes = " ".join(f"{k}={quoteattr(fields[k])}" for k in sorted(fields))
+    entries = []
+    for name, values in options.metadata_entries:
+        if not _FIELD.match(name) or not all(_FIELD.match(k) for k in values):
+            raise RenderError(f"'{name}' can't be used as a metadata element")
+        entries.append(f"<axitime:{name} " + " ".join(f"{k}={quoteattr(str(values[k]))}" for k in sorted(values)) + "/>")
+    job = (
+        f'<axitime:job xmlns:axitime="{METADATA_NAMESPACE}" {attributes}>' + "".join(entries) + "</axitime:job>"
+        if entries
+        else f'<axitime:job xmlns:axitime="{METADATA_NAMESPACE}" {attributes}/>'
+    )
     width, height = page.x1 - page.x0, page.y1 - page.y0
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         f'<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="{_INKSCAPE}" '
         f'width="{format_number(width)}mm" height="{format_number(height)}mm" '
         f'viewBox="{format_number(page.x0)} {format_number(page.y0)} {format_number(width)} {format_number(height)}">\n'
-        f'<metadata><axitime:job xmlns:axitime="{METADATA_NAMESPACE}" {attributes}/></metadata>\n'
+        f"<metadata>{job}</metadata>\n"
         + "\n".join(layers)
         + "\n</svg>\n"
     )

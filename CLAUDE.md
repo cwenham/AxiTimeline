@@ -42,6 +42,9 @@ began as are superseded. Change the specs here, in the same commit as the code t
 - `uv sync` to set up; `uv run pytest` to run all tests.
 - `uv run axitime check|list-pens|render <file.axitl> [--now DATE]`; `render -o DIR` writes a preview and one SVG
   per pen (window with `--start-offset`/`--length` or `--from`/`--to`).
+- `uv run axitime plot <file-pen.svg> [--simulate|--dry-run]` plots one per-pen SVG; the job log goes beside it.
+  Plotter settings: `~/.config/axitime/plotter.toml` (see `axitime/config.py`). pyaxidraw is optional and only
+  imported for a real plot; tests use a simulated plotter and a fake pyaxidraw.
 - To look at output, render it and export a PNG with Inkscape:
   `/Applications/Inkscape.app/Contents/MacOS/inkscape x.svg --export-type=png --export-dpi=100`.
 - Spacing constants live in `LayoutStyle` (`libaxitl/layout.py`) and `DrawStyle` (`libaxitl/draw.py`).

@@ -22,6 +22,9 @@ Already resolved, so not listed:
 - event flags drawn over lower-priority bars (settled 2026-10-12: bars are fixed obstacles for flags,
   language spec §8.2);
 - the job hash's exact serialisation (settled 2026-10-12, interpreter spec "Job log");
+- safe abort during `plot`, the plotter's travel envelope (a config file over AxiDraw SE/A3 defaults), confirming
+  the pen by typing its name, and how a job's first pass starts its log (all settled 2026-10-12, interpreter
+  spec "axitime plot" and "Job log");
 - bar labels too long for their bars: beside the bar, else pulled out up to three lanes with a 45° leader ending
   level with the middle of the label's capitals, else running past the bar with a warning (settled 2026-10-12,
   language spec §7). A label squeezed out entirely is the author's cue to shorten it or rearrange, not a case
@@ -48,15 +51,21 @@ this, or say that illustrations should be the author's responsibility with no wa
 
 ## Operational / hardware-adjacent
 
-### 3. Safe abort during `plot`
-The job log has a "cancelled" outcome, but nothing says what the hardware does on Ctrl+C, a serial error or a
-crash: raise the pen, idle the motors, leave the transport where it is. This is basic safety, separate from
-the deliberately deferred motion-feasibility question. Needs at least a stated behaviour (signal handler that
-lifts the pen and releases motors, then writes the log entry).
+### 3. The paper transport and strips (hardware not designed yet)
+The paper transport's mechanism isn't designed yet (as of 2026-10-12). What exists: a Raspberry Pi 4 to run
+axitime and drive the AxiDraw, a Pico or XIAO ESP32 for the transport's controller, and candidate parts (NEMA 17
+steppers, a brushed or BLDC motor, servos, and an optical flow sensor) that can be wired up before they can move
+paper. So `plot` currently:
+- assumes the roll runs along the AxiDraw's X axis and draws the job in strips that fit its X travel
+  (`strip_mm` in the plotter config), cutting strokes at strip edges;
+- uses a "manual" transport: between strips it asks the operator to move the paper on by an exact distance
+  (skipping strips with nothing to draw for that pen, so the paper moves on in one go).
 
-### 4. Plotter travel envelope
-Already in the interpreter spec's Open Questions: `check` must flag a `width` the hardware cannot reach, but
-nothing says where axitime learns the envelope (config file, CLI flag, built-in AxiDraw SE/A3 default).
+The transport plugs into one call, `advance(mm, next_start)` in `axitime/plotting.py`, so whatever protocol the
+controller ends up with only has to implement that. An optical flow sensor could make it closed-loop (measure
+the paper's actual movement rather than trusting the motor), which would matter because strokes cut at a strip
+edge only meet again if the paper moves exactly a strip's length. To decide with the hardware: the controller's
+serial protocol, its accuracy, and whether the orientation assumption holds.
 
 ## Smaller points
 
