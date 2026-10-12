@@ -100,13 +100,18 @@ def test_a_label_running_past_its_bar_breaks_the_outline():
     assert end_edge and all(not (label.y0 < y < label.y1) for _, y in end_edge)
 
 
-def test_a_group_is_a_bracket_open_towards_its_members():
-    resolved, d = drawing(T + '^group "G" 1900-1950 {\n}\n')
+def test_a_group_is_drawn_like_a_span():
+    group = drawing(T + '^group "G" 1900-1950 fill=diagonal {\n}\n')[1]
+    span = drawing(T + '^span "G" 1900-1950 fill=diagonal\n')[1]
+    assert [s.points for s in group.strokes] == [s.points for s in span.strokes]
+
+
+def test_a_label_starts_clear_of_an_open_end_cap():
+    resolved, d = drawing(T + '^span "s" 1850-1950\n')
     bar = resolved.bars[0]
-    (outline,) = [s for s in strokes(d, Stage.BARS) if (bar.x0, bar.y1) in s.points]
-    assert outline.points[0] == (bar.x0, bar.y0) and outline.points[-1] == (bar.x1, bar.y0)
-    top_edge = [(p, q) for p, q in zip(outline.points, outline.points[1:], strict=False) if p[1] == q[1] == bar.y0]
-    assert top_edge == []  # above the baseline the members are outward, so the top stays open
+    assert bar.cap_start and bar.label.box.x0 >= bar.x0 + resolved.cap_depth_mm + 1.5 - 1e-9
+    outline = strokes(d, Stage.BARS)[0]
+    assert len(outline.points) > 5  # the sawtooth wasn't cut away around the label
 
 
 @pytest.mark.parametrize("style", ["sawtooth", "sine"])

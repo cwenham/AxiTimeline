@@ -6,7 +6,7 @@ Status: working draft, reflecting all decisions taken in design discussion so fa
 
 This file (`docs/language-spec.md` in the AxiTimeline repo) is the **canonical copy** of this spec, and changes are made here alongside the code. The claude.ai artifact it began as is superseded.
 
-History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), and flags kept clear of bars (§8.2).
+History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7).
 
 ## 1. System overview
 
@@ -309,7 +309,14 @@ Standard greedy interval-graph colouring, ordered by priority (higher priority =
 
 Applies to `person`, `span`, `group` — collectively called **banded entities**. `group` behaves exactly like `span` for this purpose (see §9). Each banded entity occupies exactly 1 lane, and a lane's physical thickness is `lane_height` (see §4).
 
-**Bar labels and the occupied extent.** A bar's label is drawn inside its lane, vertically centred, starting just inside the bar's start — or, where that would run off the far end of the paper, ending just inside the bar's end instead (§4.1). A label longer than its bar simply runs past the bar. For packing, each bar occupies the **union of its bar and its label** along the time axis, so a short bar's overhanging label is never run into by the next bar in the same lane. A label whose `font_size` won't fit inside `lane_height` (with a small margin) is a build warning.
+**Bar labels** (revised 2026-10-12). A bar's label is drawn in a lane, vertically centred, in one of these places, tried in order:
+
+1. **Inside the bar**, if it fits: starting just inside the bar's start (clear of any open-end cap, §3.6).
+2. **Beside the bar**, in the same lane: just after the bar's end, or, where that would run off the far end of the paper, just before its start (§4.1). Only if that stretch of the lane is free.
+3. **Pulled out**: into the nearest free spot in the next three lanes outward, joined to the middle of the bar's outer edge by a **leader** at 45°. The leader points at the start of the label, level with the middle of its capitals, towards later dates where the label fits and otherwise towards earlier. The angle is always 45°, so a leader can never be mistaken for an event's pole (vertical) or a bar's edge (horizontal); together with the pen colour, that is how the reader matches a pulled-out label to its bar.
+4. Failing all three, the label runs past the end of its bar, the bar's outline broken around it, and a build warning is emitted.
+
+A label too long for its bar never pushes the bar outward: the bar takes the lowest lane free for the bar alone. For packing, a bar occupies its own extent plus a label inside or beside it. Pulled-out labels are placed only after every bar and every bar's illustration, so they take leftover space and never displace a bar. A label whose `font_size` won't fit inside `lane_height` (with a small margin) is a build warning.
 
 **Generalized for illustrations:** the same packing routine is used with a `height` parameter (number of lanes, not just 1) and a `start_search_at` parameter (search begins outward from a given lane rather than from 0) to place illustrations — see §3.5. This is the one case where a single entity spans multiple contiguous lanes.
 
@@ -317,7 +324,7 @@ Applies to `person`, `span`, `group` — collectively called **banded entities**
 
 `event` entities are **not** placed via lane packing. They are drawn as a straight line ("pole") extending away from the baseline, with the label (and any time label, §3.11) at the far end ("flag").
 
-**Broken poles** (added 2026-10-12). A pole is never drawn through other ink. Wherever it would cross a bar (anywhere inside its outline, whatever its fill), a bar's label, an illustration, a tick label or another event's flag, it is interrupted with a small gap either side and resumes beyond. The stretch beside its own flag is never broken, so the flag stays attached to its pole. A broken pole is normal and not a warning; an author who wants the reader to be sure of an event's date gives it a time label (§3.11).
+**Broken poles** (added 2026-10-12). A pole is never drawn through other ink. Wherever it would cross a bar (anywhere inside its outline, whatever its fill), a bar's label, an illustration, a tick label or another event's flag, it is interrupted with a small gap either side and resumes beyond. The stretch beside its own flag is never broken, so the flag stays attached to its pole. A broken pole is normal and not a warning; an author who wants the reader to be sure of an event's date gives it a time label (§3.11). The leader of a pulled-out bar label (§7) is broken by the same rule, except around its own bar and label. Lines may cross lines: a pole and a leader, or two leaders, cross without either being broken.
 
 ### 8.1 Pole length (base)
 
@@ -338,7 +345,7 @@ pole_length = max(outer_edge(B) for B in banded entities on same side,
 
 By default a flag points toward later dates; near the far end of the paper it points inward instead (§4.1).
 
-Group conflicting event labels (bounding-box overlap) into clusters via x-sweep. Bars (their whole outline, whatever their priority or fill: settled 2026-10-12), bar labels (§7) and illustrations are **fixed obstacles** in this check: an event flag overlapping any of them counts as a conflict to resolve, but only the event moves — the obstacle never does. Within each cluster:
+Group conflicting event labels (bounding-box overlap) into clusters via x-sweep. Bars (their whole outline, whatever their priority or fill: settled 2026-10-12), bar labels wherever they are placed and the leaders of pulled-out labels (§7), and illustrations are **fixed obstacles** in this check: an event flag overlapping any of them counts as a conflict to resolve, but only the event moves — the obstacle never does. Within each cluster:
 
 1.  **Stagger by priority** — highest-priority event gets the tallest pole in the cluster; each subsequent (descending priority) steps down by at least one flag-height (its label plus any time label). A pole's length is never reduced below its §8.1 base/clearance floor — if a lower-priority event's clearance floor exceeds its staircase step, the floor wins. Poles are also lengthened where needed to lift a flag clear of a fixed obstacle.
 2.  **If staggering doesn't fully resolve it** — flip flag orientation (left/right of the pole tip) for cluster members, starting with the **lowest**-priority event first, rechecking after each flip, stopping as soon as the cluster is resolved. A flip that would point a flag off either end of the paper is never made (§4.1).
@@ -355,7 +362,7 @@ Note: "side" for a flag's left/right orientation at the pole tip is a distinct c
 }
 ```
 
-- A `group` line is layout-equivalent to a `span` — same priority/side/date-range machinery, participates in the same shared per-side lane pool as any banded entity, drawn as a labeled bracket
+- A `group` line is layout-equivalent to a `span` — same priority/side/date-range machinery, participates in the same shared per-side lane pool as any banded entity, and is drawn exactly like a span: a closed, labelled bar (settled 2026-10-12; an earlier reading drew it as a bracket open towards its members, which read as a missing line)
 - **Children are placed independently** in the same shared pool (own priority, own lane assignment) — **not** positionally nested inside the group's bracket (deliberate simplification, chosen over reserved-sub-block nesting for lower layout complexity)
 - **Side and pen are inherited from the group by default** (which is why a group is always placed before its members, §6). A child with no explicit `^`/`v` uses the group's resolved side; a child with no explicit trailing pen uses the group's pen. Either can be overridden per-line with the child's own `^`/`v` or pen keyword — so a child *can* deliberately end up on the opposite side or in a different pen from its group, but only if it says so explicitly
 - Each child gets a `member_of` provenance tag (metadata only — not used by layout, available for future querying/styling)

@@ -20,7 +20,12 @@ Already resolved, so not listed:
   conventions"), and crop marks centred on the finished edges (settled 2026-10-12, interpreter spec "Crop
   marks");
 - event flags drawn over lower-priority bars (settled 2026-10-12: bars are fixed obstacles for flags,
-  language spec §8.2).
+  language spec §8.2);
+- the job hash's exact serialisation (settled 2026-10-12, interpreter spec "Job log");
+- bar labels too long for their bars: beside the bar, else pulled out up to three lanes with a 45° leader ending
+  level with the middle of the label's capitals, else running past the bar with a warning (settled 2026-10-12,
+  language spec §7). A label squeezed out entirely is the author's cue to shorten it or rearrange, not a case
+  for more layout logic.
 
 ## Found while building layout and render
 
@@ -29,7 +34,7 @@ The spec asks for "a small margin" in several places without numbers. They are a
 `LayoutStyle` in `libaxitl/layout.py`: bar inset 1mm, label inset 1.5mm, gap between lane neighbours 1.5mm,
 flag gap 1mm, flag clearance 1mm, stagger gap 0.5mm, collision padding 0.4mm, illustration gap 1.5mm, ticks
 1mm/2mm, tick labels at 0.75 × `font_size`, time label gap 0.4mm, 0.75mm left either side where a pole is broken,
-and pieces of broken pole shorter than 1mm left out. The drawing values are in `DrawStyle` in
+pieces of broken pole or leader shorter than 1mm left out, and 0.5mm between a leader's end and its label. The drawing values are in `DrawStyle` in
 `libaxitl/draw.py` (cap depth 1.5mm, hatching 2mm, solid 0.4mm, fills 0.75mm clear of labels, crop arms 2.5mm).
 All of them need checking on paper.
 
@@ -41,22 +46,15 @@ outline; text, embedded images, `<use>` references and foreign objects are left 
 outlines; and `check` reports each of these as a warning (interpreter spec, "How the renderer draws"). Confirm
 this, or say that illustrations should be the author's responsibility with no warnings.
 
-### 3. Exact job-hash serialisation
-The job hash input is now: flattened source + version + resolved `now` + the SHA-256 of each illustration and
-custom font (interpreter spec "Job log"). The flattened text itself is now canonical (interpreter spec "Public
-shape"). Still to fix: separators between the parts, the order the resource hashes go in, and how `now` is
-written as text, so two implementations or two platforms cannot produce different hashes for the same job. This now blocks `plot`: `axitime render` writes per-pen
-files with every other metadata field, but no job hash until this is settled.
-
 ## Operational / hardware-adjacent
 
-### 4. Safe abort during `plot`
+### 3. Safe abort during `plot`
 The job log has a "cancelled" outcome, but nothing says what the hardware does on Ctrl+C, a serial error or a
 crash: raise the pen, idle the motors, leave the transport where it is. This is basic safety, separate from
 the deliberately deferred motion-feasibility question. Needs at least a stated behaviour (signal handler that
 lifts the pen and releases motors, then writes the log entry).
 
-### 5. Plotter travel envelope
+### 4. Plotter travel envelope
 Already in the interpreter spec's Open Questions: `check` must flag a `width` the hardware cannot reach, but
 nothing says where axitime learns the envelope (config file, CLI flag, built-in AxiDraw SE/A3 default).
 
@@ -134,5 +132,4 @@ reading, not a settled decision: confirm it (and move it into the spec) or corre
   higher. Comparing the lifted lengths instead would be a small change if it turns out to matter on paper.
 
 **Render (`libaxitl/draw.py`, `libaxitl/render.py`)**
-- A `group` is drawn as a bracket open on the side facing its members (outward from the baseline).
 - Preview colours approximate each pen on screen (pencils in greys, softer grades darker); on paper the pen decides.

@@ -21,12 +21,12 @@ document and ``now`` always give the same layout.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 from .dates import DateRange, DateValue, time_label_text
 from .diagnostics import Diagnostic, Diagnostics
-from .geometry import Box
+from .geometry import Box, cut_out, keep_inside, segment_crosses
 from .model import Baseline, Entity, Illustration, Kind, Side, TimeLabel, TimelineDocument
 from .pens import PENS
 from .text import ShapedText, shape
@@ -45,6 +45,7 @@ class LayoutStyle:
 
     bar_inset: float = 1.0  # between a bar and the edges of its lane, top and bottom
     label_inset: float = 1.5  # between the end of a bar and its label
+    cap_depth: float = 1.5  # how far an open-end cap reaches into its bar; a label starts beyond it
     label_margin: float = 0.5  # space a bar label needs above and below it, inside the bar
     lane_gap: float = 1.5  # least horizontal gap between neighbours in a lane
     flag_gap: float = 1.0  # between an event's pole and its flag text
@@ -61,9 +62,20 @@ class LayoutStyle:
     time_label_gap: float = 0.4  # between an event's label and its time label
     pole_gap: float = 0.75  # left either side where a pole is broken around other ink (§8)
     min_pole_segment: float = 1.0  # shorter pieces of a broken pole are left out
+    leader_gap: float = 0.5  # between the end of a pulled-out label's leader and the label
+    max_pull_lanes: int = 3  # a label is pulled out at most this many lanes from its bar (§7, settled)
 
 
 DEFAULT_STYLE = LayoutStyle()
+
+
+class LabelPlacement(Enum):
+    """Where a bar's label went (§7)."""
+
+    INSIDE = "inside"  # it fits inside the bar
+    BESIDE = "beside"  # just after the bar's end (or before its start, at the paper's far end), same lane
+    PULLED_OUT = "pulled-out"  # in a lane further out, joined to the bar by a 45° leader
+    OVERRUN = "overrun"  # no room anywhere within reach: it runs past its bar, with a warning
 
 
 class FlagDirection(Enum):
@@ -106,6 +118,9 @@ class PlacedBar:
     clipped_start: bool  # it began before the timeline's start
     clipped_end: bool  # it continues past the timeline's end
     label: PlacedText
+    label_placement: LabelPlacement
+    leader: tuple[tuple[float, float], tuple[float, float]] | None  # a pulled-out label's leader, bar to label
+    leader_segments: tuple[tuple[tuple[float, float], tuple[float, float]], ...]  # what's left to draw (§8)
     illustration: PlacedIllustration | None
 
     @property
@@ -172,6 +187,7 @@ class ResolvedLayout:
     tick_interval: str | None  # e.g. "2 years"; None with ticks=off
     tick_label_interval: str | None
     axis_pen: str  # draws the baseline and ticks, in the first pass (§10.4)
+    cap_depth_mm: float  # how far open-end caps reach into their bars; labels were placed clear of them
     pens: tuple[str, ...]  # every pen the job needs, axis pen first
     omitted: tuple[Entity, ...]  # wholly outside the timeline window (§4.2)
     diagnostics: tuple[Diagnostic, ...]  # warnings; a layout with errors raises AxitlError instead
@@ -330,7 +346,10 @@ class _Bar:
     text: _Text
     label_x: float
     illustration: _Illustration | None = None
-    occupied: tuple[float, float] = field(default=(0.0, 0.0))
+    occupied: tuple[float, float] = field(default=(0.0, 0.0))  # for §8.1: the bar, plus a label beside it
+    placement: LabelPlacement = LabelPlacement.INSIDE
+    label_lane: int = 0
+    leader: tuple[tuple[float, float], tuple[float, float]] | None = None  # (x, distance from the baseline)
 
 
 def layout(document: TimelineDocument, now: DateValue | None = None, *, style: LayoutStyle = DEFAULT_STYLE) -> ResolvedLayout:
@@ -514,9 +533,12 @@ class _Layout:
     # -- phase A: bars -------------------------------------------------------------------------------------------
 
     def phase_a(self) -> None:
+        self.pending: list[_Bar] = []  # labels to pull out once every bar has its lane
         banded = [e for e in self.doc.walk() if e.kind.is_banded and e.order in self.extent]
         for e in self.ordered(banded):
             self.place_bar(e)
+        for bar in self.pending:
+            self.pull_out(bar)
 
     def place_bar(self, e: Entity) -> None:
         if e.order in self.bars or e.order in self.failed:
@@ -525,8 +547,11 @@ class _Layout:
         x0, x1, clipped_start, clipped_end = self.extent[e.order]
         st = self.style
         text = self.text(e.font, e.font_size_mm, e.label)
-        label_x = self.bar_label_x(e, text, x0, x1)
-        occupied = (min(x0, label_x + text.x0), max(x1, label_x + text.x1))
+        cap_start, cap_end = clipped_start, e.when.is_open or clipped_end
+        room = (x1 - x0) - 2 * st.label_inset - (st.cap_depth if cap_start else 0) - (st.cap_depth if cap_end else 0)
+        fits = text.width <= room
+        label_x = self.bar_label_x(e, text, x0, x1, cap_start, cap_end)
+        occupied = (x0, x1)  # a label too long for its bar never pushes the bar outward (§7)
         candidates = [side] if side is not None else [Side.ABOVE, Side.BELOW]
         options = {s: lane for s in candidates if (lane := self.lanes[s].find(*occupied, st.lane_gap)) is not None}
         if not options:
@@ -544,17 +569,67 @@ class _Layout:
         lane = options[side]
         self.lanes[side].add(lane, 1, *occupied, f"bar:{e.order}")
         bar = _Bar(e, side, lane, x0, x1, e.when.is_open, clipped_start, clipped_end, text, label_x, None, occupied)
+        bar.label_lane = lane
         self.bars[e.order] = bar
+        if not fits and not self.place_beside(bar):
+            self.pending.append(bar)
         self.check_label_fits(bar)
         if e.illustration is not None:
             bar.illustration = self.place_bar_illustration(bar)
 
-    def bar_label_x(self, e: Entity, text: _Text, x0: float, x1: float) -> float:
-        """Just inside the bar's start; or, if that runs off the far end, ending just inside its end (§7)."""
-        inset = self.style.label_inset
-        x = x0 + inset - text.x0
+    def place_beside(self, bar: _Bar) -> bool:
+        """A label too long for its bar, just after its end in the same lane; or, where that would run off the far
+        end of the paper, just before its start. Only if that stretch of the lane is free (§7)."""
+        st, text = self.style, bar.text
+        x0 = bar.x1 + st.label_inset
+        if x0 + text.width > self.length:
+            x0 = bar.x0 - st.label_inset - text.width
+            if x0 < 0:
+                return False
+        if not self.lanes[bar.side].free(bar.lane, x0, x0 + text.width, st.lane_gap):
+            return False
+        self.lanes[bar.side].add(bar.lane, 1, x0, x0 + text.width, f"label:{bar.entity.order}")
+        bar.label_x = x0 - text.x0
+        bar.placement = LabelPlacement.BESIDE
+        bar.occupied = (min(bar.x0, x0), max(bar.x1, x0 + text.width))
+        return True
+
+    def pull_out(self, bar: _Bar) -> None:
+        """Into the nearest free spot up to three lanes further out, joined to the middle of the bar's outer edge
+        by a 45° leader that points at the start of the label, level with the middle of its capitals: towards
+        later dates where it fits, otherwise towards earlier (§7)."""
+        st, text, lanes = self.style, bar.text, self.lanes[bar.side]
+        anchor_x = (bar.x0 + bar.x1) / 2
+        anchor_d = self.band(bar.side, bar.lane)[1] - st.bar_inset
+        for lane in range(bar.lane + 1, min(bar.lane + st.max_pull_lanes, self.geom[bar.side].capacity - 1) + 1):
+            end_d = sum(self.band(bar.side, lane)) / 2  # the lane's middle, where the label's capitals are centred
+            rise = end_d - anchor_d
+            for direction in (1, -1):
+                end_x = anchor_x + direction * rise
+                x0 = end_x + st.leader_gap if direction > 0 else end_x - st.leader_gap - text.width
+                if x0 < 0 or x0 + text.width > self.length or not lanes.free(lane, x0, x0 + text.width, st.lane_gap):
+                    continue
+                lanes.add(lane, 1, x0, x0 + text.width, f"label:{bar.entity.order}")
+                bar.label_x, bar.label_lane = x0 - text.x0, lane
+                bar.placement = LabelPlacement.PULLED_OUT
+                bar.leader = ((anchor_x, anchor_d), (end_x, end_d))
+                return
+        bar.placement = LabelPlacement.OVERRUN
+        e = bar.entity
+        self.sink.warning(
+            "label-crowded",
+            f'no room for the label of {e.kind.value} "{e.label}" beside its bar or within {st.max_pull_lanes} '
+            "lanes of it, so it runs past the end of its bar",
+            e.location,
+        )
+
+    def bar_label_x(self, e: Entity, text: _Text, x0: float, x1: float, cap_start: bool, cap_end: bool) -> float:
+        """Just inside the bar's start; or, if that runs off the far end, ending just inside its end (§7).
+        Clear of an open-end cap at either end."""
+        st = self.style
+        x = x0 + st.label_inset + (st.cap_depth if cap_start else 0.0) - text.x0
         if x + text.x1 > self.length:
-            x = x1 - inset - text.x1
+            x = x1 - st.label_inset - (st.cap_depth if cap_end else 0.0) - text.x1
             if x + text.x0 < 0:
                 x = -text.x0
                 self.sink.warning(
@@ -785,6 +860,18 @@ class _Layout:
                 out.append((self.illustration_box(ill), f'the illustration of {ill.owner.kind.value} "{ill.owner.label}"'))
         return out
 
+    def leaders(self, side: Side) -> list[tuple[tuple[float, float], tuple[float, float], str]]:
+        """Pulled-out labels' leaders on one side, in page coordinates, with a name for messages."""
+        return [
+            (
+                (bar.leader[0][0], self.y(side, bar.leader[0][1])),
+                (bar.leader[1][0], self.y(side, bar.leader[1][1])),
+                f'the leader of {bar.entity.kind.value} "{bar.entity.label}"',
+            )
+            for bar in self.bars.values()
+            if bar.side is side and bar.leader is not None
+        ]
+
     def conflicts(self) -> list[tuple[_Event, _Event | str, float]]:
         """Every collision involving a flag: with another flag, another event's pole, or a fixed obstacle."""
         pad = self.style.collision_pad
@@ -807,6 +894,9 @@ class _Layout:
                     area = box.overlap_area(obstacle)
                     if area > 0:
                         found.append((a, name, area))
+                for p, q, name in self.leaders(side):
+                    if segment_crosses(p, q, box):
+                        found.append((a, name, box.height))
         return found
 
     def phase_c(self) -> None:
@@ -905,6 +995,12 @@ class _Layout:
             if box.overlaps(obstacle):
                 outer = self.distance_range(ev.side, obstacle)[1]
                 lift = max(lift, outer + 2 * pad + ev.text.height)
+        for p, q, _ in self.leaders(ev.side):
+            if segment_crosses(p, q, box):
+                # the highest point of the leader beneath the flag's width
+                beneath = keep_inside([p, q], Box(box.x0, -1e9, box.x1, 1e9))
+                outer = max(abs(self.baseline - y) for piece in beneath for _, y in piece)
+                lift = max(lift, outer + 2 * pad + ev.text.height)
         return lift
 
     def report_collisions(self) -> None:
@@ -986,7 +1082,7 @@ class _Layout:
         return Box(bar.x0, ys[0], bar.x1, ys[1])
 
     def bar_label(self, bar: _Bar) -> PlacedText:
-        d_in, d_out = self.band(bar.side, bar.lane)
+        d_in, d_out = self.band(bar.side, bar.label_lane)
         y_mid = self.y(bar.side, (d_in + d_out) / 2)
         y = y_mid + bar.text.shaped.cap_height / 2  # the capitals are centred in the lane
         return bar.text.placed(bar.entity.label, bar.label_x, y)
@@ -1045,19 +1141,50 @@ class _Layout:
             pieces.append((keep_from, ev.length))
         return tuple((self.y(ev.side, a), self.y(ev.side, b)) for a, b in pieces)
 
+    def leader_segments(self, bar: _Bar, bars: list[PlacedBar], flag_boxes: list[Box]) -> tuple:
+        """A leader, broken like a pole wherever it would cross other ink (§8): bars, labels, illustrations and
+        flags, but never its own bar or label. Lines may cross lines."""
+        if bar.leader is None:
+            return ()
+        st = self.style
+        (ax, ad), (bx, bd) = bar.leader
+        pieces = [[(ax, self.y(bar.side, ad)), (bx, self.y(bar.side, bd))]]
+        boxes = [b2 for b in bars if b.side is bar.side and b.entity is not bar.entity
+                 for b2 in (Box(b.x0, b.y0, b.x1, b.y1), b.label.box)]
+        boxes += [self.illustration_box(ill) for ill in self.ills if ill.side is bar.side]
+        boxes += flag_boxes
+        for box in boxes:
+            pieces = [part for piece in pieces for part in cut_out(piece, box.padded(st.pole_gap))]
+        return tuple(
+            (piece[0], piece[-1]) for piece in pieces if math.dist(piece[0], piece[-1]) >= st.min_pole_segment
+        )
+
     def result(self, ticks: tuple[Tick, ...]) -> ResolvedLayout:
+        flag_boxes = {id(ev): self.flag_box(ev) for ev in self.events}
         bars = []
         for order in sorted(self.bars):
             bar = self.bars[order]
             box = self.bar_box(bar)
+            leader = None if bar.leader is None else tuple((x, self.y(bar.side, d)) for x, d in bar.leader)
             bars.append(
                 PlacedBar(
                     bar.entity, bar.side, bar.lane, bar.x0, bar.x1, box.y0, box.y1, bar.open_end, bar.clipped_start,
-                    bar.clipped_end, self.bar_label(bar), self.placed_illustration(bar.illustration),
+                    bar.clipped_end, self.bar_label(bar), bar.placement, leader, (),
+                    self.placed_illustration(bar.illustration),
                 )
             )
+        bars = [
+            replace(
+                placed,
+                leader_segments=self.leader_segments(
+                    self.bars[placed.entity.order],
+                    bars,
+                    [flag_boxes[id(ev)] for ev in self.events if ev.side is placed.side],
+                ),
+            )
+            for placed in bars
+        ]
         events = []
-        flag_boxes = {id(ev): self.flag_box(ev) for ev in self.events}
         for ev in self.events:
             box = flag_boxes[id(ev)]
             flag, time_label = ev.text.placed(ev.entity.label, box, ev.direction)
@@ -1092,6 +1219,7 @@ class _Layout:
             tick_interval=self.tick_interval,
             tick_label_interval=self.tick_label_interval,
             axis_pen=AXIS_PEN,
+            cap_depth_mm=self.style.cap_depth,
             pens=pens,
             omitted=tuple(self.omitted),
             diagnostics=tuple(self.sink.items),

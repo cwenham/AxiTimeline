@@ -38,6 +38,7 @@ from libaxitl.pens import PENS
 from libaxitl.units import UnitError, format_number, parse_length
 
 from . import __version__
+from .jobhash import job_hash
 from .resolver import filesystem_resolver
 
 EXIT_OK = 0
@@ -65,6 +66,7 @@ class Job:
     resolved: ResolvedLayout | None = None
     drawing: Drawing | None = None
     diagnostics: tuple[Diagnostic, ...] = ()
+    hash: str | None = None  # the job hash, once layout has resolved now
     notes: list[str] = field(default_factory=list)
     stages: list[str] = field(default_factory=list)
 
@@ -99,6 +101,7 @@ def run_pipeline(source_path: str, now_text: str | None) -> Job:
         job.stages.append("layout")
         job.resolved = layout(job.result.document, (pinned or clock_now()) if uses_now else None)
         job.diagnostics += job.resolved.diagnostics
+        job.hash = job_hash(job.result, job.resolved, source_path)
         job.stages.append("draw")
         job.drawing = draw(job.resolved)
         job.diagnostics += job.drawing.diagnostics
@@ -180,6 +183,7 @@ def cmd_check(args: argparse.Namespace) -> int:
             "diagnostics": [_diagnostic_json(d) for d in job.diagnostics],
             "summary": _summary(job.result) if job.result else None,
             "layout": _layout_summary(job.resolved) if job.resolved else None,
+            "job_hash": job.hash,
             "notes": job.notes,
             "stages": job.stages,
             "versions": {"axitime": __version__, "libaxitl": libaxitl.__version__},
@@ -208,6 +212,8 @@ def cmd_check(args: argparse.Namespace) -> int:
             print(f"  ticks:    every {resolved.tick_interval}, labelled every {resolved.tick_label_interval or 'none'}")
     if job.drawing:
         print("  pens:     " + ", ".join(job.drawing.pens) + f"  ({resolved.axis_pen} draws the baseline and ticks first)")
+    if job.hash:
+        print(f"  job hash: {job.hash}")
     for note in job.notes:
         print(f"  note: {note}")
     return EXIT_OK if job.errors == 0 else EXIT_ERRORS
@@ -280,7 +286,7 @@ def cmd_render(args: argparse.Namespace) -> int:
     except UnitError as exc:
         raise UsageError(f"--bleed: {exc}") from None
     window = _window(args, resolved, job.notes)
-    metadata = {"source": Path(job.source_path).name, "axitime-version": __version__}
+    metadata = {"source": Path(job.source_path).name, "axitime-version": __version__, "job-hash": job.hash}
     if resolved.now is not None:
         metadata["now"] = str(resolved.now)
     out = Path(args.out)
@@ -306,11 +312,11 @@ def cmd_render(args: argparse.Namespace) -> int:
     for pen, path, _ in written:
         what = "preview, every pen" if pen is None else f"{pen}, {_length(lengths[pen])} of ink"
         print(f"  {path}  ({what})")
+    print(f"  job hash: {job.hash}")
     if resolved.now is not None:
         print(f"  now: {resolved.now}  (pass --now {resolved.now} to reproduce these files later)")
     for note in job.notes:
         print(f"  note: {note}")
-    print("  note: job hashes aren't written into the files yet (docs/known-gaps.md)")
     return EXIT_OK
 
 

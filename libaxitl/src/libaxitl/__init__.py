@@ -16,6 +16,7 @@ from .fonts import BUILTIN_FONTS, Font
 from .geometry import Box
 from .layout import (
     FlagDirection,
+    LabelPlacement,
     LayoutStyle,
     PlacedBar,
     PlacedEvent,
@@ -35,7 +36,7 @@ from .units import parse_length
 
 __all__ = [
     "draw", "layout", "page_for", "parse", "render", "stroke_lengths", "parse_date", "parse_length", "parse_when", "shape", "AxitlError", "BUILTIN_FONTS",
-    "Baseline", "Box", "DrawStyle", "Drawing", "Page", "RenderError", "RenderOptions", "Stage", "Stroke", "DateRange", "DateValue", "Diagnostic", "Entity", "Fill", "FlagDirection", "Font",
+    "Baseline", "Box", "DrawStyle", "Drawing", "Page", "RenderError", "RenderOptions", "Stage", "Stroke", "DateRange", "DateValue", "Diagnostic", "Entity", "Fill", "FlagDirection", "LabelPlacement", "Font",
     "Illustration", "Kind", "LayoutStyle", "OpenEndStyle", "PENS", "ParseResult", "PlacedBar", "PlacedEvent",
     "PlacedIllustration", "PlacedText", "Precision", "ResolvedLayout", "Resource", "Severity", "ShapedText", "Side",
     "SourceLocation", "Tick", "TimelineDocument", "TimelineSettings", "__version__",

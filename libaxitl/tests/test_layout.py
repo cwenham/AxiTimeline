@@ -2,7 +2,8 @@
 
 import pytest
 
-from libaxitl import AxitlError, FlagDirection, Side, layout, parse, parse_date
+from libaxitl import AxitlError, Box, FlagDirection, LabelPlacement, Side, layout, parse, parse_date
+from libaxitl.geometry import segment_crosses
 from libaxitl.dates import DateValue
 
 # 1900 to the end of 1999 on exactly one metre: 10mm a year on average, baseline in the middle (y = 105).
@@ -327,3 +328,76 @@ def test_a_pole_is_broken_around_a_tick_label():
     for y0, y1 in e.pole_segments:
         assert y1 <= label.box.y0 or y0 >= label.box.y1
     assert len(e.pole_segments) == 2
+
+
+# -- bar labels too long for their bars (§7) --------------------------------------------------------------
+
+LONG = "A long label for a short bar"
+
+
+def test_a_label_that_fits_stays_inside():
+    b = bar(lay(T + '^span "Fits" 1900-1950\n'), "Fits")
+    assert b.label_placement is LabelPlacement.INSIDE
+    assert b.x0 < b.label.box.x0 and b.label.box.x1 < b.x1
+
+
+def test_a_long_label_goes_beside_its_bar_when_theres_room():
+    b = bar(lay(T + f'^span "{LONG}" 1950-1951\n'), LONG)
+    assert (b.label_placement, b.leader) == (LabelPlacement.BESIDE, None)
+    assert b.label.box.x0 == pytest.approx(b.x1 + 1.5)
+    assert b.y0 < b.label.box.y0 < b.label.box.y1 < b.y1  # same lane
+
+
+def test_at_the_paper_end_it_goes_before_the_bar_instead():
+    b = bar(lay(T + f'^span "{LONG}" 1998-1999\n'), LONG)
+    assert b.label_placement is LabelPlacement.BESIDE
+    assert b.label.box.x1 == pytest.approx(b.x0 - 1.5)
+
+
+def test_a_long_label_never_pushes_its_bar_outward():
+    r = lay(T + f'^!span "Neighbour" 1952-1970\n^span "{LONG}" 1949-1950\n')
+    assert bar(r, LONG).lane == 0
+
+
+def test_otherwise_it_is_pulled_out_with_a_45_degree_leader():
+    r = lay(T + f'^!span "Neighbour" 1952-1970\n^span "{LONG}" 1949-1950\n')
+    b = bar(r, LONG)
+    assert b.label_placement is LabelPlacement.PULLED_OUT
+    (ax, ay), (ex, ey) = b.leader
+    assert (ax, ay) == pytest.approx(((b.x0 + b.x1) / 2, b.y0))  # the middle of the bar's outer edge
+    assert ex - ax == pytest.approx(ay - ey) == pytest.approx(5.0)  # 45°, up to the middle of the next lane
+    assert b.label.box.x0 == pytest.approx(ex + 0.5)  # pointing at the start of the label
+    assert b.leader_segments == (b.leader,)  # nothing in the way
+
+
+def test_it_is_pulled_out_leftwards_when_the_paper_ends():
+    r = lay(T + f'^!span "Neighbour" 1980-1993\n^span "{LONG}" 1995-1996\n')
+    b = bar(r, LONG)
+    (ax, _), (ex, _) = b.leader
+    assert b.label_placement is LabelPlacement.PULLED_OUT and ex < ax
+    assert b.label.box.x1 == pytest.approx(ex - 0.5)
+
+
+def test_a_leader_is_broken_around_the_bars_it_crosses():
+    r = lay(T + f'^!!!span "Close" 1952-1970\n^!!span "{LONG}" 1949-1950\n^!span "Roof" 1940-1970\n')
+    b, roof = bar(r, LONG), bar(r, "Roof")
+    assert b.leader[1][1] == pytest.approx(105 - (3 + 2 * 8 + 4))  # two lanes out
+    assert len(b.leader_segments) == 2
+    for p, q in b.leader_segments:
+        assert not segment_crosses(p, q, Box(roof.x0, roof.y0, roof.x1, roof.y1))
+
+
+def test_no_room_within_three_lanes_overruns_with_a_warning():
+    roofs = "".join(f'^!span "R{n}" 1900-1999\n' for n in (1, 2, 3))
+    r = lay(T + f'^!!!span "Wall" 1952-1999\n^!!span "{LONG}" 1949-1950\n' + roofs)
+    b = bar(r, LONG)
+    assert b.label_placement is LabelPlacement.OVERRUN
+    assert b.label.box.x0 == pytest.approx(b.x0 + 1.5)
+    assert codes(r) == ["label-crowded"]
+
+
+def test_flags_clear_leaders_and_pulled_out_labels():
+    r = lay(T + f'^!span "Neighbour" 1952-1970\n^span "{LONG}" 1949-1950\n^event "Event" 1950-06\n')
+    b, e = bar(r, LONG), event(r, "Event")
+    assert not segment_crosses(*b.leader, e.flag_box.padded(0.4))
+    assert not e.flag_box.overlaps(b.label.box)

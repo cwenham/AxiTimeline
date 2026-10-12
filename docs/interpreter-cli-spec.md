@@ -74,7 +74,7 @@ AST shape: a `TimelineDocument` root carries the `timeline` directive's settings
 
 **How the renderer draws** (implemented 2026-10-12; spacing values provisional, in `DrawStyle`):
 - Everything is emitted as straight-line paths: curves (glyphs, sine caps, wave fills, illustration curves) are flattened once, in `draw`. Windows are cut geometrically at the window's edges (plus bleed), never with an SVG clip path, which plotter software ignores; so a windowed reprint draws exactly the strokes the whole job drew there.
-- A bar is a closed outline; a `group` is a bracket, the same outline left open on its outward side, where its members are placed. Open and clipped ends are drawn as a sawtooth or sine edge reaching 1.5mm into the bar. An outline is broken where its own label runs past the bar, like a pole (language spec §8).
+- Every bar, a `group` included, is a closed outline (language spec §9). Open and clipped ends are drawn as a sawtooth or sine edge reaching 1.5mm into the bar, and its label starts clear of that edge. A pulled-out label's leader (language spec §7) is drawn in the bar's pen, broken like a pole; a bar's outline is broken around its own label only when that label runs past the bar as a last resort.
 - Fills: `solid` is horizontal hatching every 0.4mm; `diagonal` and `crosshatch` lines every 2mm at 45°; `wave` horizontal sine lines every 2mm; `dots` short strokes on a 2mm grid. Patterns are anchored to the page rather than to each bar, so neighbouring bars and windowed reprints line up. A fill stops in a clean vertical edge 0.75mm either side of its bar's label, across the bar's full height, and leaves out any strip too narrow to hatch without stubs.
 - Illustrations are flattened to the outlines of their shapes (paths including arcs, lines, polylines, polygons, rectangles, circles, ellipses, through nested groups and transforms), fitted into their box with the SVG default `xMidYMid meet`. Text, embedded images, `<use>` references and foreign objects can't be plotted and are left out; filled shapes are drawn as outlines; both are reported as warnings by `check`.
 - `<metadata>` holds one `axitime:job` element (namespace `urn:axitimeline:job:1`) whose attributes record the pen (`all` for a preview), the stroke length in the file, the window and bleed actually used, and the libaxitl version, plus whatever fields the host adds (axitime adds the source file name, its own version and the resolved `now`; the job hash once its serialisation is fixed).
@@ -164,6 +164,26 @@ Flags:
 Each physical job — potentially spanning several separately-invoked `plot` runs across different pens, days, or after an interruption — gets a human-readable, append-only job log recording its full history. Scoped to `plot` only: `render` and `check` stay stateless, as already established, since neither commits anything to paper.
 
 The log's header identifies the job: the `.axitl` source path; the job hash (SHA-256, computed over the fully-resolved source *after* all includes have been expanded — not the raw pre-include text — combined with the axitime/libaxitl version that did the rendering, **the resolved value of `now` when the timeline uses it**, **and the SHA-256 of every illustration and custom font fetched through `resolve`** (settled 2026-10-12: these arrive outside the flattened text but change the layout, so editing an illustration or a font file must change the hash just as editing the source does), so that a version upgrade that might change layout behavior for otherwise-identical source, a re-render on a later day whose `now` resolves differently, or an edited illustration or font, gets caught the same way a source edit would be); the version number itself recorded separately as its own readable field (not just folded invisibly into the hash, so a human glancing at the log can see directly which version produced it rather than only inferring a change happened from the hash differing); the resolved `now`, likewise recorded as its own readable field whenever the source uses it (this is the value to hand back to `--now` when re-rendering the job later); and, since the job hash alone doesn't say *which* file changed if it ever stops matching, a SHA-256 of each individual include file, illustration and custom font involved, so a mismatch can be traced back to the specific file that moved. SHA-256's cryptographic properties are irrelevant here — it's just a convenient, effectively-collision-free fingerprint for the operator's own bookkeeping, not protecting against anything adversarial.
+
+**Exact serialisation (settled 2026-10-12).** The job hash is the SHA-256, written as 64 lowercase hex characters, of this text in UTF-8 with LF line endings:
+
+```text
+axitimeline-job 1
+libaxitl <version>
+axitime <version>
+now <value>                        (only when the timeline ends at now)
+resource <kind> <sha256> <path>    (one per illustration and custom font)
+source <length of the flattened text in bytes>
+<the flattened text>
+```
+
+- The first line names the scheme and its version, so a future change can't be confused with this one.
+- `now` is the resolved value at its truncated precision, in the language's date syntax: the value to pass back to `--now`.
+- Each `resource` line gives the kind (`illustration` or `font`), the SHA-256 of the file's content with line endings normalised to LF and any UTF-8 byte-order mark removed (so a Windows checkout hashes the same), and the file's path relative to the main `.axitl` file's folder (so the hash doesn't depend on where axitime runs). Lines are sorted by kind, then path. Includes need no line: their text is already in the flattened source.
+- The flattened text comes last, after its length, so nothing in it can be mistaken for a header line.
+- Pen, window, bleed and other render options are not part of the hash: they vary between plot runs of the same job, and are recorded per run in the log.
+
+The job log's header records the same per-file hashes, includes too, so a mismatch can be traced to the file that changed. Each SVG carries the hash as the `job-hash` attribute of its `axitime:job` metadata element.
 
 The body is a chronological, append-only sequence of entries, one per `plot` invocation against this job: timestamp, which per-pen SVG was used, which pen, the window plotted (full job, or the `--start-offset`/`--length` bounds), and the outcome — completed, cancelled, errored (with the error message), or forced past a mismatch (with what the mismatch was, per `--force` above). Append-only rather than rewritten each time matters for the same reason the tick-mark resume mechanism exists: a crash or power loss mid-plot is a scenario this project already has to tolerate, and an append-only text file degrades gracefully if a run dies mid-write (worst case, one incomplete trailing line), whereas a structured file requiring a full rewrite each time risks corrupting the entire history in the same failure.
 

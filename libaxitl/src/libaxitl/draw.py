@@ -17,8 +17,8 @@ from enum import Enum
 from .diagnostics import Diagnostic, Diagnostics
 from .geometry import Box, Point, cut_out, keep_inside
 from .illustrate import illustration_strokes
-from .layout import PlacedBar, PlacedText, ResolvedLayout
-from .model import Fill, Kind, OpenEndStyle, Side
+from .layout import LabelPlacement, PlacedBar, PlacedText, ResolvedLayout
+from .model import Fill, OpenEndStyle
 from .svgpath import flatten
 
 
@@ -35,7 +35,6 @@ class DrawStyle:
     """How things are drawn where the specs leave it open. Millimetres. Provisional values."""
 
     curve_piece: float = 0.25  # curves are drawn as straight pieces about this long
-    cap_depth: float = 1.5  # how far an open-end cap reaches into its bar
     cap_tooth: float = 1.5  # height of one sawtooth tooth or sine wave (rounded to fit the bar)
     hatch_spacing: float = 2.0  # between lines of diagonal, crosshatch and wave fills, and between dots
     solid_spacing: float = 0.4  # "solid" is dense hatching (§3.7)
@@ -139,32 +138,29 @@ class _Drawer:
         st, e = self.style, bar.entity
         x0, x1, y0, y1 = bar.x0, bar.x1, bar.y0, bar.y1
         caps = bar.cap_start + bar.cap_end
-        depth = min(st.cap_depth, 0.9 * (x1 - x0) / caps) if caps else 0.0
+        depth = min(self.layout.cap_depth_mm, 0.9 * (x1 - x0) / caps) if caps else 0.0
         style = self.layout.document.timeline.open_end_style
         left = self.cap(x0, y0, y1, +1, depth, style) if bar.cap_start else [(x0, y0), (x0, y1)]
         right = self.cap(x1, y0, y1, -1, depth, style) if bar.cap_end else [(x1, y0), (x1, y1)]
-        if e.kind is Kind.GROUP:
-            # A group is a bracket, open on the side facing outward, where its members are placed.
-            if bar.side is Side.ABOVE:
-                outline = left + list(reversed(right))
-            else:
-                outline = list(reversed(left)) + right
-        else:
-            outline = left + list(reversed(right)) + [left[0]]
-        keep_clear = bar.label.box.padded(st.label_clearance)
+        outline = left + list(reversed(right)) + [left[0]]  # groups too: a group looks like a span (§9)
+        on_bar = bar.label_placement in (LabelPlacement.INSIDE, LabelPlacement.OVERRUN)
+        keep_clear = bar.label.box.padded(st.label_clearance) if on_bar else Box(0, 0, 0, 0)
         self.add(e.pen, Stage.BARS, cut_out(outline, keep_clear))
         self.add(e.pen, Stage.BARS, self.text(bar.label))
+        self.add(e.pen, Stage.BARS, ([p, q] for p, q in bar.leader_segments))
         if e.fill is not Fill.NONE:
             region = Box(x0 + (depth if bar.cap_start else 0.0), y0, x1 - (depth if bar.cap_end else 0.0), y1)
             if region.width > 0 and region.height > 0:
                 # The fill stops in a clean vertical edge either side of the label, across the whole bar, and
                 # leaves out any strip too narrow to hatch without leaving stubs (§3.7).
-                fx0, fx1 = keep_clear.x0, keep_clear.x1
-                if fx0 - region.x0 < st.hatch_spacing:
-                    fx0 = region.x0 - 1
-                if region.x1 - fx1 < st.hatch_spacing:
-                    fx1 = region.x1 + 1
-                fill_clear = Box(fx0, y0 - 1, fx1, y1 + 1)
+                fill_clear = Box(0, 0, 0, 0)
+                if on_bar:
+                    fx0, fx1 = keep_clear.x0, keep_clear.x1
+                    if fx0 - region.x0 < st.hatch_spacing:
+                        fx0 = region.x0 - 1
+                    if region.x1 - fx1 < st.hatch_spacing:
+                        fx1 = region.x1 + 1
+                    fill_clear = Box(fx0, y0 - 1, fx1, y1 + 1)
                 for line in self.fill(e.fill, region):
                     self.add(e.pen, Stage.BARS, cut_out(line, fill_clear))
 

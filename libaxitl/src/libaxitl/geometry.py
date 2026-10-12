@@ -96,3 +96,8 @@ def keep_inside(polyline: list[Point] | tuple[Point, ...], box: Box) -> list[lis
 def cut_out(polyline: list[Point] | tuple[Point, ...], box: Box) -> list[list[Point]]:
     """The parts of a polyline outside ``box``: how ink is kept from running through other ink."""
     return _split(polyline, box, keep_inside=False)
+
+
+def segment_crosses(p: Point, q: Point, box: Box) -> bool:
+    """True if any part of the segment p→q lies inside ``box``."""
+    return _inside_interval(p, q, box) is not None

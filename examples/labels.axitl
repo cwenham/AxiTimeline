@@ -1,0 +1,33 @@
+// Bar labels that don't fit inside their bars (language spec §7), one case to each stretch of paper.
+timeline start=1900 end=1999 length=60cm width=160 baseline=low
+
+// 1900s: fits inside its bar
+^span "Fits inside its bar" 1900-1912 blue
+
+// 1910s: room just after the bar's end, so the label goes beside it
+^span "Beside its short bar" 1917-1918 green
+
+// 1930s: a higher-priority neighbour takes the room after it, so the label is pulled out one lane
+^!!span "Neighbour" 1936-1950 red fill=diagonal
+^!span "Pulled out one lane" 1932-1934 orange
+
+// 1950s: the next lane up is taken too, so it is pulled out two lanes; an event's flag stays clear of the leader
+^!!!span "Close neighbour" 1957-1972 red fill=crosshatch
+^!!span "Pulled out two lanes" 1953-1955 orange
+^!span "Roof" 1950-1972 grey
+^event "An event by the leader" 1954-06 time_label=month
+
+// 1990s: the label would run off the paper's end, and the room before the bar is taken, so it is
+// pulled out leftwards
+^!!span "Earlier neighbour" 1985-1993 grey
+^!span "Near the end of the paper" 1994-06/1995-06 violet
+
+// below, at the very end: room before the bar's start, so the label goes beside it there
+vspan "Late and short" 1997-1998 green
+
+// below: nowhere to go within three lanes, so the label runs past its bar with a warning
+v!!!span "Wall" 1972-1990 black
+v!!span "Squeezed out completely" 1969-1970 orange
+v!span "Roof one" 1950-1990 grey
+v!span "Roof two" 1950-1990 grey
+v!span "Roof three" 1950-1990 grey
