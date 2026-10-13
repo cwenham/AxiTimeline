@@ -18,6 +18,13 @@
     "Programming Languages"
   ],
   "main": "./src/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Checking runs axitime, a program found in the workspace, so files are only checked in a trusted workspace.",
+      "restrictedConfigurations": ["axitl.check.command"]
+    }
+  },
   "scripts": {
     "test": "node test/run.js"
   },
@@ -42,6 +49,23 @@
         "path": "./syntaxes/axitl.tmLanguage.json"
       }
     ],
+    "configuration": {
+      "title": "AxiTimeline",
+      "properties": {
+        "axitl.check.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Check `.axitl` files with `axitime check` when they are opened and saved, and show its errors and warnings."
+        },
+        "axitl.check.command": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "scope": "machine-overridable",
+          "markdownDescription": "The command that runs axitime, one word per item, e.g. `[\"/Users/me/AxiTimeline/.venv/bin/axitime\"]`. When empty, the `axitime` in the nearest `.venv` folder at or above the file is used, else `axitime` on the PATH. Avoid `uv run`: it syncs the environment first, which removes the optional `axidraw` extra."
+        }
+      }
+    },
     "configurationDefaults": {
       "[axitl]": {
         "editor.wordBasedSuggestions": "off"

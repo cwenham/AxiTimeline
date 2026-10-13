@@ -53,8 +53,9 @@ began as are superseded. Change the specs here, in the same commit as the code t
 - Spacing constants live in `LayoutStyle` (`libaxitl/layout.py`) and `DrawStyle` (`libaxitl/draw.py`).
 - Built-in fonts live in `libaxitl/src/libaxitl/fonts/data/` (copied from Inkscape's Hershey Text
   `svg_fonts`, with their licence notices). Keep `HERSHEY-NOTICE.txt` and `OFL.txt` beside them.
-- `editors/vscode/` is the VS Code extension (highlighting, completion, hover; plain JS, no build step; see its
-  README). Its tests: `node test/run.js` from that folder. It repeats the language's vocabularies (pens, fonts,
+- `editors/vscode/` is the VS Code extension (highlighting, completion, hover, and diagnostics from
+  `axitime check --json` on open and save; plain JS, no build step; see its README). Its tests: `node test/run.js`
+  from that folder. Keep `check --json`'s report shape stable, or update `src/check.js` with it. It repeats the language's vocabularies (pens, fonts,
   parameters, values) in `src/vocabulary.json` and the grammar; `uv run pytest` checks them against libaxitl, so
   a language change that adds to them has to update the extension in the same commit.
 

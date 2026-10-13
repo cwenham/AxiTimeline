@@ -1,9 +1,11 @@
 'use strict';
-// Completion and hover help for .axitl files. Highlighting is the TextMate grammar in syntaxes/; comments,
-// brackets and indentation are in language-configuration.json. What fits where is worked out in analyse.js.
+// Completion and hover help for .axitl files, and diagnostics from axitime check (check.js). Highlighting is the
+// TextMate grammar in syntaxes/; comments, brackets and indentation are in language-configuration.json. What fits
+// where is worked out in analyse.js.
 
 const vscode = require('vscode');
 const { completionContext, hoverTarget, splitComment, PENS } = require('./analyse');
+const { Checker } = require('./check');
 const docs = require('./docs');
 const vocabulary = require('./vocabulary.json');
 
@@ -23,10 +25,21 @@ const TEMPLATES = {
 
 function activate(context) {
   const selector = { language: 'axitl' };
+  const checker = new Checker();
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(selector, { provideCompletionItems }, '=', '"', '(', '/'),
-    vscode.languages.registerHoverProvider(selector, { provideHover })
+    vscode.languages.registerHoverProvider(selector, { provideHover }),
+    checker,
+    vscode.workspace.onDidOpenTextDocument((document) => checker.check(document)),
+    vscode.workspace.onDidSaveTextDocument((document) => checker.saved(document)),
+    vscode.workspace.onDidCloseTextDocument((document) => checker.forget(document.uri.fsPath)),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => checker.checkAll()),
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('axitl.check')) checker.checkAll();
+    })
   );
+  checker.checkAll(); // documents already open when the extension started
+  return { checker }; // for the tests
 }
 
 function deactivate() {}
