@@ -12,9 +12,8 @@ This repository is the software:
 - An editor extension for **VS Code**, with highlighting, completion, hover help and errors as you type.
 
 **Status, October 2026.** Parsing, layout, rendering and the `check`, `list-pens` and `render` commands work.
-`plot` works against a simulated plotter but hasn't yet been run on a real AxiDraw. The paper transport (the
-motorised roll feed) is still to be designed, so for now `plot` asks you to move the paper on by hand between
-strips.
+`plot` has drawn its first test strips on a real AxiDraw. The paper transport (the motorised roll feed) is still
+to be designed, so for now `plot` asks you to move the paper on by hand between strips.
 
 ## What it looks like
 

@@ -6,6 +6,10 @@ Coordinates are millimetres from the home corner, where the carriage must be whe
 
 from __future__ import annotations
 
+import logging
+import math
+import time
+
 from .config import PlotterConfig
 from .plotting import Cancelled, PlotError, Point
 
@@ -13,6 +17,16 @@ INSTALL = "uv sync --extra axidraw (in the AxiTimeline folder)"
 _UNITS_MM = 2
 _MODEL_SE_A3 = 2  # "AxiDraw V3/A3 or SE/A3"
 _PAUSE_BUTTON, _LOST_USB = 102, 104
+_POLL_SECONDS = 0.05
+_RELEASE_POLLS = 60  # up to 3 seconds for the pause button to be let go
+_IDLE_POLLS = 300  # up to 15 seconds for the board to finish its queued moves
+_HOME_TOLERANCE_MM = 0.5
+
+
+def _not_manual_homing(record: logging.LogRecord) -> bool:
+    """pyaxidraw tells the operator to home the AxiDraw by hand after the pause button. plot homes it itself, and
+    says so when it can't."""
+    return not record.getMessage().startswith("Manually home")
 
 
 class AxiDrawPlotter:
@@ -39,6 +53,7 @@ class AxiDrawPlotter:
         # to axitime (plotting.StopRequest), which stops between strokes rather than mid-command.
         ad.errors.connect = ad.errors.disconnect = True
         ad.errors.button = ad.errors.keyboard = False
+        logging.getLogger("axidrawinternal.axidraw").addFilter(_not_manual_homing)
         try:
             connected = ad.connect()
         except RuntimeError:
@@ -46,9 +61,12 @@ class AxiDrawPlotter:
         if not connected:
             raise PlotError("couldn't connect to the AxiDraw: is it plugged in, switched on, and at its home corner?")
 
+    def _stopped(self) -> int:
+        return getattr(getattr(self.ad, "plot_status", None), "stopped", 0)
+
     def _check(self) -> None:
         """Raise if pyaxidraw has stopped: the pause button, or lost USB."""
-        stopped = getattr(getattr(self.ad, "plot_status", None), "stopped", 0) or getattr(self.ad.errors, "code", 0)
+        stopped = self._stopped() or getattr(self.ad.errors, "code", 0)
         if stopped == _PAUSE_BUTTON:
             raise Cancelled("the AxiDraw's pause button was pressed")
         if stopped == _LOST_USB:
@@ -80,13 +98,47 @@ class AxiDrawPlotter:
                 raise PlotError("lost the USB connection to the AxiDraw") from exc
             raise
 
-    def _shut_down(self) -> None:
+    def _wait_for_button_release(self) -> None:
+        """The board reports the pause button as pressed until it's asked ("QB"), and goes on reporting it for as
+        long as the button is held, which would stop the move home as well. Ask until it says no twice running."""
+        clear = 0
+        for _ in range(_RELEASE_POLLS):
+            clear = clear + 1 if self.ad.usb_query("QB\r") == "0" else 0
+            if clear == 2:
+                return
+            time.sleep(_POLL_SECONDS)
+
+    def _settled(self) -> bool:
+        """Wait for the board to finish its queued moves ("QG": the low four bits are motion). pyaxidraw's block()
+        also returns early on a button press, which could switch the motors off short of home."""
+        for _ in range(_IDLE_POLLS):
+            if int(self.ad.usb_query("QG\r"), 16) & 15 == 0:
+                return True
+            time.sleep(_POLL_SECONDS)
+        return False
+
+    def _got_home(self) -> bool:
+        """Whether the carriage is known to be home. pyaxidraw skips moves after the pause button without raising,
+        so the absence of an error isn't enough."""
+        try:
+            return (
+                self._settled()
+                and self._stopped() == 0
+                and math.dist(self.ad.current_pos(), (0, 0)) < _HOME_TOLERANCE_MM
+            )
+        except Exception:
+            return False
+
+    def _shut_down(self) -> bool:
+        """Pen up, home, motors off, disconnect. True if the carriage got home."""
         ad = self.ad
         ad.penup()
         ad.moveto(0, 0)
         ad.block()
+        home = self._got_home()
         ad.usb_command("EM,0,0\r")  # the EBB's "enable motors" command with both off
         ad.disconnect()
+        return home
 
     def finish(self) -> None:
         self._shut_down()
@@ -94,14 +146,14 @@ class AxiDrawPlotter:
     def abort(self) -> bool:
         """Pen up, home, motors off, as far as the connection still allows. Never raises; True if it all happened."""
         status = getattr(self.ad, "plot_status", None)
-        if getattr(status, "stopped", 0) == _PAUSE_BUTTON:
-            # After the pause button pyaxidraw skips further moves; clear that, so the pen lifts and goes home.
-            status.stopped = 0
-            if hasattr(self.ad, "clear_pause_request"):
-                self.ad.clear_pause_request()
         try:
-            self._shut_down()
-            return True
+            if getattr(status, "stopped", 0) == _PAUSE_BUTTON:
+                # After the pause button pyaxidraw skips further moves; clear that, so the pen lifts and goes home.
+                self._wait_for_button_release()
+                status.stopped = 0
+                if hasattr(self.ad, "clear_pause_request"):
+                    self.ad.clear_pause_request()
+            return self._shut_down()
         except Exception:
             try:
                 self.ad.disconnect()
