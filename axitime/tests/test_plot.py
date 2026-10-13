@@ -4,10 +4,11 @@ The AxiDraw is replaced by a simulated plotter and the operator by scripted answ
 """
 
 import sys
+import time
 
 import pytest
 
-from axitime import cli
+from axitime import cli, plotting
 from axitime.config import ConfigError, PlotterConfig, load_config
 from axitime.joblog import Match, find_job, read_header, runs
 from axitime.plotfile import PlotFileError, load_plot_file
@@ -167,10 +168,10 @@ class FailingPlotter(SimulatedPlotter):
         super().__init__()
         self.error = error
 
-    def draw(self, strokes):
+    def draw(self, strokes, should_stop=lambda: None):
         if len(self.strips) == 1:  # fail on the second strip drawn
             raise self.error
-        super().draw(strokes)
+        super().draw(strokes, should_stop)
 
 
 @pytest.mark.parametrize("error, status", [(KeyboardInterrupt(), "cancelled"), (RuntimeError("serial port gone"), "errored")])
@@ -254,9 +255,9 @@ class SignalledPlotter(SimulatedPlotter):
         super().__init__()
         self.signum = signum
 
-    def draw(self, strokes):
-        os.kill(os.getpid(), self.signum)
-        super().draw(strokes)  # not reached: the signal stops the run first
+    def draw(self, strokes, should_stop=lambda: None):
+        os.kill(os.getpid(), self.signum)  # the stroke in progress finishes; the stop comes before the next
+        super().draw(strokes, should_stop)
 
 
 @pytest.mark.parametrize("signum", [signal.SIGHUP, signal.SIGTERM], ids=["SIGHUP", "SIGTERM"])
@@ -274,13 +275,14 @@ def test_a_hang_up_or_kill_mid_plot_is_a_safe_cancel(job, operator, signum):
 class InterruptedAbortPlotter(SimulatedPlotter):
     """Is interrupted while drawing, and again (Ctrl+C) in the middle of its own safe abort."""
 
-    def draw(self, strokes):
+    def draw(self, strokes, should_stop=lambda: None):
         raise KeyboardInterrupt
 
     def abort(self):
         self.events.append("abort")
         os.kill(os.getpid(), signal.SIGINT)  # a second Ctrl+C, impatient
         self.events.append("abort finished")
+        return True
 
 
 def test_a_second_interrupt_cant_cut_the_safe_abort_short(job, operator):
@@ -299,3 +301,61 @@ def test_a_hang_up_at_the_pen_prompt_plots_nothing(job, operator, monkeypatch):
     monkeypatch.setattr(cli, "ask", ask)
     assert plot(job) == 1
     assert operator.plotter.events == [] and not list(job.glob("*.log"))
+
+
+class StrokeCountingPlotter(SimulatedPlotter):
+    """Draws stroke by stroke, the way the AxiDraw backend does, getting a Ctrl+C during its first stroke."""
+
+    def __init__(self, presses=1):
+        super().__init__()
+        self.drawn = 0
+        self.presses = presses
+
+    def draw(self, strokes, should_stop=lambda: None):
+        for _ in strokes:
+            if should_stop():
+                raise plotting.Cancelled(should_stop())
+            if self.drawn == 0:
+                for _ in range(self.presses):
+                    os.kill(os.getpid(), signal.SIGINT)
+            self.drawn += 1
+
+
+def test_ctrl_c_stops_between_strokes_not_in_the_middle_of_one(job, operator):
+    operator.plotter = StrokeCountingPlotter()
+    operator.answers = ["red"]
+    assert plot(job) == 1
+    assert operator.plotter.drawn == 1  # the stroke under way was finished; nothing after it was started
+    (log,) = job.glob("t-*.log")
+    assert 'message="stopped by SIGINT"' in runs(log)[-1] and "safe-stop" not in runs(log)[-1]
+
+
+def test_a_second_ctrl_c_stops_at_once(job, operator):
+    operator.plotter = StrokeCountingPlotter(presses=2)
+    operator.answers = ["red"]
+    assert plot(job) == 1
+    (log,) = job.glob("t-*.log")
+    assert 'message="stopped at once by a second Ctrl+C"' in runs(log)[-1]
+    assert operator.plotter.events[-1] == "abort"
+
+
+class StuckAbortPlotter(SimulatedPlotter):
+    def draw(self, strokes, should_stop=lambda: None):
+        raise RuntimeError("serial port gone")
+
+    def abort(self):
+        self.events.append("abort")
+        time.sleep(5)  # hangs, as the real one did
+        return True
+
+
+def test_an_abort_that_hangs_is_given_up_and_reported_honestly(job, operator, monkeypatch, capsys):
+    monkeypatch.setattr(plotting, "ABORT_SECONDS", 1)
+    operator.plotter = StuckAbortPlotter()
+    operator.answers = ["red"]
+    started = time.monotonic()
+    assert plot(job) == 1
+    assert time.monotonic() - started < 4
+    (log,) = job.glob("t-*.log")
+    assert runs(log)[-1].endswith(" safe-stop=incomplete")
+    assert "switch the AxiDraw off before touching it" in capsys.readouterr().out

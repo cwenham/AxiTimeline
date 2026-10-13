@@ -34,8 +34,11 @@ class AxiDrawPlotter:
         ad.options.pen_pos_down = c.pen_pos_down
         ad.options.speed_pendown = c.speed_pendown
         ad.options.speed_penup = c.speed_penup
-        # Raise instead of quietly carrying on, so a lost connection or the pause button stops the run.
-        ad.errors.connect = ad.errors.disconnect = ad.errors.button = True
+        # A failed connection or lost USB raises. The pause button doesn't: pyaxidraw would disconnect before
+        # raising, leaving no way to lift the pen and go home, so draw() checks for it instead. Ctrl+C is left
+        # to axitime (plotting.StopRequest), which stops between strokes rather than mid-command.
+        ad.errors.connect = ad.errors.disconnect = True
+        ad.errors.button = ad.errors.keyboard = False
         try:
             connected = ad.connect()
         except RuntimeError:
@@ -43,19 +46,32 @@ class AxiDrawPlotter:
         if not connected:
             raise PlotError("couldn't connect to the AxiDraw: is it plugged in, switched on, and at its home corner?")
 
-    def draw(self, strokes: list[list[Point]]) -> None:
+    def _check(self) -> None:
+        """Raise if pyaxidraw has stopped: the pause button, or lost USB."""
+        stopped = getattr(getattr(self.ad, "plot_status", None), "stopped", 0) or getattr(self.ad.errors, "code", 0)
+        if stopped == _PAUSE_BUTTON:
+            raise Cancelled("the AxiDraw's pause button was pressed")
+        if stopped == _LOST_USB:
+            raise PlotError("lost the USB connection to the AxiDraw")
+
+    def draw(self, strokes: list[list[Point]], should_stop=lambda: None) -> None:
         ad = self.ad
         try:
             for stroke in strokes:
+                reason = should_stop()  # between strokes: the one safe place to stop
+                if reason:
+                    raise Cancelled(reason)
                 if self.dry_run:  # the full motion with the pen held up
                     for x, y in stroke:
                         ad.moveto(x, y)
                 else:
                     ad.moveto(*stroke[0])
                     ad.draw_path([[x, y] for x, y in stroke])
+                self._check()
             ad.penup()
             ad.moveto(0, 0)
             ad.block()
+            self._check()
         except RuntimeError as exc:
             code = getattr(ad.errors, "code", 0)
             if code == _PAUSE_BUTTON:
@@ -75,12 +91,20 @@ class AxiDrawPlotter:
     def finish(self) -> None:
         self._shut_down()
 
-    def abort(self) -> None:
-        """Pen up, home, motors off, as far as the connection still allows. Never raises."""
+    def abort(self) -> bool:
+        """Pen up, home, motors off, as far as the connection still allows. Never raises; True if it all happened."""
+        status = getattr(self.ad, "plot_status", None)
+        if getattr(status, "stopped", 0) == _PAUSE_BUTTON:
+            # After the pause button pyaxidraw skips further moves; clear that, so the pen lifts and goes home.
+            status.stopped = 0
+            if hasattr(self.ad, "clear_pause_request"):
+                self.ad.clear_pause_request()
         try:
             self._shut_down()
+            return True
         except Exception:
             try:
                 self.ad.disconnect()
             except Exception:
                 pass
+            return False

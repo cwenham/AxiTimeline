@@ -455,8 +455,13 @@ def _confirm_and_run(args, plot_file, strips, window, config, plotter, lookup, f
         print(f"completed; logged in {lookup.path.name}")
         return EXIT_OK
     where = f" during strip {outcome.strip.index + 1} ({outcome.strip.x0 / 10:.1f}–{outcome.strip.x1 / 10:.1f}cm)" if outcome.strip else ""
+    if outcome.safe:
+        state = "The pen is up, the carriage is home and the motors are off"
+    else:
+        state = ("The safe stop didn't finish, so the pen may still be down and the motors holding: "
+                 "switch the AxiDraw off before touching it, then return the carriage home by hand")
     print(f"{outcome.status}{where}" + (f": {outcome.message}" if outcome.message else "")
-          + f". The pen is up and the motors are off; logged in {lookup.path.name}")
+          + f". {state}. Logged in {lookup.path.name}")
     return EXIT_ERRORS
 
 

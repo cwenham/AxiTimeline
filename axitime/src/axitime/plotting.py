@@ -53,16 +53,67 @@ def stop_signals_cancel() -> Iterator[None]:
             signal.signal(s, handler)
 
 
-def _shielded(action: Callable[[], None]) -> None:
-    """Run ``action`` with Ctrl+C, SIGHUP and SIGTERM held off, so a second interrupt can't cut a safe abort
-    short and leave the pen down."""
+class StopRequest:
+    """While the plotter moves, Ctrl+C, SIGHUP and SIGTERM ask the run to stop at the next safe point, between
+    strokes. Interrupting the plotter software in the middle of a command can leave the AxiDraw stuck with its
+    motors holding, unable to lift the pen or go home. A second Ctrl+C stops at once, for when something hangs."""
+
+    def __init__(self, report: Callable[[str], None] = print):
+        self.reason: str | None = None
+        self.report = report
+
+    def __call__(self) -> str | None:
+        """Why a stop was asked for, or None: what the plotter checks between strokes."""
+        return self.reason
+
+    def _handle(self, signum: int, frame) -> None:
+        if self.reason is not None and signum == signal.SIGINT:
+            raise KeyboardInterrupt  # asked twice: stop now, whatever it's doing
+        if self.reason is None:
+            self.reason = f"stopped by {signal.Signals(signum).name}"
+            try:
+                self.report("stopping after the current stroke (press Ctrl+C again to stop at once)")
+            except OSError:
+                pass  # the terminal may already be gone
+
+    @contextlib.contextmanager
+    def installed(self) -> Iterator[None]:
+        try:
+            previous = {s: signal.signal(s, self._handle) for s in _INTERRUPTS}
+        except ValueError:  # not the main thread, where handlers can't be changed
+            previous = {}
+        try:
+            yield
+        finally:
+            for s, handler in previous.items():
+                signal.signal(s, handler)
+
+
+ABORT_SECONDS = 30  # long enough to lift the pen and drive home from anywhere on the plotter
+
+
+def _abort_timed_out(signum: int, frame) -> None:
+    raise TimeoutError(f"the safe stop didn't finish within {ABORT_SECONDS} seconds")
+
+
+def _shielded(action: Callable[[], bool]) -> bool:
+    """Run a safe abort with Ctrl+C, SIGHUP and SIGTERM held off, so a second interrupt can't cut it short and
+    leave the pen down, but give up after ``ABORT_SECONDS`` so it can't hang. True if it finished."""
+    previous: dict = {}
     try:
         previous = {s: signal.signal(s, signal.SIG_IGN) for s in _INTERRUPTS}
+        if hasattr(signal, "SIGALRM"):
+            previous[signal.SIGALRM] = signal.signal(signal.SIGALRM, _abort_timed_out)
+            signal.alarm(ABORT_SECONDS)
     except ValueError:  # not the main thread, where handlers can't be changed: just run it
-        previous = {}
+        pass
     try:
-        action()
+        return bool(action())
+    except Exception:
+        return False
     finally:
+        if hasattr(signal, "SIGALRM") and signal.SIGALRM in previous:
+            signal.alarm(0)
         for s, handler in previous.items():
             signal.signal(s, handler)
 
@@ -142,14 +193,17 @@ def to_machine(strip: Strip, plot_file: PlotFile, config: PlotterConfig) -> list
 class Plotter(Protocol):
     def begin(self) -> None: ...
 
-    def draw(self, strokes: list[list[Point]]) -> None:
-        """Draw one strip's strokes (machine coordinates), finishing with the pen up and the carriage home."""
+    def draw(self, strokes: list[list[Point]], should_stop: Callable[[], str | None]) -> None:
+        """Draw one strip's strokes (machine coordinates), finishing with the pen up and the carriage home.
+
+        Before each stroke, call ``should_stop``; if it gives a reason, raise ``Cancelled(reason)``."""
 
     def finish(self) -> None:
         """After the last strip: pen up, home, motors off, disconnect."""
 
-    def abort(self) -> None:
-        """After a failure or Ctrl+C: pen up, home, motors off, disconnect. Must never raise."""
+    def abort(self) -> bool:
+        """After a failure or a stop: pen up, home, motors off, disconnect. Must never raise. True if all of
+        that is known to have happened."""
 
 
 class Transport(Protocol):
@@ -175,6 +229,7 @@ class Outcome:
     status: str  # completed, cancelled or errored
     strip: Strip | None  # the strip in progress when it stopped
     message: str = ""
+    safe: bool = True  # the pen is known to be up, the carriage home and the motors off
 
 
 def run(
@@ -197,33 +252,38 @@ def run(
     )
     joblog.append(log_path, start)
     current: Strip | None = None
-    try:
-        plotter.begin()
-        to_move = 0.0
-        for strip in strips:
-            if strip.index > 0:
-                to_move += config.strip_mm
-            if not strip.strokes:
-                continue  # nothing for this pen here: the paper moves on past it with the next strip
-            if to_move:
-                transport.advance(to_move, strip.x0)
-                to_move = 0.0
-            current = strip
-            report(f"strip {strip.index + 1} of {len(strips)}: {strip.x0 / 10:.1f}–{strip.x1 / 10:.1f}cm")
-            plotter.draw(to_machine(strip, plot_file, config))
-        plotter.finish()
-    except (KeyboardInterrupt, Cancelled) as exc:
-        _shielded(plotter.abort)
-        outcome = Outcome("cancelled", current, str(exc) if isinstance(exc, Cancelled) else "")
-    except Exception as exc:  # serial errors, lost USB, anything: make the hardware safe, then record it
-        _shielded(plotter.abort)
-        outcome = Outcome("errored", current, str(exc) or type(exc).__name__)
-    else:
-        joblog.append(log_path, "end completed")
-        return Outcome("completed", None)
+    stop = StopRequest(report)
+    with stop.installed():
+        try:
+            plotter.begin()
+            to_move = 0.0
+            for strip in strips:
+                if strip.index > 0:
+                    to_move += config.strip_mm
+                if not strip.strokes:
+                    continue  # nothing for this pen here: the paper moves on past it with the next strip
+                if stop():
+                    raise Cancelled(stop())
+                if to_move:
+                    transport.advance(to_move, strip.x0)
+                    to_move = 0.0
+                current = strip
+                report(f"strip {strip.index + 1} of {len(strips)}: {strip.x0 / 10:.1f}–{strip.x1 / 10:.1f}cm")
+                plotter.draw(to_machine(strip, plot_file, config), stop)
+            plotter.finish()
+        except (KeyboardInterrupt, Cancelled) as exc:
+            safe = _shielded(plotter.abort)
+            reason = str(exc) if isinstance(exc, Cancelled) else "stopped at once by a second Ctrl+C"
+            outcome = Outcome("cancelled", current, reason, safe)
+        except Exception as exc:  # serial errors, lost USB, anything: make the hardware safe, then record it
+            safe = _shielded(plotter.abort)
+            outcome = Outcome("errored", current, str(exc) or type(exc).__name__, safe)
+        else:
+            joblog.append(log_path, "end completed")
+            return Outcome("completed", None)
     where = f" strip={current.index + 1} x={current.x0:g}-{current.x1:g}mm" if current else " before the first strip"
     detail = f' message="{outcome.message}"' if outcome.message else ""
-    joblog.append(log_path, f"end {outcome.status}{where}{detail}")
+    joblog.append(log_path, f"end {outcome.status}{where}{detail}" + ("" if outcome.safe else " safe-stop=incomplete"))
     return outcome
 
 
@@ -237,12 +297,16 @@ class SimulatedPlotter:
     def begin(self) -> None:
         self.events.append("begin")
 
-    def draw(self, strokes: list[list[Point]]) -> None:
+    def draw(self, strokes: list[list[Point]], should_stop: Callable[[], str | None] = lambda: None) -> None:
+        for _ in strokes:
+            if should_stop():
+                raise Cancelled(should_stop())
         self.strips.append(strokes)
         self.events.append("draw")
 
     def finish(self) -> None:
         self.events.append("finish")
 
-    def abort(self) -> None:
+    def abort(self) -> bool:
         self.events.append("abort")
+        return True
