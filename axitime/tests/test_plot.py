@@ -239,3 +239,63 @@ def test_without_pyaxidraw_plot_says_how_to_install_it(job, monkeypatch, capsys)
     monkeypatch.setattr(cli, "ask", lambda prompt: "red")
     assert plot(job) == 2
     assert "uv sync --extra axidraw" in capsys.readouterr().err
+
+
+# -- signals: a closed terminal or a kill stops the run the safe way ---------------------------------------
+
+import os  # noqa: E402
+import signal  # noqa: E402
+
+
+class SignalledPlotter(SimulatedPlotter):
+    """Gets a signal while drawing its first strip, as if the SSH session dropped or someone ran kill."""
+
+    def __init__(self, signum):
+        super().__init__()
+        self.signum = signum
+
+    def draw(self, strokes):
+        os.kill(os.getpid(), self.signum)
+        super().draw(strokes)  # not reached: the signal stops the run first
+
+
+@pytest.mark.parametrize("signum", [signal.SIGHUP, signal.SIGTERM], ids=["SIGHUP", "SIGTERM"])
+def test_a_hang_up_or_kill_mid_plot_is_a_safe_cancel(job, operator, signum):
+    before = signal.getsignal(signum)
+    operator.plotter = SignalledPlotter(signum)
+    operator.answers = ["red"]
+    assert plot(job) == 1
+    assert operator.plotter.events == ["begin", "abort"]
+    (log,) = job.glob("t-*.log")
+    assert f'end cancelled strip=1 x=0-400mm message="stopped by {signal.Signals(signum).name}"' in runs(log)[-1]
+    assert signal.getsignal(signum) is before  # plot puts the old handler back
+
+
+class InterruptedAbortPlotter(SimulatedPlotter):
+    """Is interrupted while drawing, and again (Ctrl+C) in the middle of its own safe abort."""
+
+    def draw(self, strokes):
+        raise KeyboardInterrupt
+
+    def abort(self):
+        self.events.append("abort")
+        os.kill(os.getpid(), signal.SIGINT)  # a second Ctrl+C, impatient
+        self.events.append("abort finished")
+
+
+def test_a_second_interrupt_cant_cut_the_safe_abort_short(job, operator):
+    operator.plotter = InterruptedAbortPlotter()
+    operator.answers = ["red"]
+    assert plot(job) == 1
+    assert operator.plotter.events[-2:] == ["abort", "abort finished"]
+    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+
+
+def test_a_hang_up_at_the_pen_prompt_plots_nothing(job, operator, monkeypatch):
+    def ask(prompt):
+        os.kill(os.getpid(), signal.SIGHUP)
+        return "red"
+
+    monkeypatch.setattr(cli, "ask", ask)
+    assert plot(job) == 1
+    assert operator.plotter.events == [] and not list(job.glob("*.log"))

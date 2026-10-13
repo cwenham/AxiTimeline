@@ -42,7 +42,7 @@ from . import joblog
 from .config import ConfigError, PlotterConfig, load_config
 from .jobhash import job_hash, resource_hashes
 from .plotfile import PlotFileError, load_plot_file
-from .plotting import ManualTransport, PlotError, plan_strips, run, window_for
+from .plotting import Cancelled, ManualTransport, PlotError, plan_strips, run, stop_signals_cancel, window_for
 from .resolver import filesystem_resolver
 
 EXIT_OK = 0
@@ -431,9 +431,14 @@ def cmd_plot(args: argparse.Namespace) -> int:
         plotter = make_plotter(config, args.dry_run)
     except PlotError as exc:
         raise UsageError(str(exc)) from None
+    with stop_signals_cancel():
+        return _confirm_and_run(args, plot_file, strips, window, config, plotter, lookup, forced)
+
+
+def _confirm_and_run(args, plot_file, strips, window, config, plotter, lookup, forced) -> int:
     try:
         answer = ask(f"Load the {plot_file.pen} pen. Type its name to start (anything else stops): ").strip()
-    except (KeyboardInterrupt, EOFError):
+    except (KeyboardInterrupt, EOFError, Cancelled):
         answer = ""
     if answer != plot_file.pen:
         if not (args.force and answer):

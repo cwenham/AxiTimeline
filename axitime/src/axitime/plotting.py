@@ -11,9 +11,11 @@ assumption until the hardware spec is in the repo: docs/known-gaps.md.)
 
 from __future__ import annotations
 
+import contextlib
 import math
+import signal
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Callable, Iterator, Protocol
 
 from libaxitl.geometry import Box, keep_inside
 
@@ -27,7 +29,42 @@ class PlotError(Exception):
 
 
 class Cancelled(Exception):
-    """The operator stopped the run another way than Ctrl+C, such as the AxiDraw's pause button."""
+    """The run was stopped another way than Ctrl+C: the AxiDraw's pause button, a closed terminal, a kill."""
+
+
+# A closed terminal (a dropped SSH connection, say) sends SIGHUP and a plain `kill` sends SIGTERM. Left alone,
+# either would end plot on the spot with the pen possibly still down, so both are turned into a cancel.
+_STOPPING = tuple(s for s in (getattr(signal, "SIGHUP", None), signal.SIGTERM) if s is not None)
+_INTERRUPTS = (signal.SIGINT, *_STOPPING)
+
+
+@contextlib.contextmanager
+def stop_signals_cancel() -> Iterator[None]:
+    """While plotting, SIGHUP and SIGTERM stop the run the way Ctrl+C does: through the safe abort."""
+
+    def cancel(signum: int, frame) -> None:
+        raise Cancelled(f"stopped by {signal.Signals(signum).name}")
+
+    previous = {s: signal.signal(s, cancel) for s in _STOPPING}
+    try:
+        yield
+    finally:
+        for s, handler in previous.items():
+            signal.signal(s, handler)
+
+
+def _shielded(action: Callable[[], None]) -> None:
+    """Run ``action`` with Ctrl+C, SIGHUP and SIGTERM held off, so a second interrupt can't cut a safe abort
+    short and leave the pen down."""
+    try:
+        previous = {s: signal.signal(s, signal.SIG_IGN) for s in _INTERRUPTS}
+    except ValueError:  # not the main thread, where handlers can't be changed: just run it
+        previous = {}
+    try:
+        action()
+    finally:
+        for s, handler in previous.items():
+            signal.signal(s, handler)
 
 
 @dataclass(frozen=True)
@@ -176,10 +213,10 @@ def run(
             plotter.draw(to_machine(strip, plot_file, config))
         plotter.finish()
     except (KeyboardInterrupt, Cancelled) as exc:
-        plotter.abort()
+        _shielded(plotter.abort)
         outcome = Outcome("cancelled", current, str(exc) if isinstance(exc, Cancelled) else "")
     except Exception as exc:  # serial errors, lost USB, anything: make the hardware safe, then record it
-        plotter.abort()
+        _shielded(plotter.abort)
         outcome = Outcome("errored", current, str(exc) or type(exc).__name__)
     else:
         joblog.append(log_path, "end completed")
