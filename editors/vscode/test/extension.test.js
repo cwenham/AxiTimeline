@@ -102,7 +102,7 @@ test('a scale keeps the number typed and offers each unit', async () => {
 
 test('include names .axitl files and folders beside the document, but not the document itself', async () => {
   const items = await complete('include "|"');
-  assert.deepStrictEqual(labels(items), ['chernobyl.axitl', 'labels.axitl', 'common/', 'illustrations/']);
+  assert.deepStrictEqual(labels(items), ['century.axitl', 'chernobyl.axitl', 'labels.axitl', 'common/', 'illustrations/']);
   assert.strictEqual(find(items, 'common/').command.command, 'editor.action.triggerSuggest');
   const nested = await complete('include "common/w|"');
   assert.deepStrictEqual(labels(nested), ['wars.axitl']);

@@ -1,0 +1,19 @@
+// A short showcase, drawn for the README: people, spans, a group with its events, an ongoing life,
+// time labels and fills.
+timeline start=1900 end=1999 length=40cm width=120 baseline=middle
+
+^!!person "Marie Curie" 1867-1934 blue
+^!person "Albert Einstein" 1879-1955 blue
+^person "Grace Hopper" 1906-1992 violet
+^person "Alan Turing" 1912-1954 green
+^person "Tim Berners-Lee" 1955- green
+
+v!span "Second World War" 1939-1945 red fill=crosshatch
+
+!group "Space Race" 1957-1975 orange fill=diagonal time_label=day {
+  event "Sputnik 1" 1957-10-04
+  event "Apollo 11 lands" 1969-07-20
+}
+
+event "First powered flight" 1903-12-17 time_label=year
+event "World Wide Web proposed" 1989-03 time_label=month
