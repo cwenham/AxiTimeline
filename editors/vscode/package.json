@@ -1,0 +1,51 @@
+{
+  "name": "axitl",
+  "displayName": "AxiTimeline (.axitl)",
+  "description": "Syntax highlighting, completion and hover help for the .axitl timeline language.",
+  "version": "0.1.0",
+  "publisher": "axitimeline",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cwenham/AxiTimeline.git",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "main": "./src/extension.js",
+  "scripts": {
+    "test": "node test/run.js"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "axitl",
+        "aliases": [
+          "AxiTimeline",
+          "axitl"
+        ],
+        "extensions": [
+          ".axitl"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "axitl",
+        "scopeName": "source.axitl",
+        "path": "./syntaxes/axitl.tmLanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[axitl]": {
+        "editor.wordBasedSuggestions": "off"
+      }
+    }
+  }
+}

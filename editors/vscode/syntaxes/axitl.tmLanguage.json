@@ -1,0 +1,204 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "AxiTimeline",
+  "scopeName": "source.axitl",
+  "fileTypes": ["axitl"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#timeline" },
+    { "include": "#include" },
+    { "include": "#entity" },
+    { "include": "#illustration" },
+    { "include": "#parameter" },
+    { "include": "#pen" },
+    { "include": "#year-range" },
+    { "include": "#date" },
+    { "include": "#braces" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "(//).*$",
+      "name": "comment.line.double-slash.axitl",
+      "captures": { "1": { "name": "punctuation.definition.comment.axitl" } }
+    },
+    "string": {
+      "name": "string.quoted.double.axitl",
+      "begin": "\"",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.axitl" } },
+      "end": "(\")|$",
+      "endCaptures": { "1": { "name": "punctuation.definition.string.end.axitl" } },
+      "patterns": [{ "match": "\\\\[\"\\\\]", "name": "constant.character.escape.axitl" }]
+    },
+    "timeline": {
+      "match": "^\\s*(timeline)(?![\\w])",
+      "captures": { "1": { "name": "keyword.control.timeline.axitl" } }
+    },
+    "include": {
+      "match": "^\\s*(include)(?![\\w])",
+      "captures": { "1": { "name": "keyword.control.import.axitl" } }
+    },
+    "entity": {
+      "comment": "A side mark, a run of priority marks (mixing ! and - is an error), then the keyword.",
+      "match": "^\\s*([\\^v]?)(?:(!+)|(-+)|([!-]+))?(person|event|span|group)(?![\\w])",
+      "captures": {
+        "1": { "name": "keyword.operator.side.axitl" },
+        "2": { "name": "keyword.operator.priority.axitl" },
+        "3": { "name": "keyword.operator.priority.axitl" },
+        "4": { "name": "invalid.illegal.mixed-priority.axitl" },
+        "5": { "name": "storage.type.entity.axitl" }
+      }
+    },
+    "illustration": {
+      "begin": "(?<![^\\s])(illustration)\\s*(\\()",
+      "beginCaptures": {
+        "1": { "name": "support.function.illustration.axitl" },
+        "2": { "name": "punctuation.section.parens.begin.axitl" }
+      },
+      "end": "(\\))|(?=$|//)",
+      "endCaptures": { "1": { "name": "punctuation.section.parens.end.axitl" } },
+      "patterns": [
+        { "include": "#string" },
+        { "include": "#parameter" },
+        { "match": "[^\\s\"()=]+", "name": "string.unquoted.path.axitl" }
+      ]
+    },
+    "parameter": {
+      "comment": "Known keys are highlighted with their known values; an unknown key or value is left plain, which shows up a typo.",
+      "patterns": [
+        {
+          "match": "(?<![^\\s])(start|end)(=)(?:(now)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(width|length|lane_height|above_lane_height|below_lane_height|baseline_offset|above_baseline_offset|below_baseline_offset|font_size|height)(=)(?:(\\d+(?:\\.\\d*)?|\\.\\d+)(mm|cm|m)?(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.numeric.axitl" },
+            "4": { "name": "keyword.other.unit.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(ticks)(=)(?:(?:(off)|(\\d+(?:\\.\\d*)?|\\.\\d+)(mm|cm|m)?)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" },
+            "4": { "name": "constant.numeric.axitl" },
+            "5": { "name": "keyword.other.unit.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(scale)(=)(?:(\\d+(?:\\.\\d*)?|\\.\\d+)(mm)(/)(year|day|hour|minute|second)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.numeric.axitl" },
+            "4": { "name": "keyword.other.unit.axitl" },
+            "5": { "name": "keyword.other.unit.axitl" },
+            "6": { "name": "keyword.other.unit.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(tick_label_every|priority)(=)(?:([+-]?\\d+)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.numeric.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(fill)(=)(?:(none|solid|diagonal|crosshatch|wave|dots)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(time_label)(=)(?:(none|date|year|month|day|hour|min|sec)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(baseline)(=)(?:(high|middle|low)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(open_end_style)(=)(?:(sawtooth|sine)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(side)(=)(?:(above|below)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(font)(=)(?:(HersheySans1|HersheySansMed|HersheySerifMed|HersheySerifMedItalic|HersheySerifBold|HersheySerifBoldItalic|HersheyScript1|HersheyScriptMed|HersheyGothEnglish|EMSAllure|EMSElfin|EMSFelix|EMSNixish|EMSNixishItalic|EMSOsmotron|EMSReadability|EMSReadabilityItalic|EMSTech)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "support.constant.font.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])[A-Za-z_][A-Za-z0-9_]*(=)",
+          "captures": { "1": { "name": "punctuation.separator.key-value.axitl" } }
+        }
+      ]
+    },
+    "pen": {
+      "match": "(?<![^\\s])(?:red|orange|yellow|green|blue|indigo|violet|black|grey|(?:[2-6]?B|HB|F|[2-6]?H)-pencil|fountain-(?:red|orange|yellow|green|blue|indigo|violet|black|grey))(?=[\\s{}()]|$|//)",
+      "name": "support.constant.pen.axitl"
+    },
+    "year-range": {
+      "comment": "Two bare years joined by -, or an open start. Two digits after the - are a month (1910-12 is December 1910), so that is left to #date.",
+      "match": "(?<![^\\s=])(\\d+)([Bb][Cc][Ee]?)?(-)(?:(?!\\d{2}(?:[\\s{}()]|$|//))(\\d+)([Bb][Cc][Ee]?)?)?(?=[\\s{}()]|$|//)",
+      "captures": {
+        "1": { "name": "constant.numeric.date.axitl" },
+        "2": { "name": "keyword.other.unit.era.axitl" },
+        "3": { "name": "punctuation.separator.range.axitl" },
+        "4": { "name": "constant.numeric.date.axitl" },
+        "5": { "name": "keyword.other.unit.era.axitl" }
+      }
+    },
+    "date": {
+      "comment": "A date at any precision, or a range of them joined by /, or an open start ending in /.",
+      "match": "(?<![^\\s=])(\\d+)([Bb][Cc][Ee]?)?((?:-\\d{2}(?:-\\d{2}(?:[Tt]\\d{2}(?::\\d{2}(?::\\d{2})?)?(?:[Zz]|[+-]\\d{2}:\\d{2})?)?)?)?)(?:(/)(?:(\\d+)([Bb][Cc][Ee]?)?((?:-\\d{2}(?:-\\d{2}(?:[Tt]\\d{2}(?::\\d{2}(?::\\d{2})?)?(?:[Zz]|[+-]\\d{2}:\\d{2})?)?)?)?))?)?(?=[\\s{}()]|$|//)",
+      "captures": {
+        "1": { "name": "constant.numeric.date.axitl" },
+        "2": { "name": "keyword.other.unit.era.axitl" },
+        "3": { "name": "constant.numeric.date.axitl" },
+        "4": { "name": "punctuation.separator.range.axitl" },
+        "5": { "name": "constant.numeric.date.axitl" },
+        "6": { "name": "keyword.other.unit.era.axitl" },
+        "7": { "name": "constant.numeric.date.axitl" }
+      }
+    },
+    "braces": {
+      "patterns": [
+        { "match": "\\{", "name": "punctuation.section.block.begin.axitl" },
+        { "match": "\\}", "name": "punctuation.section.block.end.axitl" }
+      ]
+    }
+  }
+}

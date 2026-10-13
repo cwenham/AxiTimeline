@@ -26,6 +26,6 @@ axidrawinternal = { path = "vendor/axidrawinternal-3.9.6-py2.py3-none-any.whl" }
 dev = ["pytest>=8"]
 
 [tool.pytest.ini_options]
-testpaths = ["libaxitl/tests", "axitime/tests"]
+testpaths = ["libaxitl/tests", "axitime/tests", "editors/vscode/test"]
 # Default (prepend) import mode: test file names must be unique across both packages. Don't switch to
 # importlib mode: it registers the libaxitl/ workspace directory as a module and shadows the real package.

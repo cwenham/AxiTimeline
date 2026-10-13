@@ -1,0 +1,43 @@
+{
+  "comment": "The language's closed vocabularies. editors/vscode/test/test_vocabulary.py checks them against libaxitl. Pens map to the preview colour axitime renders them in.",
+  "entities": ["person", "event", "span", "group"],
+  "bandedEntities": ["person", "span", "group"],
+  "pens": {
+    "red": "#c62828", "orange": "#ef6c00", "yellow": "#f9a825", "green": "#2e7d32", "blue": "#1565c0",
+    "indigo": "#3949ab", "violet": "#6a1b9a", "black": "#212121", "grey": "#757575",
+    "6B-pencil": "#55555d", "5B-pencil": "#5b5b63", "4B-pencil": "#616169", "3B-pencil": "#67676f",
+    "2B-pencil": "#6d6d75", "B-pencil": "#73737b", "HB-pencil": "#797981", "F-pencil": "#7f7f87",
+    "H-pencil": "#85858d", "2H-pencil": "#8b8b93", "3H-pencil": "#919199", "4H-pencil": "#97979f",
+    "5H-pencil": "#9d9da5", "6H-pencil": "#a3a3ab",
+    "fountain-red": "#c62828", "fountain-orange": "#ef6c00", "fountain-yellow": "#f9a825",
+    "fountain-green": "#2e7d32", "fountain-blue": "#1565c0", "fountain-indigo": "#3949ab",
+    "fountain-violet": "#6a1b9a", "fountain-black": "#212121", "fountain-grey": "#757575"
+  },
+  "defaultPen": "black",
+  "fonts": [
+    "HersheySans1", "HersheySansMed", "HersheySerifMed", "HersheySerifMedItalic", "HersheySerifBold",
+    "HersheySerifBoldItalic", "HersheyScript1", "HersheyScriptMed", "HersheyGothEnglish", "EMSAllure",
+    "EMSElfin", "EMSFelix", "EMSNixish", "EMSNixishItalic", "EMSOsmotron", "EMSReadability",
+    "EMSReadabilityItalic", "EMSTech"
+  ],
+  "defaultFont": "HersheySans1",
+  "timelineParameters": [
+    "start", "end", "length", "scale", "width", "baseline",
+    "lane_height", "above_lane_height", "below_lane_height",
+    "baseline_offset", "above_baseline_offset", "below_baseline_offset",
+    "ticks", "tick_label_every", "open_end_style", "font", "font_size", "time_label"
+  ],
+  "entityParameters": ["fill", "font", "font_size", "time_label"],
+  "includeParameters": ["priority", "side"],
+  "illustrationParameters": ["height"],
+  "values": {
+    "fill": ["none", "solid", "diagonal", "crosshatch", "wave", "dots"],
+    "time_label": ["none", "date", "year", "month", "day", "hour", "min", "sec"],
+    "baseline": ["high", "middle", "low"],
+    "open_end_style": ["sawtooth", "sine"],
+    "side": ["above", "below"],
+    "ticks": ["off"],
+    "end": ["now"]
+  },
+  "scaleUnits": ["year", "day", "hour", "minute", "second"]
+}
