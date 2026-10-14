@@ -14,8 +14,8 @@ const VENV_AXITIME = process.platform === 'win32' ? ['Scripts', 'axitime.exe'] :
 
 /**
  * The command that runs axitime for a file in `dir`: the setting if given, else the axitime in the nearest
- * `.venv` at or above `dir`, else `axitime` on the PATH. Never `uv run`: it syncs the environment first, which
- * removes the optional axidraw extra on the machine that drives the plotter.
+ * `.venv` at or above `dir`, else `axitime` on the PATH. Not `uv run`, which checks the environment is up to date
+ * before every run: slower, on every save.
  */
 function axitimeCommand(dir, configured) {
   if (configured && configured.length) return configured;

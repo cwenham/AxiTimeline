@@ -62,7 +62,7 @@
           "items": { "type": "string" },
           "default": [],
           "scope": "machine-overridable",
-          "markdownDescription": "The command that runs axitime, one word per item, e.g. `[\"/Users/me/AxiTimeline/.venv/bin/axitime\"]`. When empty, the `axitime` in the nearest `.venv` folder at or above the file is used, else `axitime` on the PATH. Avoid `uv run`: it syncs the environment first, which removes the optional `axidraw` extra."
+          "markdownDescription": "The command that runs axitime, one word per item, e.g. `[\"/Users/me/AxiTimeline/.venv/bin/axitime\"]`. When empty, the `axitime` in the nearest `.venv` folder at or above the file is used, else `axitime` on the PATH. That's quicker than `uv run`, which checks the environment is up to date before every run."
         }
       }
     },
