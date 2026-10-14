@@ -4,6 +4,7 @@ This checks the calls axitime makes, in order, not the real hardware: that needs
 """
 
 import logging
+import math
 import sys
 import types
 
@@ -14,13 +15,13 @@ from axitime.plotting import Cancelled, PlotError
 
 
 class FakeAxiDraw:
-    def __init__(self, connects=True, fail_on=None, code=0, held=0, busy=0):
+    def __init__(self, connects=True, fail_on=None, code=0, busy=0):
         self.calls = []
         self.options = types.SimpleNamespace()
         self.errors = types.SimpleNamespace(code=0)
         self.plot_status = types.SimpleNamespace(stopped=0)
+        self.params = types.SimpleNamespace(button_interval=0.05)
         self.connects, self.fail_on, self.fail_code = connects, fail_on, code
-        self.held = held  # how many more "QB" queries report the pause button pressed
         self.busy = busy  # how many more "QG" queries report motion still queued
         self.position = (0.0, 0.0)
         self.hooks = {}  # name -> called with the arguments before the call is answered
@@ -44,9 +45,6 @@ class FakeAxiDraw:
             self.position = args
         if name == "current_pos":
             return self.position
-        if args == ("QB\r",):
-            self.held, pressed = max(self.held - 1, 0), self.held > 0
-            return "1" if pressed else "0"
         if args == ("QG\r",):
             self.busy, moving = max(self.busy - 1, 0), self.busy > 0
             return "03" if moving else "00"
@@ -159,23 +157,28 @@ def test_the_pause_button_cancels_and_the_abort_still_goes_home(fake):
     assert plotter.abort() is True
     assert ad.plot_status.stopped == 0  # cleared, so the moves home aren't skipped
     assert ad.calls == [
-        ("usb_query", "QB\r"), ("usb_query", "QB\r"), ("clear_pause_request",),
-        ("penup",), ("moveto", 0, 0), ("block",), ("usb_query", "QG\r"), ("current_pos",),
+        ("clear_pause_request",), ("penup",), ("moveto", 0, 0), ("block",), ("usb_query", "QG\r"), ("current_pos",),
         ("usb_command", "EM,0,0\r"), ("disconnect",),
     ]
 
 
-def test_the_abort_waits_for_the_pause_button_to_be_let_go(fake):
-    plotter = paused(fake, held=3)  # the board goes on reporting the press while the button is held
-    calls = plotter.ad.calls
-    assert plotter.abort() is True
-    assert calls[: calls.index(("moveto", 0, 0))].count(("usb_query", "QB\r")) == 5  # 3 pressed, then 2 clear
-
-
-def test_a_move_home_that_was_stopped_again_isnt_reported_as_home(fake):
-    plotter = paused(fake, held=1000)  # held down throughout: pyaxidraw halts the move home as well
+def test_the_move_home_ignores_the_pause_button(fake):
+    plotter = paused(fake)
     ad = plotter.ad
-    ad.hooks["moveto"] = lambda *args: setattr(ad.plot_status, "stopped", 102)
+
+    def pressed_again(*args):  # letting go of the button can register as a fresh press
+        if ad.params.button_interval < math.inf:  # only seen if pyaxidraw is still checking the button
+            ad.plot_status.stopped = 102
+
+    ad.hooks["moveto"] = pressed_again
+    assert plotter.abort() is True
+    assert ad.position == (0, 0)
+
+
+def test_a_move_home_that_was_skipped_isnt_reported_as_home(fake):
+    plotter = paused(fake)
+    ad = plotter.ad
+    ad.hooks["moveto"] = lambda *args: setattr(ad.plot_status, "stopped", 102)  # halted whatever the setting
     assert plotter.abort() is False
     assert ad.position == (1, 1)  # where it paused
     assert ad.calls[-2:] == [("usb_command", "EM,0,0\r"), ("disconnect",)]  # the motors still go off

@@ -18,7 +18,6 @@ _UNITS_MM = 2
 _MODEL_SE_A3 = 2  # "AxiDraw V3/A3 or SE/A3"
 _PAUSE_BUTTON, _LOST_USB = 102, 104
 _POLL_SECONDS = 0.05
-_RELEASE_POLLS = 60  # up to 3 seconds for the pause button to be let go
 _IDLE_POLLS = 300  # up to 15 seconds for the board to finish its queued moves
 _HOME_TOLERANCE_MM = 0.5
 
@@ -98,16 +97,6 @@ class AxiDrawPlotter:
                 raise PlotError("lost the USB connection to the AxiDraw") from exc
             raise
 
-    def _wait_for_button_release(self) -> None:
-        """The board reports the pause button as pressed until it's asked ("QB"), and goes on reporting it for as
-        long as the button is held, which would stop the move home as well. Ask until it says no twice running."""
-        clear = 0
-        for _ in range(_RELEASE_POLLS):
-            clear = clear + 1 if self.ad.usb_query("QB\r") == "0" else 0
-            if clear == 2:
-                return
-            time.sleep(_POLL_SECONDS)
-
     def _settled(self) -> bool:
         """Wait for the board to finish its queued moves ("QG": the low four bits are motion). pyaxidraw's block()
         also returns early on a button press, which could switch the motors off short of home."""
@@ -130,8 +119,13 @@ class AxiDrawPlotter:
             return False
 
     def _shut_down(self) -> bool:
-        """Pen up, home, motors off, disconnect. True if the carriage got home."""
+        """Pen up, home, motors off, disconnect. True if the carriage got home.
+
+        The move home ignores the pause button. The board records a press, not whether the button is still down,
+        and letting go can register as a fresh press, which would halt the move home and leave the carriage where
+        it paused. The power switch still stops it."""
         ad = self.ad
+        ad.params.button_interval = math.inf  # how often pyaxidraw checks the button: never
         ad.penup()
         ad.moveto(0, 0)
         ad.block()
@@ -149,7 +143,6 @@ class AxiDrawPlotter:
         try:
             if getattr(status, "stopped", 0) == _PAUSE_BUTTON:
                 # After the pause button pyaxidraw skips further moves; clear that, so the pen lifts and goes home.
-                self._wait_for_button_release()
                 status.stopped = 0
                 if hasattr(self.ad, "clear_pause_request"):
                     self.ad.clear_pause_request()
