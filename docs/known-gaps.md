@@ -56,8 +56,10 @@ The paper transport's mechanism isn't designed yet (as of 2026-10-12). What exis
 axitime and drive the AxiDraw, a Pico or XIAO ESP32 for the transport's controller, and candidate parts (NEMA 17
 steppers, a brushed or BLDC motor, servos, and an optical flow sensor) that can be wired up before they can move
 paper. So `plot` currently:
-- assumes the roll runs along the AxiDraw's X axis and draws the job in strips that fit its X travel
-  (`strip_mm` in the plotter config), cutting strokes at strip edges;
+- runs the roll under the AxiDraw's base beam, along its Y axis (settled 2026-10-14, interpreter spec "The
+  roll's orientation"), and draws the job in strips that fit its Y travel (`strip_mm` in the plotter config, 250mm
+  by default), cutting strokes at strip edges. Which way the paper moves (`feed`) is a setting until the
+  transport is designed;
 - uses a "manual" transport: between strips it asks the operator to move the paper on by an exact distance
   (skipping strips with nothing to draw for that pen, so the paper moves on in one go).
 
@@ -65,7 +67,7 @@ The transport plugs into one call, `advance(mm, next_start)` in `axitime/plottin
 controller ends up with only has to implement that. An optical flow sensor could make it closed-loop (measure
 the paper's actual movement rather than trusting the motor), which would matter because strokes cut at a strip
 edge only meet again if the paper moves exactly a strip's length. To decide with the hardware: the controller's
-serial protocol, its accuracy, and whether the orientation assumption holds.
+serial protocol, its accuracy, and which way the paper feeds.
 
 ## Smaller points
 

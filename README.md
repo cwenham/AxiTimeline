@@ -101,9 +101,9 @@ up against.
 
 - **Before moving**, `plot` shows the pen, the stretch of roll, the ink and the strips, then asks you to type the
   pen's name. Answering y/n would be too easy to wave through on autopilot.
-- **The roll goes through in strips** the AxiDraw can reach (40cm by default). Between strips you move the paper
-  on by an exact distance, until the motorised transport exists. Strips with nothing for the current pen are
-  skipped.
+- **The roll goes through in strips**, running under the AxiDraw's base beam, 25cm at a time by default. Between
+  strips you move the paper on by an exact distance, until the motorised transport exists. Strips with nothing
+  for the current pen are skipped.
 - **Ctrl+C, the AxiDraw's pause button, or any error** lifts the pen, sends the carriage home and switches the
   motors off. The job log then says where it stopped, so you know what `--start-offset` to resume from.
   Measure from a labelled tick, or from the pencil crop marks every 50cm.

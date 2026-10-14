@@ -3,11 +3,13 @@
 The file is ``~/.config/axitime/plotter.toml`` unless ``--config`` names another. Every key is optional::
 
     [plotter]
-    travel_along_mm = 430      # the AxiDraw's X travel, which runs along the roll
-    travel_across_mm = 297     # its Y travel, across the roll
-    strip_mm = 400             # how much of the roll is drawn before the paper moves on
-    origin_x_mm = 10           # where each strip starts, measured from the AxiDraw's home along X
-    origin_y_mm = 5            # where the page's top edge sits, measured from home along Y
+    travel_along_mm = 297      # the AxiDraw's Y travel: the roll runs under its base beam, along Y
+    travel_across_mm = 430     # its X travel, across the roll
+    strip_mm = 250             # how much of the roll is drawn before the paper moves on
+    origin_along_mm = 10       # where each strip starts, measured from the AxiDraw's home along Y
+    origin_across_mm = 5       # where the page's nearer edge sits, measured from home along X
+    feed = "towards-front"     # which way the paper moves on: "towards-front" (out from under the base beam,
+                               # towards the operator) or "towards-back"
     pen_pos_up = 60            # pyaxidraw pen heights and speeds, as percentages
     pen_pos_down = 40
     speed_pendown = 25
@@ -26,17 +28,21 @@ from pathlib import Path
 DEFAULT_PATH = Path.home() / ".config" / "axitime" / "plotter.toml"
 
 
+FEEDS = ("towards-front", "towards-back")
+
+
 class ConfigError(ValueError):
     pass
 
 
 @dataclass(frozen=True)
 class PlotterConfig:
-    travel_along_mm: float = 430.0  # AxiDraw SE/A3
-    travel_across_mm: float = 297.0
-    strip_mm: float = 400.0
-    origin_x_mm: float = 10.0
-    origin_y_mm: float = 5.0
+    travel_along_mm: float = 297.0  # AxiDraw SE/A3, with the roll along its Y axis
+    travel_across_mm: float = 430.0
+    strip_mm: float = 250.0
+    origin_along_mm: float = 10.0
+    origin_across_mm: float = 5.0
+    feed: str = "towards-front"
     pen_pos_up: int = 60
     pen_pos_down: int = 40
     speed_pendown: int = 25
@@ -47,13 +53,15 @@ class PlotterConfig:
     def check(self) -> None:
         if self.strip_mm <= 0:
             raise ConfigError("strip_mm must be more than zero")
-        if self.origin_x_mm < 0 or self.origin_y_mm < 0:
-            raise ConfigError("origin_x_mm and origin_y_mm can't be negative")
-        if self.origin_x_mm + self.strip_mm > self.travel_along_mm:
+        if self.origin_along_mm < 0 or self.origin_across_mm < 0:
+            raise ConfigError("origin_along_mm and origin_across_mm can't be negative")
+        if self.origin_along_mm + self.strip_mm > self.travel_along_mm:
             raise ConfigError(
-                f"a {self.strip_mm:g}mm strip starting {self.origin_x_mm:g}mm from home doesn't fit the plotter's "
-                f"{self.travel_along_mm:g}mm of travel along the roll"
+                f"a {self.strip_mm:g}mm strip starting {self.origin_along_mm:g}mm from home doesn't fit the "
+                f"plotter's {self.travel_along_mm:g}mm of travel along the roll"
             )
+        if self.feed not in FEEDS:
+            raise ConfigError(f"feed must be {FEEDS[0]} or {FEEDS[1]}, not '{self.feed}'")
         if self.transport != "manual":
             raise ConfigError(
                 f"transport kind '{self.transport}' isn't supported yet; only 'manual' is, until the paper "
@@ -62,7 +70,7 @@ class PlotterConfig:
 
     def fits_across(self, page_height_mm: float) -> bool:
         """Whether a page this tall (the finished width plus crop-mark margins) is within reach across the roll."""
-        return self.origin_y_mm + page_height_mm <= self.travel_across_mm
+        return self.origin_across_mm + page_height_mm <= self.travel_across_mm
 
 
 def load_config(path: Path | None = None) -> PlotterConfig:
@@ -81,6 +89,11 @@ def load_config(path: Path | None = None) -> PlotterConfig:
     for key, value in (data.get("plotter") or {}).items():
         if key not in known:
             raise ConfigError(f"{chosen}: [plotter] has no setting '{key}'")
+        if known[key] == "str":
+            if not isinstance(value, str):
+                raise ConfigError(f"{chosen}: {key} must be a word in quotes")
+            values[key] = value
+            continue
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             raise ConfigError(f"{chosen}: {key} must be a number")
         values[key] = int(value) if known[key] == "int" else float(value)

@@ -4,9 +4,11 @@ The roll is much longer than the AxiDraw can reach, so a job is drawn in **strip
 the plotter is drawn, then the paper moves on by one strip's length and the next is drawn. Strokes that cross a
 strip boundary are cut there; the two halves meet again on paper if the paper moves exactly a strip's length.
 
-Machine coordinates are millimetres from the AxiDraw's home corner: x along the roll, y across it. A strip's
-start sits ``origin_x_mm`` from home, and the page's top edge ``origin_y_mm`` from home. (This orientation is an
-assumption until the hardware spec is in the repo: docs/known-gaps.md.)
+Machine coordinates are millimetres from the AxiDraw's home corner. The roll runs under the AxiDraw's base beam,
+along its Y axis, so each strip is turned a quarter-turn onto the machine (never mirrored): along the roll is Y,
+across it is X. Every strip sits ``origin_along_mm`` to ``origin_along_mm + strip_mm`` from home along Y, and the
+page's nearer edge ``origin_across_mm`` from home along X. Which way time runs depends on which way the paper
+moves on (``feed``).
 """
 
 from __future__ import annotations
@@ -183,11 +185,15 @@ def plan_strips(strokes, window: Window, strip_mm: float) -> list[Strip]:
 
 
 def to_machine(strip: Strip, plot_file: PlotFile, config: PlotterConfig) -> list[list[Point]]:
-    page_y = plot_file.page[1]
-    return [
-        [(x - strip.x0 + config.origin_x_mm, y - page_y + config.origin_y_mm) for x, y in stroke]
-        for stroke in strip.strokes
-    ]
+    """A strip's strokes in machine coordinates. Its earlier end leads in the feed direction, so moving the paper
+    on by ``strip_mm`` carries what was drawn exactly onto where the next strip would draw it."""
+    _, top, _, height = plot_file.page
+    along, across = config.origin_along_mm, config.origin_across_mm
+    if config.feed == "towards-front":  # time runs back towards the base beam; the page's top edge is nearer home
+        far = along + config.strip_mm
+        return [[(across + y - top, far - (x - strip.x0)) for x, y in stroke] for stroke in strip.strokes]
+    # towards the back: time runs towards the front; the page's bottom edge is nearer home
+    return [[(across + top + height - y, along + x - strip.x0) for x, y in stroke] for stroke in strip.strokes]
 
 
 class Plotter(Protocol):
@@ -214,13 +220,14 @@ class Transport(Protocol):
 class ManualTransport:
     """Until the paper transport's controller protocol is specified, the operator moves the paper on."""
 
-    def __init__(self, ask: Callable[[str], str] = input):
+    def __init__(self, ask: Callable[[str], str] = input, feed: str = "towards-front"):
         self.ask = ask
+        self.towards = "the front" if feed == "towards-front" else "the back"
 
     def advance(self, mm: float, next_start: float) -> None:
         self.ask(
-            f"Move the paper on by exactly {mm:g}mm, so the roll at {next_start / 10:.1f}cm sits where this "
-            "strip started, then press Enter: "
+            f"Move the paper on by exactly {mm:g}mm, towards {self.towards}, so the roll at {next_start / 10:.1f}cm "
+            "sits where this strip started, then press Enter: "
         )
 
 

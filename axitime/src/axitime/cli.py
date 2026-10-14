@@ -195,7 +195,7 @@ def _reach_check(job: Job, config: PlotterConfig) -> None:
                 Severity.ERROR,
                 "too-wide",
                 f"the page is {page:g}mm across the roll (width {job.drawing.width_mm:g}mm plus crop marks), but the "
-                f"plotter reaches {config.travel_across_mm - config.origin_y_mm:g}mm from where the page starts "
+                f"plotter reaches {config.travel_across_mm - config.origin_across_mm:g}mm from where the page starts "
                 f"({config.source})",
                 timeline.location,
             ),
@@ -384,7 +384,7 @@ def cmd_plot(args: argparse.Namespace) -> int:
     if not config.fits_across(page_height):
         raise UsageError(
             f"this page is {page_height:g}mm across the roll, more than the plotter reaches "
-            f"({config.travel_across_mm - config.origin_y_mm:g}mm, from {config.source})"
+            f"({config.travel_across_mm - config.origin_across_mm:g}mm, from {config.source})"
         )
     strips = plan_strips(plot_file.strokes, window, config.strip_mm)
     ink = sum(strip.length for strip in strips)
@@ -448,7 +448,7 @@ def _confirm_and_run(args, plot_file, strips, window, config, plotter, lookup, f
     if lookup.match is not joblog.Match.EXISTING:
         joblog.create(lookup.path, plot_file)
     outcome = run(
-        plot_file, strips, window, config, plotter, ManualTransport(ask), lookup.path,
+        plot_file, strips, window, config, plotter, ManualTransport(ask, config.feed), lookup.path,
         forced="; ".join(forced) or None, dry_run=args.dry_run,
     )
     if outcome.status == "completed":

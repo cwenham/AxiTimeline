@@ -5,6 +5,7 @@ The AxiDraw is replaced by a simulated plotter and the operator by scripted answ
 
 import sys
 import time
+import types
 
 import pytest
 
@@ -12,7 +13,7 @@ from axitime import cli, plotting
 from axitime.config import ConfigError, PlotterConfig, load_config
 from axitime.joblog import Match, find_job, read_header, runs
 from axitime.plotfile import PlotFileError, load_plot_file
-from axitime.plotting import PlotError, SimulatedPlotter, Window, plan_strips, window_for
+from axitime.plotting import PlotError, SimulatedPlotter, Strip, Window, plan_strips, to_machine, window_for
 
 SOURCE = """timeline start=1900 end=1999 length=1m width=150 ticks=off
 ^span "Early" 1900-1930 red
@@ -90,6 +91,45 @@ def test_strips_cut_strokes_at_their_edges():
     assert [s.strokes for s in strips] == [(((100.0, 5.0), (400.0, 5.0)),), (((400.0, 5.0), (700.0, 5.0)),), ()]
 
 
+PAGE = types.SimpleNamespace(page=(0.0, -10.0, 1000.0, 160.0))  # x, y, width, height of a per-pen SVG's page
+
+
+def turn(a, b, c):
+    """Which way a, b, c turn: the sign flips if a drawing is mirrored, and not if it's rotated."""
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+
+@pytest.mark.parametrize("feed", ["towards-front", "towards-back"])
+def test_strips_are_turned_onto_the_y_axis_never_mirrored(feed):
+    config = PlotterConfig(feed=feed)
+    letter = ((0.0, -10.0), (10.0, -10.0), (0.0, 0.0))  # along the roll, then across it
+    (placed,) = to_machine(Strip(0, 0.0, 250.0, (letter,)), PAGE, config)
+    assert placed[1][0] == placed[0][0]  # a line along the roll runs along the machine's Y axis
+    assert turn(*placed) > 0 and turn(*letter) > 0
+    assert all(10 <= y <= 260 and 5 <= x <= 165 for x, y in placed)
+
+
+def test_towards_the_front_the_page_top_edge_is_nearer_home_and_time_runs_back():
+    (placed,) = to_machine(Strip(0, 0.0, 250.0, (((0.0, -10.0), (250.0, -10.0)),)), PAGE, PlotterConfig())
+    assert placed == [(5.0, 260.0), (5.0, 10.0)]
+
+
+def test_towards_the_back_the_page_bottom_edge_is_nearer_home_and_time_runs_forward():
+    config = PlotterConfig(feed="towards-back")
+    (placed,) = to_machine(Strip(0, 0.0, 250.0, (((0.0, 150.0), (250.0, 150.0)),)), PAGE, config)
+    assert placed == [(5.0, 10.0), (5.0, 260.0)]
+
+
+@pytest.mark.parametrize("feed, moves", [("towards-front", +250.0), ("towards-back", -250.0)])
+def test_moving_the_paper_on_carries_ink_onto_the_next_strip(feed, moves):
+    # strokes cut at a strip edge only meet again if the next strip draws exactly where the paper has carried them
+    config = PlotterConfig(feed=feed)
+    point = (((240.0, 50.0), (260.0, 50.0)),)
+    (here,) = to_machine(Strip(0, 0.0, 250.0, point), PAGE, config)
+    (there,) = to_machine(Strip(1, 250.0, 500.0, point), PAGE, config)
+    assert [(x, y + moves) for x, y in here] == there
+
+
 # -- the job log ----------------------------------------------------------------------------------------
 
 
@@ -103,18 +143,19 @@ def test_a_first_pass_starts_a_new_job_log(job, operator):
     lines = runs(lookup.path)
     assert len(lines) == 2 and " start pen=red file=t-red.svg window=0-1000mm" in lines[0]
     assert lines[1].endswith(" end completed")
-    assert operator.plotter.events == ["begin", "draw", "draw", "finish"]  # the middle strip is empty for red
+    assert operator.plotter.events == ["begin", "draw", "draw", "draw", "finish"]  # the third is empty for red
 
 
 def test_the_paper_moves_on_past_empty_strips_in_one_go(job, operator):
-    operator.answers = ["red", ""]
+    operator.answers = ["red", "", ""]
     plot(job)
-    (move,) = [p for p in operator.prompts if p.startswith("Move the paper")]
-    assert "by exactly 800mm" in move  # strips 2 and 3 at once: red has nothing in 40–80cm
+    moves = [p for p in operator.prompts if p.startswith("Move the paper")]
+    assert len(moves) == 2 and "by exactly 250mm, towards the front," in moves[0]
+    assert "by exactly 500mm" in moves[1]  # strips 3 and 4 at once: red has nothing in 50–75cm
 
 
 def test_later_runs_append_to_the_same_log(job, operator):
-    operator.answers = ["red", "", "red", ""]
+    operator.answers = ["red", "", "", "red", "", ""]
     plot(job)
     plot(job, "--start-offset", "50cm")
     (log,) = job.glob("t-*.log")
@@ -157,7 +198,7 @@ def test_a_different_version_of_the_same_source_is_refused(job, operator, capsys
 def test_simulate_plots_nothing_and_logs_nothing(job, operator, capsys):
     assert plot(job, "--simulate") == 0
     assert operator.plotter.events == [] and not list(job.glob("*.log"))
-    assert "strip 1: 0.0–40.0cm" in capsys.readouterr().out
+    assert "strip 1: 0.0–25.0cm" in capsys.readouterr().out
 
 
 # -- safe abort -----------------------------------------------------------------------------------------
@@ -182,7 +223,7 @@ def test_a_failure_makes_the_hardware_safe_and_is_logged(job, operator, error, s
     assert operator.plotter.events == ["begin", "draw", "abort"]
     (log,) = job.glob("t-*.log")
     end = runs(log)[-1]
-    assert f" end {status} strip=3 x=800-1000mm" in end
+    assert f" end {status} strip=2 x=250-500mm" in end
     if status == "errored":
         assert 'message="serial port gone"' in end
 
@@ -205,16 +246,23 @@ def test_ctrl_c_while_moving_the_paper_is_a_cancel_too(job, operator, monkeypatc
 
 def test_config_overrides_defaults(tmp_path):
     path = tmp_path / "plotter.toml"
-    path.write_text("[plotter]\nstrip_mm = 300\norigin_y_mm = 8\n[transport]\nkind = \"manual\"\n")
+    path.write_text(
+        '[plotter]\nstrip_mm = 280\norigin_across_mm = 8\nfeed = "towards-back"\n[transport]\nkind = "manual"\n'
+    )
     config = load_config(path)
-    assert (config.strip_mm, config.origin_y_mm, config.travel_along_mm) == (300.0, 8.0, 430.0)
+    assert (config.strip_mm, config.origin_across_mm, config.feed, config.travel_along_mm) == (
+        280.0, 8.0, "towards-back", 297.0,
+    )
 
 
 @pytest.mark.parametrize(
     "text, message",
     [
         ("[plotter]\nstrip = 3\n", "no setting 'strip'"),
-        ("[plotter]\nstrip_mm = 425\n", "doesn't fit"),
+        ("[plotter]\nstrip_mm = 290\n", "doesn't fit"),
+        ("[plotter]\norigin_y_mm = 5\n", "no setting 'origin_y_mm'"),
+        ('[plotter]\nfeed = "sideways"\n', "feed must be towards-front or towards-back"),
+        ("[plotter]\nfeed = 1\n", "must be a word in quotes"),
         ('[transport]\nkind = "serial"\n', "isn't supported yet"),
         ("[plotter\n", "can't read"),
     ],
@@ -268,7 +316,7 @@ def test_a_hang_up_or_kill_mid_plot_is_a_safe_cancel(job, operator, signum):
     assert plot(job) == 1
     assert operator.plotter.events == ["begin", "abort"]
     (log,) = job.glob("t-*.log")
-    assert f'end cancelled strip=1 x=0-400mm message="stopped by {signal.Signals(signum).name}"' in runs(log)[-1]
+    assert f'end cancelled strip=1 x=0-250mm message="stopped by {signal.Signals(signum).name}"' in runs(log)[-1]
     assert signal.getsignal(signum) is before  # plot puts the old handler back
 
 
