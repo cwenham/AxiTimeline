@@ -51,11 +51,10 @@ this, or say that illustrations should be the author's responsibility with no wa
 
 ## Operational / hardware-adjacent
 
-### 3. The paper transport and strips (hardware not designed yet)
-The paper transport's mechanism isn't designed yet (as of 2026-10-12). What exists: a Raspberry Pi 4 to run
-axitime and drive the AxiDraw, a Pico or XIAO ESP32 for the transport's controller, and candidate parts (NEMA 17
-steppers, a brushed or BLDC motor, servos, and an optical flow sensor) that can be wired up before they can move
-paper. So `plot` currently:
+### 3. The paper transport and strips (hardware drafted, not built)
+The paper transport's hardware is drafted in `docs/transport.md` (2026-10-15): a raised board with the rolls and
+weighted dancer loops hanging below both edges, a gritted drive roller at the front edge, and three steppers
+driven from a Pico. It isn't built yet, so `plot` currently:
 - runs the roll under the AxiDraw's base beam, along its Y axis (settled 2026-10-14, interpreter spec "The
   roll's orientation"), and draws the job in strips that fit its Y travel (`strip_mm` in the plotter config, 250mm
   by default), cutting strokes at strip edges. Which way the paper moves (`feed`) is a setting until the
@@ -66,8 +65,9 @@ paper. So `plot` currently:
 The transport plugs into one call, `advance(mm, next_start)` in `axitime/plotting.py`, so whatever protocol the
 controller ends up with only has to implement that. An optical flow sensor could make it closed-loop (measure
 the paper's actual movement rather than trusting the motor), which would matter because strokes cut at a strip
-edge only meet again if the paper moves exactly a strip's length. To decide with the hardware: the controller's
-serial protocol, its accuracy, and which way the paper feeds.
+edge only meet again if the paper moves exactly a strip's length (`docs/transport.md` suggests it only catch
+slipping, since mouse-type sensors drift). To decide with the hardware: the controller's serial protocol and its
+accuracy. The drafted layout feeds towards the front, which is the current default.
 
 ## Background graphs (language spec §15, added 2026-10-24)
 

@@ -1,0 +1,148 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860mm" height="645mm" viewBox="0 0 860 645" font-family="Helvetica, Arial, sans-serif">
+  <title>AxiTimeline paper transport, side view, 1:1 in millimetres</title>
+  <rect id="background" width="860" height="645" fill="#fff"/>
+
+  <g id="ruler-along" stroke="#333" stroke-width="0.4" font-size="7" fill="#333">
+    <line x1="40" y1="140" x2="712" y2="140"/>
+    <g stroke-width="0.5">
+      <line x1="47" y1="136" x2="47" y2="144"/>
+      <line x1="72" y1="136" x2="72" y2="144"/>
+      <line x1="100" y1="136" x2="100" y2="144"/>
+      <line x1="127" y1="136" x2="127" y2="144"/>
+      <line x1="200" y1="136" x2="200" y2="144"/>
+      <line x1="260" y1="136" x2="260" y2="144"/>
+      <line x1="270" y1="136" x2="270" y2="144"/>
+      <line x1="520" y1="136" x2="520" y2="144"/>
+      <line x1="560" y1="136" x2="560" y2="144"/>
+      <line x1="595" y1="136" x2="595" y2="144"/>
+      <line x1="605" y1="136" x2="605" y2="144"/>
+      <line x1="615" y1="136" x2="615" y2="144"/>
+      <line x1="625" y1="136" x2="625" y2="144"/>
+      <line x1="660" y1="136" x2="660" y2="144"/>
+      <line x1="685" y1="136" x2="685" y2="144"/>
+      <line x1="705" y1="136" x2="705" y2="144"/>
+    </g>
+    <g stroke="none">
+      <text transform="translate(49.5,133) rotate(-90)">−153 paper to back loop</text>
+      <text transform="translate(74.5,133) rotate(-90)">−128 back roller</text>
+      <text transform="translate(102.5,133) rotate(-90)">−100 board back edge</text>
+      <text transform="translate(129.5,133) rotate(-90)">−73 supply spindle</text>
+      <text transform="translate(202.5,133) rotate(-90)">0 bar front face</text>
+      <text transform="translate(262.5,133) rotate(-90)">60 pen home</text>
+      <text transform="translate(272.5,133) rotate(-90)">70 strip start</text>
+      <text transform="translate(522.5,133) rotate(-90)">320 strip end</text>
+      <text transform="translate(562.5,133) rotate(-90)">360 pen full reach</text>
+      <text transform="translate(597.5,133) rotate(-90)">395 carriage front</text>
+      <text transform="translate(607.5,133) rotate(-90)">405 take-up spindle</text>
+      <text transform="translate(617.5,133) rotate(-90)">415 board front edge</text>
+      <text transform="translate(627.5,133) rotate(-90)">425 drive roller</text>
+      <text transform="translate(662.5,133) rotate(-90)">460 front roller</text>
+      <text transform="translate(687.5,133) rotate(-90)">485 paper to front loop</text>
+      <text transform="translate(707.5,133) rotate(-90)">505 pinch rail</text>
+    </g>
+  </g>
+
+  <g id="ruler-height" stroke="#333" stroke-width="0.4" font-size="7" fill="#333">
+    <line x1="740" y1="170" x2="740" y2="528"/>
+    <g stroke-width="0.5">
+      <line x1="736" y1="175" x2="744" y2="175"/>
+      <line x1="736" y1="197.5" x2="744" y2="197.5"/>
+      <line x1="736" y1="210" x2="744" y2="210"/>
+      <line x1="736" y1="235" x2="744" y2="235"/>
+      <line x1="736" y1="285" x2="744" y2="285"/>
+      <line x1="736" y1="360" x2="744" y2="360"/>
+      <line x1="736" y1="470" x2="744" y2="470"/>
+      <line x1="736" y1="528" x2="744" y2="528"/>
+    </g>
+    <g stroke="none">
+      <text x="748" y="177.5">+35 pinch rail</text>
+      <text x="748" y="200">+12.5 pinch wheel axle</text>
+      <text x="748" y="212.5">0 board top</text>
+      <text x="748" y="237.5">−25 edge roller axles</text>
+      <text x="748" y="287.5">−75 spindles</text>
+      <text x="748" y="362.5">−150 dancer, top</text>
+      <text x="748" y="472.5">−260 dancer, bottom</text>
+      <text x="748" y="530.5">−318 tabletop</text>
+    </g>
+  </g>
+
+  <g id="structure" fill="none" stroke="#999" stroke-width="0.5" stroke-dasharray="4 2">
+    <rect id="side-plate" x="30" y="228" width="685" height="300"/>
+    <line id="rail-bracket" x1="705" y1="185" x2="712" y2="228"/>
+    <rect id="axidraw-legs" x="107" y="202.5" width="126" height="7.5"/>
+    <rect id="axidraw-arm" x="200" y="160" width="340" height="5"/>
+    <rect id="pen-carriage" x="540" y="150" width="55" height="52"/>
+    <rect id="back-dancer-travel" x="47" y="335" width="50" height="160"/>
+    <rect id="front-dancer-travel" x="635" y="335" width="50" height="160"/>
+    <circle id="supply-full" cx="127" cy="285" r="45"/>
+    <circle id="take-up-full" cx="605" cy="285" r="45"/>
+  </g>
+
+  <line id="tabletop" x1="20" y1="528" x2="730" y2="528" stroke="#333" stroke-width="0.8"/>
+
+  <g id="parts" stroke="#333" stroke-width="0.5">
+    <rect id="board" x="100" y="210" width="515" height="18" fill="#e4e4e4"/>
+    <rect id="axidraw-bar" x="140" y="165" width="60" height="37.5" fill="#e4e4e4"/>
+    <line id="pen" x1="560" y1="202" x2="560" y2="210" stroke-width="1"/>
+    <line id="pen-home" x1="260" y1="201" x2="260" y2="210" stroke-dasharray="2 1"/>
+    <circle id="supply-roll" cx="127" cy="285" r="30" fill="#e3f4ec"/>
+    <circle id="supply-core" cx="127" cy="285" r="16" fill="#fff"/>
+    <circle id="take-up-roll" cx="605" cy="285" r="30" fill="#e3f4ec"/>
+    <circle id="take-up-core" cx="605" cy="285" r="16" fill="#fff"/>
+    <circle id="back-roller" cx="72" cy="235" r="25" fill="#f2f2f2"/>
+    <circle id="front-roller" cx="660" cy="235" r="25" fill="#f2f2f2"/>
+    <circle id="back-dancer" cx="72" cy="400" r="25" fill="#f2f2f2"/>
+    <circle id="front-dancer" cx="660" cy="400" r="25" fill="#f2f2f2"/>
+  </g>
+
+  <line id="strip" x1="270" y1="206" x2="520" y2="206" stroke="#BA7517" stroke-width="2"/>
+  <path id="paper" d="M97 285 L97 400 A25 25 0 0 1 47 400 L47 235 A25 25 0 0 1 72 210 L660 210 A25 25 0 0 1 685 235 L685 400 A25 25 0 0 1 635 400 L635 285" fill="none" stroke="#1D9E75" stroke-width="1.2"/>
+
+  <g id="drive" stroke="#333" stroke-width="0.5">
+    <circle id="drive-roller" cx="625" cy="214.25" r="4.25" fill="#D85A30"/>
+    <line id="pinch-arm" x1="625" y1="197.5" x2="705" y2="175" stroke-width="2.5" stroke-linecap="round"/>
+    <circle id="pinch-wheel" cx="625" cy="197.5" r="12.5" fill="#fff"/>
+    <circle cx="625" cy="197.5" r="2.5" fill="#333"/>
+    <rect id="pinch-rail" x="695" y="165" width="20" height="20" fill="#e4e4e4"/>
+  </g>
+
+  <g id="callouts" font-size="8" fill="#333" text-anchor="middle">
+    <text x="72" y="238">1</text>
+    <text x="72" y="403">2</text>
+    <text x="127" y="288">3</text>
+    <text x="300" y="222">4</text>
+    <text x="170" y="187">5</text>
+    <text x="567" y="180">6</text>
+    <text x="629" y="233">7</text>
+    <text x="637" y="182">8</text>
+    <text x="660" y="238">9</text>
+    <text x="660" y="403">10</text>
+    <text x="605" y="288">11</text>
+    <text x="40" y="520">12</text>
+  </g>
+
+  <g id="key" font-size="8" fill="#333">
+    <text x="30" y="550" font-size="9">Paper transport, side view at 1:1 in mm. Y is measured from the front face of the AxiDraw's bar (positive towards the operator), Z from the board's top surface.</text>
+    <text x="30" y="565">1  Back roller Ø50, axle at Y −128, Z −25 (top flush with the board)</text>
+    <text x="30" y="574">2  Back dancer Ø50, axle travels Z −150 to −260, sensors at both ends</text>
+    <text x="30" y="583">3  Supply roll on a 10mm carbon spindle at Y −73, Z −75 (26mm core bore)</text>
+    <text x="30" y="592">4  Board, 18mm thick, Y −100 to 415 (515 deep), 600 wide</text>
+    <text x="30" y="601">5  AxiDraw bar, Y −60 to 0, 7.5 clear above the board; its legs run Y −93 to 33</text>
+    <text x="30" y="610">6  Pen carriage at full reach: pen tip at 360, carriage front about 395 (heights not measured)</text>
+    <text x="440" y="565">7  Drive roller, 8mm steel, gritted, axle at Y 425, Z −4.25 (top flush)</text>
+    <text x="440" y="574">8  Pinch wheel Ø25 on a sprung arm; 20×20 rail centred at Y 505, Z 35</text>
+    <text x="440" y="583">9  Front roller Ø50, axle at Y 460, Z −25 (top flush with the board)</text>
+    <text x="440" y="592">10 Front dancer Ø50, axle travels Z −150 to −260, sensors at both ends</text>
+    <text x="440" y="601">11 Take-up roll on a 10mm carbon spindle at Y 405, Z −75</text>
+    <text x="440" y="610">12 Side plate, 18mm ply, Y −170 to 515, Z −18 to −318, one each side</text>
+    <text x="30" y="623">Rolls are drawn 60 across; the dashed circles are 90 across, the largest roll these spindles clear. Dashed outlines are out of the paper's plane. The amber line is a 250mm strip at the default origin.</text>
+  </g>
+
+  <g id="scale-bar" stroke="#333" stroke-width="0.6" font-size="8" fill="#333">
+    <line x1="30" y1="636" x2="130" y2="636"/>
+    <line x1="30" y1="632" x2="30" y2="640"/>
+    <line x1="80" y1="633" x2="80" y2="639"/>
+    <line x1="130" y1="632" x2="130" y2="640"/>
+    <text x="136" y="639" stroke="none">100 mm (check this after importing)</text>
+  </g>
+</svg>
