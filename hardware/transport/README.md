@@ -1,0 +1,135 @@
+# Paper transport: printed parts
+
+OpenSCAD models of every printed part of the paper transport. The design (paper path, layout, why it's
+shaped this way) is in [docs/transport.md](../../docs/transport.md). This file covers building the parts
+and putting them together.
+
+- `params.scad`: every dimension, in the doc's coordinates (x across from the paper's centreline, +x the
+  operator's left; y from the AxiDraw bar's front face, +y towards the operator; z up from the board's top).
+- `lib.scad`: helpers, including an involute gear.
+- `transport.scad`: the parts, an assembly view, and a print layout for each part. Open it in OpenSCAD and
+  pick `part` in the Customizer; `assembly` shows everything in place (`show_paper` and `show_board` hide
+  the paper, rolls, board and AxiDraw so the brackets can be seen).
+- `build.sh`: exports every part to `stl/` (not committed), laid flat for printing, and runs `check_fit.py`,
+  which confirms each one fits the Prusa Core One's 250 × 220 × 270 bed and sits on it. A full build takes
+  about ten minutes; `./build.sh foot board_jaw` builds just those.
+
+Tested with OpenSCAD 2021.01 on macOS (Intel).
+
+![The transport's assembly in OpenSCAD, seen from behind the AxiDraw](../../docs/images/transport-assembly.png)
+
+## What to print
+
+| Part | Qty | Notes |
+|---|---|---|
+| `back_bracket_left` | 1 | Supply roll's drive cone and motor. Lay on its large flat face (as exported). |
+| `back_bracket_right` | 1 | Supply tailstock. The back roller's bolt slot here is the tracking trim. |
+| `front_bracket_left` | 1 | Take-up roll's drive cone and motor. |
+| `front_bracket_right` | 1 | Take-up tailstock, drive motor and coupler. The motor's face plate prints as a 42mm bridge. |
+| `drive_housing` | 2 | The drive roller's 608s. Oversize bolt holes let you set its height and squareness. |
+| `dancer_guide_full` | 2 | Back left and front right: the flag's recess and the endstops' slot. |
+| `dancer_guide_plain` | 2 | Back right and front left. |
+| `endstop_bracket` | 4 | Two per full guide, at the top and bottom of the dancer's travel. |
+| `flag_slider` | 2 | Rides in the full guide's recess on the dancer's bolt. |
+| `roller_half` | 4 | Two per edge roller (back and front). Print upright. |
+| `dancer_half` | 4 | Two per dancer. Print upright; the infill sets the dancer's weight (below). |
+| `drive_cone` | 2 | 48-tooth gear and cone. Gear face down. |
+| `tail_cone` | 2 | |
+| `tail_knob` | 2 | Takes the head of an M8 × 100 bolt. |
+| `motor_gear` | 2 | 16 teeth, on the roll motors' D shafts. |
+| `spacers` | 1 set | 4 × 15mm (edge rollers), 2 × 9mm (drive cones), 4 × 22mm (dancers). |
+| `rod_collar` | 2 | Locate the drive roller endwise, one just inboard of each drive housing. |
+| `pinch_block` | 2 | Flat plates; the second of each is the same part turned over. |
+| `pinch_arm` | 2 | |
+| `board_jaw` | 4 | Clamp the board's corners to the brackets' seats without drilling it. |
+| `foot` | 4 | One under each leg; screw holes if you want to fix them to the table. |
+
+**Material and settings.**
+- **Most parts:** PETG or PETG-CF, 0.2mm layers, 4 perimeters, 25–30% gyroid infill.
+- **Brackets:** PETG-CF is the stiffest choice. No supports are needed anywhere.
+- **Gears:** PETG or nylon, at 40% infill or more.
+- **Edge roller halves:** 10–15% infill, to keep them light.
+- **Dancer halves:** the infill is the dancer's weight. At 20% a dancer with its bolts comes to about 450g,
+  which is about 2.2N of tension on the paper. Use more infill, or washers on its bolts, for more.
+
+## Hardware
+
+Stock you have, cut to length (a hacksaw and a mitre box will do; wear a mask cutting carbon):
+
+| Item | Cut | Use |
+|---|---|---|
+| 8mm steel rod | 1 × 501mm | Drive roller: from its left bearing to 11mm into the coupler |
+| 18mm carbon tube | 2 × 420mm | Spines of the back and front rollers |
+| 14mm carbon tube | 2 × 440mm | Spines of the dancers |
+| 2020 extrusion, 300mm | 4 | Legs, uncut |
+| 2020 extrusion, 1m | 1 × 560mm or more | Pinch rail (or leave it at 1m; it just overhangs) |
+
+To buy or find:
+- **Bearings:** 14 × 608ZZ: two in each edge roller, two in each dancer, two for the drive roller, one in
+  each cone.
+- **Coupler:** 1 × flexible beam coupler, 5mm to 8mm, about 19 × 25mm.
+- **Motors:** 3 × NEMA 17. The two roll motors bolt to their brackets' inner skins with M3 × 8 screws, from
+  inside; the drive motor bolts the same way from inside the coupler's pocket.
+- **Endstops:** 4 × slotted optical endstop modules. The brackets' slots suit boards with M3 holes about
+  19mm apart; check yours.
+- **Springs:** 2 × small extension springs, about 6mm across and 20mm long, for the pinch arms.
+- **Grit:** epoxy and 120–180 grit aluminium oxide.
+- **M8:**
+  - 4 × M8 × 60 for the edge rollers' axles.
+  - 2 × M8 × 60 for the drive cones' axles, each with a nut.
+  - 4 × M8 × 70 for the dancers' axles, each with a nut and washers.
+  - 2 × M8 × 100 for the tailstocks, each with 4 nuts: one captured in the bracket, two clamping the
+    bearing, one jam nut.
+  - 4 more M8 nuts, captured in the brackets for the edge rollers' axles.
+- **M5:**
+  - 32 T-nuts for 2020.
+  - Bracket to leg: 8 × M5 × 30 through the plate, and 8 × M5 × 10 through the cheeks.
+  - Guide to leg: 12 × M5 × 16.
+  - Drive housings: 2 × M5 × 45 on the left, 2 × M5 × 20 with nuts on the right.
+  - Board jaws: 8 × M5 × 25 with nuts.
+  - Rail on its posts: 2 × M5 × 16.
+  - Pinch wheels: blocks on the rail 2 × M5 × 12; pivots 2 × M5 × 25 with nuts; wheel axles 2 × M5 × 25
+    with nuts and washers.
+- **M3:**
+  - 12 × M3 × 8 for the motors.
+  - 4 × M3 × 6 grub screws with nuts, for the motor gears and rod collars.
+  - 4 × M3 × 20 with nuts, as the spring pins.
+  - 8 × M3 × 8 with nuts for the endstop boards.
+- **M4:** 4 × M4 × 10 with nuts for the endstop brackets, and 16 × M4 wood screws if you fix the feet down.
+
+## Putting it together
+
+1. **Rollers.** Press a 608 into the end of each roller half. Glue two halves onto each spine with epoxy, so
+   the halves meet in the middle and the bearings face out. Check the roller runs true before the glue sets.
+2. **Dancers.** Before pressing each dancer half's bearing in, push an M8 × 70 through it from the inside, so
+   the bolt's head is captive in the half. Then glue the halves onto the 14mm spines as above.
+3. **Legs.**
+   - Push each leg up into its bracket's cap, between the cheeks.
+   - Screw it on through the plate and cheeks into T-nuts. Pre-load the T-nuts in the leg's slots first.
+   - Fit a foot on the bottom. Bolt the dancer guides to the legs' inner faces.
+4. **Board.**
+   - Stand the four corners up and lay the board (with the AxiDraw) on the seats.
+   - Fit the jaws on top, bolting through the seats outside the board's edges.
+   - Slide the whole transport sideways until the paper's centreline is under the middle of the pen's travel,
+     then tighten.
+5. **Drive roller.**
+   - Grit the rod where the pinch wheels run: 200 to 215mm either side of the paper's centreline.
+   - Press the 608s into the housings and slide them onto the rod with a collar inside each.
+   - Bolt the housings to the front brackets, loosely.
+   - Fit the coupler and the drive motor on the right.
+   - Set the rod's top flush with the board and square to the AxiDraw's Y axis, then tighten the housings.
+6. **Back and front rollers.** Hold each between its brackets and screw the M8 × 60 axles in from outside,
+   through the brackets' captured nuts. Put a 15mm spacer between each bracket and roller.
+7. **Roll holders.** On the left, bolt each drive cone on with a 9mm spacer, and fit its motor and gear. On
+   the right, run the M8 × 100 (head in the knob) through the bracket's captured nut, then a nut, the tail
+   cone's bearing, and a nut.
+8. **Pinch rail and arms.**
+   - Bolt the rail onto the two posts on the front brackets.
+   - Hang a block under the rail above each wheel track, and hang each arm on its block.
+   - Put each wheel on its arm and hook the springs on their pins.
+9. **Dancers.** Fit the 22mm spacers on the dancers' bolts and drop the bolts into the guides' open slots.
+   Add the flag sliders on the full guides, then washers and nuts.
+10. **Endstops.** Set the top and bottom endstop brackets so the flags pass through their gaps at the ends
+    of the dancers' travel, Z −150 and −260.
+
+The left and right sides here are as the operator sees them, standing at the front.

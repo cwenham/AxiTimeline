@@ -54,6 +54,8 @@ began as are superseded. Change the specs here, in the same commit as the code t
 - Spacing constants live in `LayoutStyle` (`libaxitl/layout.py`) and `DrawStyle` (`libaxitl/draw.py`).
 - Background graphs (language spec §15) are laid out after everything else in `libaxitl/graphs.py`, and never
   move the foreground; their points (CSV or inline) are read in `libaxitl/graphdata.py`.
+- `hardware/transport/` holds the paper transport's printed parts in OpenSCAD (the design is `docs/transport.md`).
+  `./build.sh` there exports every part to its `stl/` (ignored by git) and checks each fits the Prusa Core One's bed.
 - Built-in fonts live in `libaxitl/src/libaxitl/fonts/data/` (copied from Inkscape's Hershey Text
   `svg_fonts`, with their licence notices). Keep `HERSHEY-NOTICE.txt` and `OFL.txt` beside them.
 - `editors/vscode/` is the VS Code extension (highlighting, completion, hover, and diagnostics from
