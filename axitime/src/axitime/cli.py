@@ -20,6 +20,7 @@ from libaxitl import (
     DateValue,
     Diagnostic,
     Drawing,
+    Fill,
     Kind,
     ParseResult,
     RenderError,
@@ -34,6 +35,7 @@ from libaxitl import (
     stroke_lengths,
 )
 from libaxitl.dates import DateError, parse_date
+from libaxitl.graphs import number_text
 from libaxitl.pens import PENS
 from libaxitl.units import UnitError, format_number, parse_length
 
@@ -129,8 +131,11 @@ def _summary(result: ParseResult) -> dict:
     entities = list(result.document.walk())
     kinds = Counter(e.kind for e in entities)
     pens = Counter(e.pen for e in entities)
+    pens.update(e.fill_pen for e in entities if e.fill is not Fill.NONE and e.fill_pen != e.pen)
+    pens.update(p for g in result.document.graphs for p in {g.pen, g.fill_pen})
     return {
         "entities": {k.value: kinds.get(k, 0) for k in Kind},
+        "graphs": len(result.document.graphs),
         "pens": {pen: pens[pen] for pen in PENS if pen in pens},
         "fonts": list(result.document.fonts),
         "resources": [{"kind": r.kind, "name": r.name} for r in result.resources],
@@ -150,6 +155,20 @@ def _layout_summary(resolved: ResolvedLayout) -> dict:
         "ticks": {"every": resolved.tick_interval, "labels_every": resolved.tick_label_interval},
         "pens": list(resolved.pens),
         "omitted": [e.label for e in resolved.omitted],
+        "graphs": [
+            {
+                "title": g.graph.title,
+                "pen": g.graph.pen,
+                "fill_pen": g.graph.fill_pen,
+                "unit": g.graph.unit,
+                "origin": g.origin,
+                "rate_mm": g.rate_mm,
+                "rate_per": g.rate_unit,
+                "above_mm": g.above_mm,
+                "below_mm": g.below_mm,
+            }
+            for g in resolved.graphs
+        ],
     }
 
 
@@ -227,6 +246,8 @@ def cmd_check(args: argparse.Namespace) -> int:
     if job.result:
         summary = _summary(job.result)
         counts = ", ".join(f"{n} {_PLURALS[Kind(k)] if n != 1 else k}" for k, n in summary["entities"].items() if n)
+        if summary["graphs"]:
+            counts += f"{', ' if counts else ''}{_plural(summary['graphs'], 'graph')}"
         print(f"  entities: {counts or 'none'}")
         print("  fonts:    " + ", ".join(summary["fonts"]))
     resolved = job.resolved
@@ -241,6 +262,13 @@ def cmd_check(args: argparse.Namespace) -> int:
         print(f"  lanes:    {lanes}")
         if resolved.tick_interval:
             print(f"  ticks:    every {resolved.tick_interval}, labelled every {resolved.tick_label_interval or 'none'}")
+        for g in resolved.graphs:
+            title = f'"{g.graph.title}"' if g.graph.title else "untitled graph"
+            print(
+                f"  graph:    {title}, {format_number(g.rate_mm, 3)}mm per {g.rate_unit} from "
+                f"{number_text(g.origin)}{' ' + g.graph.unit if g.graph.unit else ''} "
+                f"on the baseline; reaches {_length(g.above_mm)} above and {_length(g.below_mm)} below"
+            )
     if job.drawing:
         print("  pens:     " + ", ".join(job.drawing.pens) + f"  ({resolved.axis_pen} draws the baseline and ticks first)")
     if job.hash:

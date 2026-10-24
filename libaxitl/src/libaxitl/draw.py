@@ -4,8 +4,9 @@ Everything is a polyline in the layout's own millimetre coordinates (x along the
 it from the finished top edge), so the same stroke has the same coordinates however the job is later cut into
 windows. Curves are flattened here, once, so nothing downstream has to understand them.
 
-Strokes come out in the draw order of language spec §11: baseline and ticks, then bars (outlines, labels and
-fills), then event poles and flags, then illustrations; crop marks (interpreter spec) are last.
+Strokes come out in the draw order of language spec §11: baseline and ticks, then background graphs (§15), then
+bars (outlines, labels and fills), then event poles and flags, then illustrations; crop marks (interpreter spec)
+are last.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from enum import Enum
 
 from .diagnostics import Diagnostic, Diagnostics
 from .geometry import Box, Point, cut_out, keep_inside
+from .graphs import PlacedGraph, shading, shading_box
 from .illustrate import illustration_strokes
 from .layout import LabelPlacement, PlacedBar, PlacedText, ResolvedLayout
 from .model import Fill, OpenEndStyle
@@ -24,6 +26,7 @@ from .svgpath import flatten
 
 class Stage(Enum):
     AXIS = "axis"
+    BACKGROUND = "background"
     BARS = "bars"
     EVENTS = "events"
     ILLUSTRATIONS = "illustrations"
@@ -45,6 +48,8 @@ class DrawStyle:
     crop_interval: float = 500.0  # crop marks every 50cm (interpreter spec)
     crop_arm: float = 2.5  # each arm of a crop mark's cross
     crop_pen: str = "2H-pencil"  # crop marks are pencil, never one of the job's own pens
+    shade_shortest: float = 0.5  # pieces of a graph's shading shorter than this are left out (§15.7)
+    shadow_gap: float = 0.75  # a graph's shadow keeps this far from its own line (§15.7)
 
 
 DEFAULT_DRAW_STYLE = DrawStyle()
@@ -100,6 +105,8 @@ class _Drawer:
     def run(self) -> Drawing:
         L = self.layout
         self.axis()
+        for graph in L.graphs:
+            self.graph(graph)
         for bar in L.bars:
             self.bar(bar)
         for ev in L.events:
@@ -132,6 +139,20 @@ class _Drawer:
             if tick.label is not None:
                 self.add(pen, Stage.AXIS, self.text(tick.label))
 
+    # -- background graphs (§15) -------------------------------------------------------------------------
+
+    def graph(self, pg: PlacedGraph) -> None:
+        g, st = pg.graph, self.style
+        self.add(g.pen, Stage.BACKGROUND, pg.line)
+        if g.fill is not Fill.NONE:
+            box = shading_box(pg)
+            if box is not None:
+                shortest = 0.0 if g.fill is Fill.DOTS else st.shade_shortest
+                self.add(g.fill_pen, Stage.BACKGROUND, shading(pg, self.fill(g.fill, box), shortest, st.shadow_gap))
+        self.add(g.pen, Stage.BACKGROUND, pg.rules)
+        for text in pg.texts:
+            self.add(g.pen, Stage.BACKGROUND, self.text(text))
+
     # -- bars --------------------------------------------------------------------------------------------------
 
     def bar(self, bar: PlacedBar) -> None:
@@ -162,7 +183,7 @@ class _Drawer:
                         fx1 = region.x1 + 1
                     fill_clear = Box(fx0, y0 - 1, fx1, y1 + 1)
                 for line in self.fill(e.fill, region):
-                    self.add(e.pen, Stage.BARS, cut_out(line, fill_clear))
+                    self.add(e.fill_pen, Stage.BARS, cut_out(line, fill_clear))  # its own pen if it has one (§3.7)
 
     def cap(self, x: float, y0: float, y1: float, inward: int, depth: float, style: OpenEndStyle) -> list[Point]:
         """The torn edge drawn where a bar is open or clipped (§3.6), from its top to its bottom."""

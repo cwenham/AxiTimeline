@@ -6,7 +6,7 @@ Status: working draft, reflecting all decisions taken in design discussion so fa
 
 This file (`docs/language-spec.md` in the AxiTimeline repo) is the **canonical copy** of this spec, and changes are made here alongside the code. The claude.ai artifact it began as is superseded.
 
-History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Drafted 2026-10-24, not yet implemented: backgrounds, starting with graphs (§15).
+History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7).
 
 ## 1. System overview
 
@@ -16,7 +16,7 @@ The software architecture — `libaxitl` (parse → layout → render) and the `
 
 ## 2. Entity types
 
-`person`, `event`, `span`, `group`, `include`, plus the top-level `timeline` directive. Keywords are lowercase. Illustrations are attachments to entities, not entities in their own right (§3.5). A `graph` (§15, draft) isn't an entity either: it is a background, drawn under the entities and taking no part in their layout.
+`person`, `event`, `span`, `group`, `include`, plus the top-level `timeline` directive. Keywords are lowercase. Illustrations are attachments to entities, not entities in their own right (§3.5). A `graph` (§15) isn't an entity either: it is a background, drawn under the entities and taking no part in their layout.
 
 ## 3. Compact line syntax
 
@@ -129,7 +129,9 @@ event "First explosion" 1986-04-26T01:23:44
 - Reserved styles: `none` (outline only, default), `solid` (in practice implemented as dense hatching — a pen plotter has no true flat-fill primitive, so this carries a real plot-time and pen-wear cost worth being aware of), `diagonal`, `crosshatch`, `wave`, `dots`
 - Applies uniformly to all three banded entity types, since they all render as the same kind of bar
 - A fill pattern never draws through its bar's label (§7): hatching stops at the label's bounding box plus a small margin. A plotter can't knock a pattern out from behind ink after the fact, and text drawn over hatching is illegible
-- A graph shades under its line, or casts a shadow, with the same patterns (§15.7)
+- `fill_pen=<pen>` draws the pattern in a pen of its own (added 2026-10-24), so the outline and label can be dark ink for legibility and the fill a soft coloured pencil: `span "Cold War" 1947-1991 black fill=diagonal fill_pen=2H-pencil`. Default: the bar's own pen. A group passes it to its members as it does its pen (§9), and a group may give one only to pass on; elsewhere `fill_pen=` without `fill=` is an error
+- A fill pen that differs from its bar's pen is plotted straight after the axis pen, with graphs' pens (§15.10), so the fill goes down before the outlines and lettering drawn in the passes after it
+- A graph shades under its line, or casts a shadow, with the same patterns, and can do so in its own `fill_pen=` (§15.7)
 
 ### 3.8 Font and size
 
@@ -280,7 +282,7 @@ Layout runs in three phases, each consuming the results of the one before:
 2.  **Phase B** — events get a side (§6.1) and a base pole length (§8.1); illustrations attached to events are placed; illustrations in a pole's path are nudged
 3.  **Phase C** — label collisions involving event flags are resolved (§8.2)
 
-Backgrounds (§15, draft) are placed after all three phases, and nothing in them looks at backgrounds.
+Backgrounds (§15) are placed after all three phases, and nothing in them looks at backgrounds.
 
 For each banded entity without a forced `^`/`v`, side is resolved during layout (not parsing), jointly with lane assignment:
 
@@ -368,7 +370,7 @@ Note: "side" for a flag's left/right orientation at the pole tip is a distinct c
 
 - A `group` line is layout-equivalent to a `span` — same priority/side/date-range machinery, participates in the same shared per-side lane pool as any banded entity, and is drawn exactly like a span: a closed, labelled bar (settled 2026-10-12; an earlier reading drew it as a bracket open towards its members, which read as a missing line)
 - **Children are placed independently** in the same shared pool (own priority, own lane assignment) — **not** positionally nested inside the group's bracket (deliberate simplification, chosen over reserved-sub-block nesting for lower layout complexity)
-- **Side and pen are inherited from the group by default** (which is why a group is always placed before its members, §6). A child with no explicit `^`/`v` uses the group's resolved side; a child with no explicit trailing pen uses the group's pen. Either can be overridden per-line with the child's own `^`/`v` or pen keyword — so a child *can* deliberately end up on the opposite side or in a different pen from its group, but only if it says so explicitly
+- **Side and pen are inherited from the group by default** (which is why a group is always placed before its members, §6). A child with no explicit `^`/`v` uses the group's resolved side; a child with no explicit trailing pen uses the group's pen, and one with no `fill_pen=` the group's (§3.7). Either can be overridden per-line with the child's own `^`/`v` or pen keyword — so a child *can* deliberately end up on the opposite side or in a different pen from its group, but only if it says so explicitly
 - Each child gets a `member_of` provenance tag (metadata only — not used by layout, available for future querying/styling)
 - Grammar is recursive (`group` can contain `group`), inherited for free from the entity-list structure, though nested groups haven't been exercised in an example yet
 
@@ -418,14 +420,14 @@ timeline ... tick_label_every=10   // override the derived n
 
 ### 10.4 Interaction with the plotting workflow
 
-- Ticks **must be drawn in the first pen pass**, since they are the alignment reference every subsequent pass and every resumption depends on. This is consistent with the interpreter spec's existing note that ticks are drawn with the first pen (typically black or a hard pencil). Background pens (§15.10) come next, before the rest of the foreground
+- Ticks **must be drawn in the first pen pass**, since they are the alignment reference every subsequent pass and every resumption depends on. This is consistent with the interpreter spec's existing note that ticks are drawn with the first pen (typically black or a hard pencil). Background and fill pens (§§3.7, 15.10) come next, before the rest of the foreground
 - Because tick spacing is not perfectly uniform (§10.1), an operator measuring an offset should count ticks to a *labelled* tick and measure from there, rather than assuming a constant mm-per-tick across a long run
 - The interpreter's renderer also draws pencil crop marks every 50cm, giving a second, purely physical reference that's independent of tick spacing
 
 ## 11. Draw order (for the physical plot)
 
 1.  Baseline + tick marks (auto-generated, first pen pass — see §10.4)
-2.  Backgrounds: graphs, with their shading, titles and value scales (§15, draft)
+2.  Backgrounds: graphs, with their shading, titles and value scales (§15)
 3.  Span / group fills
 4.  Event poles + flags (on top of fills)
 5.  Illustrations (last — fine detail, and by this point nothing should be crossing into their footprint)
@@ -450,9 +452,9 @@ This doesn't touch `scale`, which is always an explicit rate (`mm/year`, `mm/day
 
 The same rule covers a graph's `height=`, `fill_depth=`, `shadow=`, and `value_scale=` when it is a length (§15).
 
-## 15. Backgrounds and graphs (draft, 2026-10-24: not yet implemented)
+## 15. Backgrounds and graphs (added 2026-10-24)
 
-Agreed in discussion on 2026-10-24 and tried in a throwaway mock-up (rendered from `renders/graph-mock/`, which git ignores); nothing in libaxitl implements it yet. Open points are in `docs/known-gaps.md`.
+Agreed in discussion on 2026-10-24, tried in a throwaway mock-up, and implemented the same day (`libaxitl/graphs.py` and `graphdata.py`; the examples `crash-1929.axitl` and `reactor-power.axitl`). Open points are in `docs/known-gaps.md`.
 
 A **background** is drawn underneath the timeline, usually in pencil, and everything else (the baseline and ticks, bars, events, their labels and illustrations: together the **foreground**) is drawn over it freely. Backgrounds take no part in laying out the foreground, which is laid out exactly as if they weren't there, so adding, removing or changing a background never moves any foreground ink. The one concession runs the other way: a background is broken where it would run through foreground text or an illustration (§15.8).
 
@@ -493,10 +495,12 @@ graph "Dow Jones Industrial Average" HB-pencil
 | `range=` | a number | none | §15.5 |
 | `line=` | `straight`, `smooth`, `step` | `straight` | §15.6 |
 | `fill=` | a §3.7 pattern | `none` | §15.7 |
+| `fill_pen=` | a pen | the graph's pen | §15.7 |
 | `fill_depth=` | a length | all the way to the baseline | §15.7 |
 | `shadow=` | a length | none | §15.7 |
 | `value_scale=` | `off`, `start`, or a length | `1m` | §15.9 |
 | `value_marks=` | `auto`, or numbers separated by commas | `auto` | §15.9 |
+| `unit=` | any text | none | §15.9 |
 | `font=`, `font_size=` | as §3.8 | the timeline's | §15.9 |
 
 ### 15.2 Data from a CSV file
@@ -541,7 +545,7 @@ graph "Reactor thermal power, MW" origin=3200 y_scale=log {
 
 - A point sits at the start of its date's period, by §3.3's rule for a single date: a value dated `1929-10` sits at 1 October.
 - Points must be in time order, each strictly later than the one before. Anything else is an error naming the row, which catches an export sorted the wrong way and a day/month mix-up.
-- The line is clipped at the timeline's start and end, like a bar (§4.2): a stretch from a point before `start` to one after it is drawn from `start` on. A graph with no point inside the timeline is omitted with a warning.
+- The line is clipped at the timeline's start and end, like a bar (§4.2): a stretch from a point before `start` to one after it is drawn from `start` on. A graph whose line lies wholly outside the timeline is omitted with a warning, and so is one with `origin=first` (§15.5) and no point inside the timeline.
 
 ### 15.5 Vertical scale
 
@@ -566,6 +570,7 @@ graph "Reactor thermal power, MW" origin=3200 y_scale=log {
 ### 15.7 Shading
 
 - `fill=` takes the patterns of §3.7 (default `none`), anchored to the page like a bar's fill. Pieces of shading shorter than 0.5mm are left out, as stubs are from bar fills.
+- `fill_pen=` draws the shading or shadow in a pen of its own, so the line and labels can be dark and the shading a softer pencil (added 2026-10-24). Default: the graph's pen. Without `fill=` it is an error.
 - **Under the line** (the default): the area between the line and the baseline is shaded. `fill_depth=` limits it to the part within that distance of the line, measured from the line in any direction, so the band keeps its thickness where the line is steep; without `fill_depth=` it reaches the baseline. It never crosses the baseline: where the line is below the baseline, the shading lies above the line. A near-vertical spike encloses almost no area, so it gets almost no shading.
 - **Drop shadow**: `shadow=<length>` shades a shadow of the line instead. The shadow is the area the line would pass over if slid from `shadow` to `shadow + fill_depth` down the page and towards later dates at once, at 45°, less 0.75mm clear around the line itself. Under a flat stretch it is a band `fill_depth` thick, `shadow` below the line; beside a vertical stretch it is the same, on the later side; where the line runs down and to the right at 45° there is none, as with a real shadow. A shadow is cast on the paper, so it isn't stopped by the baseline and falls the same way on both sides of it. Unlike shading under the line, a shadow shows a spike plainly, which matters where events crowd the spike's moment. `shadow=` needs `fill_depth=`, its thickness.
 - `fill_depth=` or `shadow=` without a `fill=` pattern is an error.
@@ -581,9 +586,10 @@ graph "Reactor thermal power, MW" origin=3200 y_scale=log {
 - A graph's own text is drawn in its pen and font (`font=` and `font_size=`, inherited from `timeline` as for entities, §3.8): the title at `font_size`, and value labels at three-quarters of it, like tick labels. It is placed only where it is clear of all foreground ink (bars, their labels and leaders, poles, flags, illustrations, the baseline, and the ticks with their labels), and of other graphs' text. It never moves anything; where there is no room, it moves along or is left out.
 - **The title** is drawn once, beside the line near its start, on the side away from the baseline (or else the side towards it), 1.5mm from the line. Where there's no room, it moves later along the line, 1mm at a time, to the first place that has room. If there is none anywhere, it is left out with a warning.
 - **A value scale** is a vertical rule from the baseline to the outermost mark, with a short tick and a label at each mark. The origin's label sits just above the baseline, or if there's no room there, just below the tick labels. By default the marks are 3 to 5 round values within the values the graph draws, from the sequence 1, 2, 5, 10, 20, 50… (for `log`: powers of ten, or else 1 and 3, or 1, 2 and 5, in each power of ten). `value_marks=` lists them instead, e.g. `value_marks=-0.5,0,0.5,1`. A mark too close to the baseline to label clear of it, or whose label would overlap another mark's, is left out.
+- **`unit=`** names the values' unit, as any text (added 2026-10-24): `unit=MW`, `unit=%`, `unit=$`, `unit="°C"`. Every value scale prints it, at value-label size in the labels' column, just beyond the end of its rule further from the baseline, or the other end if there's no room there; it counts as one of the scale's labels when finding room for the scale. It stands on its own rather than being attached to each number, so a prefix such as `$` and a suffix such as `%` both read naturally.
 - **`value_scale=`** sets where scales go: `off` for none, `start` for one near the start of the paper, or a length to repeat them at that interval along the roll, starting at the start (default `1m`), since a reader several metres in won't see one at the start. Each scale goes at the first place from its preferred position where all its labels have room, looking as far as the next scale's position (for `start`, 30cm). Failing that, it goes where the most labels have room, and the rest are left out with a warning. Two graphs' scales never stand in line with each other, so they can't be read as one.
 
 ### 15.10 Layout, drawing and plotting
 
 - Graphs are placed in a fourth layout phase, after §6's phases A to C, in document order; nothing in phases A to C looks at them. Their searches step along the roll in fixed increments from fixed starting points, so placement is deterministic like the rest of layout (§12).
-- They are drawn after the baseline and ticks and before everything else (§11). Their pens come straight after the axis pen in pass order, so ink always goes over graphite rather than graphite over ink, and the ticks remain the first pass's measuring reference (§10.4). A graph in `2H-pencil` shares its pass with the crop marks; one in a pen the foreground also uses is drawn first in that pen's pass.
+- They are drawn after the baseline and ticks and before everything else (§11). Their pens, and their fill pens, come straight after the axis pen in pass order, before any other pen except bars' fill pens, which join them (§3.7). So ink always goes over graphite rather than graphite over ink, and the ticks remain the first pass's measuring reference (§10.4). A graph in `2H-pencil` shares its pass with the crop marks; one in a pen the foreground also uses is drawn first in that pen's pass.

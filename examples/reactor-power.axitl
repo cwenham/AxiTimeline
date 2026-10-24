@@ -1,0 +1,35 @@
+// Chernobyl Unit 4's thermal power through the night of the accident, as a background graph (language spec §15)
+// under the events of chernobyl.axitl. A log scale, with full power (3,200 MW) on the baseline, so the half-power
+// hold, the collapse to 30 MW and the surge past ten times full power all fit. A smooth line with a drop shadow:
+// the shadow, in a lighter pencil than the line, keeps the surge visible beside the poles of the events at the
+// same moment. Figures are approximate.
+timeline start=1986-04-25T14:00:00 end=1986-04-26T06:00:00 length=2m width=210 time_label=sec
+
+event "Test delayed" 1986-04-25T14:00:00
+span  "Delayed low-power test window" 1986-04-25T14:00:00/1986-04-25T23:10:00
+event "Reactor power drops unexpectedly" 1986-04-26T00:28:00
+event "AZ-5 emergency shutdown initiated" 1986-04-26T01:23:40
+event "First explosion" 1986-04-26T01:23:44
+
+graph "Reactor thermal power (approximate)"
+    unit=MW
+    origin=3200
+    y_scale=log
+    height=70mm
+    line=smooth
+    fill=solid
+    fill_pen=2H-pencil
+    fill_depth=1.5mm
+    shadow=1mm
+    value_scale=50cm {
+    1986-04-25T14:00:00   1600
+    1986-04-25T23:10:00   1600
+    1986-04-26T00:05:00    720
+    1986-04-26T00:28:00    500
+    1986-04-26T00:29:00     30
+    1986-04-26T00:43:00    160
+    1986-04-26T01:00:00    200
+    1986-04-26T01:23:40    200
+    1986-04-26T01:23:43    530
+    1986-04-26T01:23:44  30000
+}

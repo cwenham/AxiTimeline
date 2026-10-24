@@ -2,7 +2,8 @@
 
 Flattens includes (preprocess), runs the grammar once over the flattened text, then builds the AST: checking
 dates, pens and parameters, resolving inheritance that is purely textual (pen, font, font size), dropping
-duplicate entities (last definition wins, §5), and loading every font and illustration the document uses.
+duplicate entities (last definition wins, §5), and loading every font, illustration and graph data file the
+document uses, so a graph's points are read and checked here (§15).
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from dataclasses import dataclass, replace
 from lark import Token, Tree
 from lark.exceptions import UnexpectedCharacters, UnexpectedInput, UnexpectedToken
 
-from . import grammar
+from . import grammar, graphdata
 from .dates import DateError, DateRange, DateValue, parse_date, parse_when, time_label_text
 from .diagnostics import AxitlError, Diagnostic, Diagnostics, SourceLocation
 from .fetch import Fetcher, Resolver, Resource, no_resolver, relative_name
@@ -24,13 +25,17 @@ from .model import (
     Baseline,
     Entity,
     Fill,
+    Graph,
     Illustration,
     Kind,
+    LineMode,
     OpenEndStyle,
     Side,
     TimeLabel,
     TimelineDocument,
     TimelineSettings,
+    ValueScaleMode,
+    YScale,
 )
 from .pens import DEFAULT_PEN, is_pen, suggest_pen
 from .preprocess import Flattener, LogicalLine, unescape
@@ -50,8 +55,16 @@ _TIMELINE_KEYS = (
     "baseline_offset", "above_baseline_offset", "below_baseline_offset",
     "ticks", "tick_label_every", "open_end_style", "font", "font_size", "time_label",
 )
-_ENTITY_KEYS = ("fill", "font", "font_size", "time_label")
+_ENTITY_KEYS = ("fill", "fill_pen", "font", "font_size", "time_label")
+_GRAPH_KEYS = (
+    "data", "first_row", "last_row", "header", "separator", "time_column", "value_column", "time_format", "missing",
+    "origin", "y_scale", "height", "range", "line", "fill", "fill_pen", "fill_depth", "shadow", "value_scale",
+    "value_marks", "unit", "font", "font_size",
+)
+_CSV_KEYS = ("first_row", "last_row", "header", "separator", "time_column", "value_column", "time_format")
 _UNCLOSED_GROUP = "this group's { body is never closed with }"
+_UNCLOSED_GRAPH = "this graph's { body of points is never closed with }"
+DEFAULT_GRAPH_PEN = "HB-pencil"
 
 
 @dataclass(frozen=True)
@@ -65,8 +78,8 @@ class ParseResult:
 def parse(source: str, resolve: Resolver | None = None, source_name: str = "main.axitl") -> ParseResult:
     """Parse ``.axitl`` source.
 
-    ``resolve(name)`` fetches includes, illustrations and custom fonts; names are relative to the same root as
-    ``source_name``. Raises :class:`AxitlError`, carrying every diagnostic found, if the source has errors.
+    ``resolve(name)`` fetches includes, illustrations, custom fonts and graph data; names are relative to the
+    same root as ``source_name``. Raises :class:`AxitlError`, carrying every diagnostic found, if the source has errors.
     """
     sink = Diagnostics()
     fetcher = Fetcher(resolve or no_resolver, sink)
@@ -80,7 +93,11 @@ def parse(source: str, resolve: Resolver | None = None, source_name: str = "main
         location = lines[line - 1].location if lines else SourceLocation(source_name, 1)
         message = _syntax_message(exc, text)
         if message == _UNCLOSED_GROUP:
-            location = _unclosed_group(lines) or location
+            opener = _unclosed_body(lines)
+            if opener is not None:
+                location = opener.location
+                if opener.text.startswith("graph"):
+                    message = _UNCLOSED_GRAPH
         sink.error("syntax", message, location)
         raise AxitlError(sink.items) from None
     document = _Builder(lines, fetcher, sink, source_name).build(tree)
@@ -104,8 +121,8 @@ def _syntax_message(exc: UnexpectedInput, text: str) -> str:
         if found == "'}'":
             return "this } has no group { to close"
         return (
-            f"{found} doesn't start a declaration; a line starts with timeline, person, event, span or group "
-            "(with optional ^/v side and !/- priority marks before the keyword)"
+            f"{found} doesn't start a declaration; a line starts with timeline, person, event, span, group or "
+            "graph (with optional ^/v side and !/- priority marks before an entity's keyword)"
         )
     if expected == {"STRING"}:
         return f'expected a quoted label, e.g. "Isaac Newton", but found {found}'
@@ -126,6 +143,7 @@ class _Builder:
         self.source_name = source_name
         self.fonts: dict[str, Font] = {}
         self.order = 0
+        self.graph_count = 0
 
     # -- helpers ------------------------------------------------------------------------------------------
 
@@ -213,15 +231,27 @@ class _Builder:
             settings.font if settings else DEFAULT_FONT,
             settings.font_size_mm if settings else DEFAULT_FONT_SIZE_MM,
             settings.time_label if settings else TimeLabel.NONE,
+            None,  # no fill pen to inherit: a bar's fill is in its own pen unless it says otherwise
         )
         entities = [
             e for c in tree.children if c.data == "entity" if (e := self.entity(c, context, None)) is not None
         ]
         entities = self.drop_duplicates(entities)
         self.check_glyphs(entities)
+        graph_context = (
+            settings.font if settings else DEFAULT_FONT,
+            settings.font_size_mm if settings else DEFAULT_FONT_SIZE_MM,
+        )
+        graphs = [g for c in tree.children if c.data == "graph" if (g := self.graph(c, graph_context)) is not None]
+        graphs = self.drop_duplicate_graphs(graphs)
+        for g in graphs:
+            if g.font in self.fonts:
+                self.warn_missing_glyphs(self.fonts[g.font], g.font, g.title, f'graph "{g.title}"', g.location)
+                self.warn_missing_glyphs(self.fonts[g.font], g.font, g.unit, f'the unit of graph "{g.title}"',
+                                         g.location)
         if settings is None or self.sink.has_errors:
             return None
-        return TimelineDocument(settings, tuple(entities), dict(sorted(self.fonts.items())))
+        return TimelineDocument(settings, tuple(entities), dict(sorted(self.fonts.items())), tuple(graphs))
 
     def timeline(self, node: Tree) -> TimelineSettings | None:
         location = self.loc(node)
@@ -335,7 +365,7 @@ class _Builder:
 
     # -- entities -----------------------------------------------------------------------------------------
 
-    def entity(self, node: Tree, context: tuple[str, str, float, TimeLabel], group: str | None) -> Entity | None:
+    def entity(self, node: Tree, context: tuple[str, str, float, TimeLabel, str | None], group: str | None) -> Entity | None:
         location = self.loc(node)
         head, label_token, *items = node.children
         body = items.pop() if items and isinstance(items[-1], Tree) and items[-1].data == "body" else None
@@ -407,7 +437,20 @@ class _Builder:
                 except ValueError:
                     options = ", ".join(f.value for f in Fill)
                     self.sink.error("bad-value", f"fill= takes one of {options}, not '{text}'", where)
-        inherited_pen, inherited_font, inherited_size, inherited_time_label = context
+        inherited_pen, inherited_font, inherited_size, inherited_time_label, inherited_fill_pen = context
+        fill_pen = None
+        if "fill_pen" in p:
+            text, where = p["fill_pen"]
+            if not kind.is_banded:
+                self.sink.error("bad-value", "fill_pen= applies to person, span and group bars, not events", where)
+            elif not is_pen(text):
+                hint = suggest_pen(text)
+                self.sink.error("unknown-pen", f"fill_pen=: '{text}' is not a pen{f'; did you mean {hint}?' if hint else ''}",
+                                where)
+            elif fill is Fill.NONE and kind is not Kind.GROUP:  # a group may only be passing it on to its members
+                self.sink.error("bad-value", "fill_pen= needs a fill= pattern to draw", where)
+            else:
+                fill_pen = text
         font = self.font(*p["font"]) if "font" in p else inherited_font
         font_size = self.length("font_size", *p["font_size"]) if "font_size" in p else inherited_size
         pen = pen or inherited_pen
@@ -439,7 +482,16 @@ class _Builder:
                 if child.data == "timeline":
                     self.sink.error("nested-timeline", "a timeline declaration can't be inside a group", self.loc(child))
                     continue
-                inherited = (pen, font or inherited_font, font_size or inherited_size, time_label)
+                if child.data == "graph":
+                    self.sink.error(
+                        "nested-graph",
+                        "a graph can't be inside a group; declare it at the top level of a file (it can be an "
+                        "included file)",
+                        self.loc(child),
+                    )
+                    continue
+                inherited = (pen, font or inherited_font, font_size or inherited_size, time_label,
+                             fill_pen or inherited_fill_pen)
                 built = self.entity(child, inherited, label)
                 if built is not None:
                     children.append(built)
@@ -454,6 +506,7 @@ class _Builder:
             side=side,
             pen=pen,
             fill=fill,
+            fill_pen=fill_pen or inherited_fill_pen or pen,
             font=font,
             font_size_mm=font_size,
             time_label=time_label,
@@ -507,6 +560,288 @@ class _Builder:
             return None
         return Illustration(name, content, width, intrinsic_height, height)
 
+    # -- graphs (§15) ---------------------------------------------------------------------------------------
+
+    def graph(self, node: Tree, context: tuple[str, float]) -> Graph | None:
+        location = self.loc(node)
+        head, title_token, *items = node.children
+        points_node = items.pop() if items and isinstance(items[-1], Tree) and items[-1].data == "points" else None
+        title = self.value(title_token)
+        ok = True
+        if str(head) != "graph":
+            self.sink.error(
+                "graph-marks",
+                "a graph takes no ^/v side or !/- priority marks: it is a background, drawn on both sides of the "
+                "baseline, and takes no lane",
+                location,
+            )
+            ok = False
+        pen = None
+        param_nodes = []
+        for item in items:
+            if item.data == "param":
+                param_nodes.append(item)
+            elif item.data == "illustration":
+                self.sink.error("unexpected-item", "a graph can't have an illustration", location)
+                ok = False
+            else:
+                word = str(item.children[0])
+                ok = False
+                if pen is None and is_pen(word):
+                    pen, ok = word, True
+                elif pen is not None and is_pen(word):
+                    self.sink.error("duplicate-pen", f'graph "{title}" has more than one pen', location)
+                else:
+                    hint = suggest_pen(word)
+                    extra = f"; did you mean {hint}?" if hint else ""
+                    self.sink.error("unknown-pen", f"'{word}' is not a pen{extra}", location)
+        p = self.params(param_nodes, _GRAPH_KEYS, "graph")
+
+        def number(key: str, *, positive: bool = False) -> float | None:
+            text, where = p[key]
+            value = graphdata.number(text)
+            if value is None or (positive and value <= 0):
+                need = "a number above zero" if positive else "a number"
+                self.sink.error("bad-value", f"{key}= takes {need}, such as 2.5, not '{text}'", where)
+                return None
+            return value
+
+        def whole(key: str) -> int | None:
+            text, where = p[key]
+            if text.isdigit() and int(text) > 0:
+                return int(text)
+            self.sink.error("bad-value", f"{key}= takes a row number, counting from 1, not '{text}'", where)
+            return None
+
+        def choice(key: str, enum, default):
+            if key not in p:
+                return default
+            text, where = p[key]
+            try:
+                return enum(text)
+            except ValueError:
+                options = ", ".join(m.value for m in enum)
+                self.sink.error("bad-value", f"{key}= takes one of {options}, not '{text}'", where)
+                return None
+
+        def length(key: str) -> float | None:
+            return self.length(key, *p[key]) if key in p else None
+
+        y_scale = choice("y_scale", YScale, YScale.LINEAR)
+        line = choice("line", LineMode, LineMode.STRAIGHT)
+        fill = choice("fill", Fill, Fill.NONE)
+        missing = p["missing"][0] if "missing" in p else None
+        unit = p["unit"][0] if "unit" in p else ""
+        fill_pen = None
+        if "fill_pen" in p:
+            text, where = p["fill_pen"]
+            if not is_pen(text):
+                hint = suggest_pen(text)
+                self.sink.error("unknown-pen", f"fill_pen=: '{text}' is not a pen{f'; did you mean {hint}?' if hint else ''}",
+                                where)
+                ok = False
+            elif fill is Fill.NONE:
+                self.sink.error("bad-value", "fill_pen= needs a fill= pattern to draw", where)
+                ok = False
+            else:
+                fill_pen = text
+
+        origin: float | None = 0.0
+        if "origin" in p and p["origin"][0] != "first":
+            origin = number("origin")
+            ok = ok and origin is not None
+        elif "origin" in p:
+            origin = None
+        if y_scale is YScale.LOG and origin is not None and origin <= 0:
+            where = p["origin"][1] if "origin" in p else location
+            self.sink.error(
+                "bad-value",
+                "y_scale=log measures each value as a ratio of the origin, so it needs origin= above zero "
+                "(the default is 0), or origin=first",
+                where,
+            )
+            ok = False
+
+        height = length("height")
+        value_range = number("range", positive=True) if "range" in p else None
+        if "range" in p and "height" not in p:
+            self.sink.error("bad-value", "range= needs height= as well: together they fix the scale", p["range"][1])
+            ok = False
+        if y_scale is YScale.LOG and value_range is not None and value_range <= 1:
+            self.sink.error(
+                "bad-value", "with y_scale=log, range= is a ratio and must be above 1 (range=10 is a power of ten)",
+                p["range"][1],
+            )
+            ok = False
+
+        fill_depth = length("fill_depth")
+        shadow = length("shadow")
+        for key in ("fill_depth", "shadow"):
+            if key in p and fill is Fill.NONE:
+                self.sink.error("bad-value", f"{key}= needs a fill= pattern to shade with", p[key][1])
+                ok = False
+        if "shadow" in p and "fill_depth" not in p:
+            self.sink.error("bad-value", "shadow= needs fill_depth=, the shadow's thickness", p["shadow"][1])
+            ok = False
+
+        value_scale, value_scale_mm = ValueScaleMode.EVERY, 1000.0
+        if "value_scale" in p:
+            text, where = p["value_scale"]
+            if text in ("off", "start"):
+                value_scale, value_scale_mm = ValueScaleMode(text), None
+            else:
+                value_scale_mm = self.length("value_scale", text, where)
+                if value_scale_mm is None:
+                    ok = False
+        value_marks = None
+        if "value_marks" in p and p["value_marks"][0] != "auto":
+            text, where = p["value_marks"]
+            marks = [graphdata.number(part.strip()) for part in text.split(",")]
+            if any(m is None for m in marks):
+                self.sink.error(
+                    "bad-value", f"value_marks= takes auto or numbers separated by commas, such as 0,100,200, not '{text}'",
+                    where,
+                )
+                ok = False
+            elif y_scale is YScale.LOG and any(m <= 0 for m in marks):
+                self.sink.error("bad-value", "with y_scale=log, every value mark must be above zero", where)
+                ok = False
+            else:
+                value_marks = tuple(sorted(set(marks)))
+
+        inherited_font, inherited_size = context
+        font = self.font(*p["font"]) if "font" in p else inherited_font
+        font_size = self.length("font_size", *p["font_size"]) if "font_size" in p else inherited_size
+        for value in (y_scale, line, fill, height if "height" in p else 0, fill_depth if "fill_depth" in p else 0,
+                      shadow if "shadow" in p else 0, font, font_size):
+            if value is None:
+                ok = False
+
+        points = None
+        data = None
+        if ("data" in p) == (points_node is not None):
+            self.sink.error(
+                "graph-data",
+                "a graph takes its points from either data= (a CSV file) or a { } body of points, not both"
+                if points_node is not None else
+                "a graph needs points: data= naming a CSV file, or a { } body with a date and a value on each line",
+                location,
+            )
+            ok = False
+        elif points_node is not None:
+            for key in _CSV_KEYS:
+                if key in p:
+                    self.sink.error("bad-value", f"{key}= applies to data= files, not points written inline", p[key][1])
+                    ok = False
+            lines = [([str(w) for w in point.children], self.loc(point)) for point in points_node.children]
+            points = graphdata.read_inline(lines, missing, self.sink, location)
+        else:
+            options = self.csv_options(p)
+            data = relative_name(location.source, p["data"][0])
+            content = self.fetcher.fetch("data", data, p["data"][1])
+            if options is not None and content is not None:
+                points = graphdata.read_csv(content, data, options, self.sink, location)
+        if points is None:
+            return None
+        if y_scale is YScale.LOG:
+            bad = [pt for pt in points if pt.value is not None and pt.value <= 0]
+            for pt in bad[: graphdata.MAX_ROW_ERRORS]:
+                self.sink.error(
+                    "bad-value", f"y_scale=log can't draw {pt.value:g}: every value must be above zero", pt.location
+                )
+            ok = ok and not bad
+        if not ok:
+            return None
+        order = self.graph_count
+        self.graph_count += 1
+        return Graph(
+            title=title,
+            pen=pen or DEFAULT_GRAPH_PEN,
+            fill_pen=fill_pen or pen or DEFAULT_GRAPH_PEN,
+            points=tuple(points),
+            data=data,
+            origin=origin,
+            y_scale=y_scale,
+            height_mm=height,
+            range=value_range,
+            line=line,
+            fill=fill,
+            fill_depth_mm=fill_depth,
+            shadow_mm=shadow,
+            value_scale=value_scale,
+            value_scale_mm=value_scale_mm,
+            value_marks=value_marks,
+            unit=unit,
+            font=font,
+            font_size_mm=font_size,
+            order=order,
+            location=location,
+        )
+
+    def csv_options(self, p: dict[str, tuple[str, SourceLocation]]) -> graphdata.CsvOptions | None:
+        ok = True
+        values: dict = {}
+        for key in ("first_row", "last_row"):
+            if key in p:
+                text, where = p[key]
+                if text.isdigit() and int(text) > 0:
+                    values[key] = int(text)
+                else:
+                    self.sink.error("bad-value", f"{key}= takes a row number, counting from 1, not '{text}'", where)
+                    ok = False
+        if "first_row" in values and "last_row" in values and values["last_row"] < values["first_row"]:
+            self.sink.error("bad-value", "last_row= is before first_row=", p["last_row"][1])
+            ok = False
+        if "header" in p:
+            text, where = p["header"]
+            if text not in ("yes", "no"):
+                self.sink.error("bad-value", f"header= takes yes or no, not '{text}'", where)
+                ok = False
+            values["header"] = text == "yes"
+        if "separator" in p:
+            text, where = p["separator"]
+            if text not in graphdata.SEPARATORS:
+                options = ", ".join(graphdata.SEPARATORS)
+                self.sink.error("bad-value", f"separator= takes one of {options}, not '{text}'", where)
+                ok = False
+            else:
+                values["separator"] = graphdata.SEPARATORS[text]
+        for key in ("time_column", "value_column"):
+            if key in p:
+                text, where = p[key]
+                if text.isdigit():
+                    if int(text) < 1:
+                        self.sink.error("bad-value", f"{key}= counts columns from 1", where)
+                        ok = False
+                    values[key] = int(text)
+                else:
+                    values[key] = text.strip()
+        if "time_format" in p:
+            values["time_format"] = p["time_format"][0]
+        if "missing" in p:
+            values["missing"] = p["missing"][0].strip()
+        return graphdata.CsvOptions(**values) if ok else None
+
+    def drop_duplicate_graphs(self, graphs: list[Graph]) -> list[Graph]:
+        """A graph defined again (§15.1): its identity is its title, and the last definition wins, as for
+        entities (§5). Untitled graphs are never duplicates."""
+        last = {g.title: g for g in graphs if g.title}
+        kept = []
+        for g in graphs:
+            winner = last.get(g.title)
+            if winner is not None and winner is not g and (
+                g.location.source != winner.location.source or g.location.line == winner.location.line
+            ):
+                self.sink.warning(
+                    "duplicate-graph",
+                    f'graph "{g.title}" is defined again at {winner.location}; the later definition wins and this '
+                    "one is dropped",
+                    g.location,
+                )
+                continue
+            kept.append(g)
+        return kept
+
     # -- whole-document checks ----------------------------------------------------------------------------
 
     def drop_duplicates(self, entities: list[Entity]) -> list[Entity]:
@@ -550,21 +885,20 @@ class _Builder:
                 texts = [("", e.label)]
                 if e.kind is Kind.EVENT and e.time_label is not TimeLabel.NONE:
                     texts.append(("the time label of ", time_label_text(e.when, e.time_label.value)))
-                replacements = [(what, r) for what, text in texts for r in drawable_text(font, text)[1]]
-                for what, r in replacements:
-                    code = f"U+{ord(r.original):04X}"
-                    char = code if r.original.isspace() or not r.original.isprintable() else f"{r.original} ({code})"
-                    if r.replacement == "":
-                        drawn = "leaving it out"
-                    elif r.replacement.isspace():
-                        drawn = "drawing a space instead"
-                    else:
-                        drawn = f"drawing {r.replacement} instead"
-                    self.sink.warning(
-                        "missing-glyph",
-                        f'font {e.font} has no {char} for {what}{e.kind.value} "{e.label}"; {drawn}',
-                        e.location,
-                    )
+                for what, text in texts:
+                    self.warn_missing_glyphs(font, e.font, text, f'{what}{e.kind.value} "{e.label}"', e.location)
+
+    def warn_missing_glyphs(self, font: Font, font_key: str, text: str, what: str, location: SourceLocation) -> None:
+        for r in drawable_text(font, text)[1]:
+            code = f"U+{ord(r.original):04X}"
+            char = code if r.original.isspace() or not r.original.isprintable() else f"{r.original} ({code})"
+            if r.replacement == "":
+                drawn = "leaving it out"
+            elif r.replacement.isspace():
+                drawn = "drawing a space instead"
+            else:
+                drawn = f"drawing {r.replacement} instead"
+            self.sink.warning("missing-glyph", f"font {font_key} has no {char} for {what}; {drawn}", location)
 
 
 def _identity(e: Entity) -> tuple:
@@ -581,8 +915,8 @@ def _a(word: str) -> str:
     return f"{'an' if word[:1] in 'aeiou' else 'a'} {word}"
 
 
-def _unclosed_group(lines: list[LogicalLine]) -> SourceLocation | None:
-    """The innermost group whose { is never closed, for pointing the error at the group's own line."""
+def _unclosed_body(lines: list[LogicalLine]) -> LogicalLine | None:
+    """The innermost group or graph whose { is never closed, for pointing the error at its own line."""
     open_lines: list[LogicalLine] = []
     for line in lines:
         if line.text == "}":
@@ -590,7 +924,7 @@ def _unclosed_group(lines: list[LogicalLine]) -> SourceLocation | None:
                 open_lines.pop()
         elif line.text.endswith("{"):
             open_lines.append(line)
-    return open_lines[-1].location if open_lines else None
+    return open_lines[-1] if open_lines else None
 
 
 def _looks_like_date(word: str) -> bool:

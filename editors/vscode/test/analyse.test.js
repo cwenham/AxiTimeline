@@ -162,7 +162,9 @@ test('hovering keywords, pens, parameters and values', () => {
   assert.deepStrictEqual(hover('ti|meline start=1900'), { type: 'keyword', name: 'timeline', start: 0, end: 8 });
   assert.strictEqual(hover('event "E" 1900 il|lustration(a.svg)').name, 'illustration');
   assert.deepStrictEqual(hover('span "S" 1900-1950 r|ed'), { type: 'pen', name: 'red', start: 19, end: 22 });
-  assert.deepStrictEqual(hover('span "S" 1900-1950 fi|ll=solid'), { type: 'parameter', name: 'fill', start: 19, end: 23 });
+  assert.deepStrictEqual(hover('span "S" 1900-1950 fi|ll=solid'), {
+    type: 'parameter', name: 'fill', decl: 'span', start: 19, end: 23,
+  });
   assert.deepStrictEqual(hover('span "S" 1900-1950 fill=so|lid'), {
     type: 'value', key: 'fill', name: 'solid', start: 24, end: 29,
   });
@@ -179,4 +181,39 @@ test('nothing to say for labels, dates and comments', () => {
   assert.strictEqual(hover('event "r|ed" 1900'), null);
   assert.strictEqual(hover('event "E" 19|00'), null);
   assert.strictEqual(hover('event "E" 1900 // r|ed'), null);
+});
+
+// -- graphs (language spec §15) -------------------------------------------------------------------------------
+
+test('a graph is offered at the top level, but not inside a group', () => {
+  expect('|', { kind: 'statement', inBody: false });
+  expect('group "G" 1900-1950 {\n  |\n}', { kind: 'statement', inBody: true });
+});
+
+test("a graph's items follow its title, with no date", () => {
+  expect('graph "Dow" |', { kind: 'item', decl: 'graph', prefix: '' });
+  expect('graph "Dow" HB-pencil y_sc|', { kind: 'item', decl: 'graph', prefix: 'y_sc', pen: true });
+  expect('graph "Dow" y_scale=|', { kind: 'value', decl: 'graph', key: 'y_scale' });
+  expect('graph "Do|', { kind: 'none' });
+});
+
+test('a graph continued on indented lines, and its parameters known', () => {
+  const c = expect('graph "Dow"\n    data="dow.csv"\n    |', { kind: 'statement' });
+  assert.strictEqual(c.continues.decl, 'graph');
+  assert.deepStrictEqual([...c.continues.used], ['data']);
+  expect('graph "Dow"\n    data="dow.csv"\n    origin=|', { kind: 'value', decl: 'graph', key: 'origin' });
+});
+
+test("nothing is offered inside a graph's body of points, even when its { ends a continuation line", () => {
+  expect('graph "Rate" line=step {\n    |\n}', { kind: 'none' });
+  expect('graph "Rate"\n    line=step {\n    1929-08-09 6\n    |\n}', { kind: 'none' });
+  expect('graph "Rate" {\n    1929-08-09 6\n}\n|', { kind: 'statement', inBody: false });
+});
+
+test('hovering a graph: its keyword, and parameters known to belong to it', () => {
+  assert.deepStrictEqual(hover('gra|ph "Dow" data="d.csv"'), { type: 'keyword', name: 'graph', start: 0, end: 5 });
+  assert.strictEqual(hover('graph "Dow" hei|ght=40mm').decl, 'graph');
+  assert.strictEqual(hover('graph "Dow"\n    fill_de|pth=4mm').decl, 'graph');
+  assert.strictEqual(hover('event "E" 1900 illustration(a.svg hei|ght=40mm)').decl, 'illustration');
+  assert.deepStrictEqual(hover('graph "Dow" y_scale=l|og'), { type: 'value', key: 'y_scale', name: 'log', start: 20, end: 23 });
 });

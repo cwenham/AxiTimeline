@@ -1,4 +1,5 @@
-"""The one seam where libaxitl touches host I/O: fetching includes, illustrations and custom fonts by name.
+"""The one seam where libaxitl touches host I/O: fetching includes, illustrations, custom fonts and graph data
+by name.
 
 The host supplies ``resolve(name) -> str | bytes``. Every resource fetched is recorded, with its content, so
 the host can hash exactly what the parse used (interpreter spec, "Job log") without re-reading anything.
@@ -17,7 +18,7 @@ Resolver = Callable[[str], "str | bytes"]
 
 @dataclass(frozen=True)
 class Resource:
-    kind: str  # "include", "illustration" or "font"
+    kind: str  # "include", "illustration", "font" or "data" (a graph's CSV file)
     name: str
     content: bytes
 
@@ -28,7 +29,7 @@ def relative_name(including: str, name: str) -> str:
 
 
 def no_resolver(name: str) -> bytes:
-    raise LookupError("no resolver was supplied, so includes, illustrations and custom fonts can't be read")
+    raise LookupError("no resolver was supplied, so includes, illustrations, custom fonts and graph data can't be read")
 
 
 class Fetcher:

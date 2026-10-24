@@ -1,0 +1,53 @@
+// The 1929 crash and the Depression that followed, over two background graphs (language spec §15): the Dow, on
+// a log scale from its value at the start, shaded under its line; and the New York Fed's discount rate, a
+// stepped line from zero. Graphs are drawn first, in pencil, and never move anything. Figures are approximate.
+timeline start=1928-06 end=1932-12 length=3m width=297 ticks=1.5cm
+
+include "common/dow-1929.axitl"
+
+// Each rate holds until the next change. The first change is before the timeline starts and the last after it
+// ends, so the line runs the whole length. Further along, long bars fill the lanes where its value labels
+// would go, so it has one value scale, at the start.
+graph "New York Fed discount rate (approximate)" 2H-pencil
+    unit=%
+    line=step
+    height=30mm
+    value_scale=start {
+    1928-05-18  4.5
+    1928-07-13  5
+    1929-08-09  6
+    1929-11-01  5
+    1929-11-15  4.5
+    1930-02-07  4
+    1930-03-14  3.5
+    1930-05-02  3
+    1930-06-20  2.5
+    1930-12-24  2
+    1931-05-08  1.5
+    1931-10-09  2.5
+    1931-10-16  3.5
+    1932-02-26  3
+    1932-06-24  2.5
+    1933-03-03  3.5
+}
+
+span "Bull market" 1921/1929-09-03
+span "Great Crash" 1929-09-03/1929-11-13 fill=diagonal fill_pen=2H-pencil  // black outline, pencil fill
+!span "Great Depression" 1929-08/1933-03
+span "Hoover presidency" 1929-03-04/1933-03-04
+span "First banking panic" 1930-10/1931-01
+span "Second banking panic" 1931-03/1931-08
+
+event "Hoover elected" 1928-11-06
+!event "Dow peaks at 381" 1929-09-03
+event "Babson Break" 1929-09-05
+!!event "Black Thursday" 1929-10-24
+event "Black Monday" 1929-10-28
+!!event "Black Tuesday" 1929-10-29
+event "Smoot-Hawley Tariff Act signed" 1930-06-17
+event "Bank of United States fails" 1930-12-11
+event "Creditanstalt collapses" 1931-05-11
+!event "Britain leaves the gold standard" 1931-09-21
+!event "Dow bottoms at 41" 1932-07-08
+event "Bonus Army dispersed" 1932-07-28
+!event "Roosevelt elected" 1932-11-08

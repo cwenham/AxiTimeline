@@ -88,6 +88,7 @@ class Entity:
     side: Side | None  # explicitly written or include-forced; None = automatic (or inherited from a group)
     pen: str  # effective pen: its own, else its group's, else black
     fill: Fill
+    fill_pen: str  # effective pen for the fill pattern: its own fill_pen, else its group's, else its pen (§3.7)
     font: str  # effective font: a key into TimelineDocument.fonts
     font_size_mm: float  # effective font size (the em)
     time_label: TimeLabel  # effective, for an event; for a group, what its members inherit; NONE for bars
@@ -128,11 +129,69 @@ class TimelineSettings:
         return self.end is None
 
 
+class YScale(Enum):
+    """How a graph's values map to distance from the baseline (§15.5)."""
+
+    LINEAR = "linear"
+    LOG = "log"
+
+
+class LineMode(Enum):
+    """How a graph's line joins its points (§15.6)."""
+
+    STRAIGHT = "straight"
+    SMOOTH = "smooth"
+    STEP = "step"
+
+
+class ValueScaleMode(Enum):
+    """Where a graph's value scales go (§15.9)."""
+
+    OFF = "off"
+    START = "start"
+    EVERY = "every"  # repeated at value_scale_mm along the roll
+
+
+@dataclass(frozen=True)
+class GraphPoint:
+    seconds: int  # the start of the point's date (§15.4)
+    value: float | None  # None marks a gap in the line
+    location: SourceLocation  # the CSV row, or the line of the graph's body
+
+
+@dataclass(frozen=True)
+class Graph:
+    """A background graph (§15): a line of values against the timeline's time axis, drawn under the foreground."""
+
+    title: str  # "" for none
+    pen: str
+    points: tuple[GraphPoint, ...]  # in time order, gaps included
+    data: str | None  # the CSV file's resource name, or None for points written inline
+    origin: float | None  # the value drawn on the baseline; None for origin=first
+    y_scale: YScale
+    height_mm: float | None
+    range: float | None  # with height_mm, pins the rate: a difference (linear) or a ratio (log)
+    line: LineMode
+    fill: Fill
+    fill_pen: str  # the pen its shading is drawn in: its own fill_pen, else its pen (§15.7)
+    fill_depth_mm: float | None
+    shadow_mm: float | None
+    value_scale: ValueScaleMode
+    value_scale_mm: float | None  # the interval, for ValueScaleMode.EVERY
+    value_marks: tuple[float, ...] | None  # None: chosen automatically
+    unit: str  # printed on each value scale (§15.9); "" for none
+    font: str  # a key into TimelineDocument.fonts
+    font_size_mm: float
+    order: int  # among graphs, in document order
+    location: SourceLocation
+
+
 @dataclass(frozen=True)
 class TimelineDocument:
     timeline: TimelineSettings
     entities: tuple[Entity, ...]  # top level, in document order
     fonts: Mapping[str, Font] = field(repr=False)
+    graphs: tuple[Graph, ...] = ()  # backgrounds (§15), in document order
 
     def walk(self) -> Iterator[Entity]:
         """Every entity, groups before their members, in document order."""

@@ -14,6 +14,7 @@ from .diagnostics import AxitlError, Diagnostic, Severity, SourceLocation
 from .fetch import Resource
 from .fonts import BUILTIN_FONTS, Font
 from .geometry import Box
+from .graphs import PlacedGraph
 from .layout import (
     FlagDirection,
     LabelPlacement,
@@ -26,7 +27,22 @@ from .layout import (
     Tick,
     layout,
 )
-from .model import Baseline, Entity, Fill, Illustration, Kind, OpenEndStyle, Side, TimelineDocument, TimelineSettings
+from .model import (
+    Baseline,
+    Entity,
+    Fill,
+    Graph,
+    GraphPoint,
+    Illustration,
+    Kind,
+    LineMode,
+    OpenEndStyle,
+    Side,
+    TimelineDocument,
+    TimelineSettings,
+    ValueScaleMode,
+    YScale,
+)
 from .parser import ParseResult, parse
 from .pens import PENS
 from .render import Page, RenderError, RenderOptions, page_for, render, stroke_lengths
@@ -37,7 +53,8 @@ from .units import parse_length
 __all__ = [
     "draw", "layout", "page_for", "parse", "render", "stroke_lengths", "parse_date", "parse_length", "parse_when", "shape", "AxitlError", "BUILTIN_FONTS",
     "Baseline", "Box", "DrawStyle", "Drawing", "Page", "RenderError", "RenderOptions", "Stage", "Stroke", "DateRange", "DateValue", "Diagnostic", "Entity", "Fill", "FlagDirection", "LabelPlacement", "Font",
-    "Illustration", "Kind", "LayoutStyle", "OpenEndStyle", "PENS", "ParseResult", "PlacedBar", "PlacedEvent",
+    "Graph", "GraphPoint", "Illustration", "Kind", "LayoutStyle", "LineMode", "OpenEndStyle", "PENS", "ParseResult",
+    "PlacedBar", "PlacedEvent", "PlacedGraph", "ValueScaleMode", "YScale",
     "PlacedIllustration", "PlacedText", "Precision", "ResolvedLayout", "Resource", "Severity", "ShapedText", "Side",
     "SourceLocation", "Tick", "TimelineDocument", "TimelineSettings", "__version__",
 ]

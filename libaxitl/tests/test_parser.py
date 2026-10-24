@@ -317,3 +317,29 @@ def test_a_time_label_the_font_cant_draw_is_a_warning(make_files):
     result = parse(T + 'event "a" 1920 font="hand.svg" time_label=year\n', make_files({"hand.svg": HAND_FONT}))
     messages = [d.message for d in result.diagnostics]
     assert any("for the time label of event" in m and "U+0031" in m for m in messages)  # the font has no "1"
+
+
+def test_a_fill_pen_and_how_a_group_passes_it_on():
+    found = {e.label: e for e in entities(
+        T + '!group "G" 1900-1950 red fill_pen=HB-pencil {\n'
+        '  span "A" 1900-1920 fill=dots\n'
+        '  span "B" 1920-1930 blue fill=solid fill_pen=yellow\n'
+        "}\n"
+        'span "C" 1930-1940 green fill=diagonal\n'
+    )}
+    assert (found["G"].pen, found["G"].fill_pen) == ("red", "HB-pencil")  # a group may set one only to pass it on
+    assert (found["A"].pen, found["A"].fill_pen) == ("red", "HB-pencil")
+    assert (found["B"].pen, found["B"].fill_pen) == ("blue", "yellow")
+    assert (found["C"].pen, found["C"].fill_pen) == ("green", "green")  # by default the bar's own pen
+
+
+@pytest.mark.parametrize(
+    "line, code",
+    [
+        ('span "S" 1900-1950 fill_pen=HB-pencil\n', "bad-value"),  # nothing to fill
+        ('event "E" 1900 fill_pen=HB-pencil\n', "bad-value"),
+        ('span "S" 1900-1950 fill=solid fill_pen=pink\n', "unknown-pen"),
+    ],
+)
+def test_fill_pen_errors(line, code):
+    assert code in error_codes(T + line)

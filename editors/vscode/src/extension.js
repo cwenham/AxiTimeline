@@ -12,7 +12,7 @@ const vocabulary = require('./vocabulary.json');
 const SUGGEST = { title: 'Suggest', command: 'editor.action.triggerSuggest' };
 const REQUIRED = ['start', 'end', 'width'];
 const ONE_OF = { length: 'scale', scale: 'length' };
-const SUGGESTS_VALUES = new Set(Object.keys(vocabulary.values).concat(['font', 'scale']));
+const SUGGESTS_VALUES = new Set(Object.keys(vocabulary.values).concat(['font', 'scale', 'fill_pen']));
 
 const TEMPLATES = {
   timeline: ['timeline\n\tstart=${1:1900}\n\tend=${2:now}\n\tlength=${3:2m}\n\twidth=${4:210}\n$0', 'start, end, length, width'],
@@ -21,6 +21,7 @@ const TEMPLATES = {
   event: ['event "${1:Name}" ${2:1900}$0', 'event "Name" 1900'],
   span: ['span "${1:Name}" ${2:1900}-${3:1950}$0', 'span "Name" 1900-1950'],
   group: ['group "${1:Name}" ${2:1900}-${3:1950} {\n\t$0\n}', 'group "Name" 1900-1950 { … }'],
+  graph: ['graph "${1:Title}"\n\tdata="${2}"$0', 'graph "Title" data="file.csv"'],
 };
 
 function activate(context) {
@@ -89,7 +90,10 @@ function statementItems(at, range, after) {
   // On a line that already has more after the cursor, a keyword goes in alone rather than as a template.
   const bare = splitComment(after).code.trim() !== '';
   const continuingSettings = at.continues && (at.continues.decl === 'timeline' || at.continues.decl === 'include');
-  const words = at.marks ? vocabulary.entities : (at.timeline ? ['timeline'] : []).concat('include', vocabulary.entities);
+  const backgrounds = at.inBody ? [] : vocabulary.backgrounds; // a graph can't be inside a group
+  const words = at.marks
+    ? vocabulary.entities
+    : (at.timeline ? ['timeline'] : []).concat('include', vocabulary.entities, backgrounds);
   const items = words.map((word, i) => {
     const item = new vscode.CompletionItem(word, vscode.CompletionItemKind.Keyword);
     item.range = range;
@@ -98,7 +102,7 @@ function statementItems(at, range, after) {
     if (!bare) {
       item.insertText = new vscode.SnippetString(TEMPLATES[word][0]);
       item.detail = TEMPLATES[word][1];
-      if (word === 'include') item.command = SUGGEST;
+      if (word === 'include' || word === 'graph') item.command = SUGGEST;
     }
     return item;
   });
@@ -113,10 +117,11 @@ function parameterItems(decl, used, range, group) {
   if (decl === 'timeline') keys = vocabulary.timelineParameters;
   else if (decl === 'include') keys = vocabulary.includeParameters;
   else if (decl === 'illustration') keys = vocabulary.illustrationParameters;
+  else if (decl === 'graph') keys = vocabulary.graphParameters;
   else {
     keys = vocabulary.entityParameters.filter(
       (key) =>
-        (key !== 'fill' || vocabulary.bandedEntities.includes(decl)) &&
+        ((key !== 'fill' && key !== 'fill_pen') || vocabulary.bandedEntities.includes(decl)) &&
         (key !== 'time_label' || decl === 'event' || decl === 'group')
     );
   }
@@ -125,14 +130,14 @@ function parameterItems(decl, used, range, group) {
     .map((key, i) => {
       const item = new vscode.CompletionItem(`${key}=`, vscode.CompletionItemKind.Property);
       item.range = range;
-      item.documentation = markdown(docs.parameters[key]);
+      item.documentation = markdown(docs.parameter(key, decl));
       let rank = '1';
       if (decl === 'timeline' && (REQUIRED.includes(key) || ONE_OF[key])) {
         item.detail = ONE_OF[key] ? `required: this or ${ONE_OF[key]}=` : 'required';
         rank = '0';
       }
       item.sortText = group + rank + String(i).padStart(2, '0');
-      if (SUGGESTS_VALUES.has(key)) item.command = SUGGEST;
+      if (SUGGESTS_VALUES.has(key) || (decl === 'graph' && key === 'data')) item.command = SUGGEST;
       return item;
     });
 }
@@ -140,16 +145,8 @@ function parameterItems(decl, used, range, group) {
 function itemItems(at, range) {
   const items = [];
   const entity = vocabulary.entities.includes(at.decl);
-  if (entity && !at.pen) {
-    PENS.forEach((pen, i) => {
-      // A colour item whose documentation is a colour string gets a swatch in the list.
-      const item = new vscode.CompletionItem(pen, vscode.CompletionItemKind.Color);
-      item.range = range;
-      item.detail = docs.penDetail(pen);
-      item.documentation = vocabulary.pens[pen];
-      item.sortText = '0' + String(i).padStart(2, '0');
-      items.push(item);
-    });
+  if ((entity || at.decl === 'graph') && !at.pen) {
+    items.push(...penItems(range, '0', at.decl === 'graph' ? vocabulary.defaultGraphPen : null));
   }
   items.push(...parameterItems(at.decl, at.used, range, '1'));
   if (entity && !at.illustration) {
@@ -165,9 +162,30 @@ function itemItems(at, range) {
   return items;
 }
 
+/** Every pen, each with a swatch of its preview colour; `marked` gets a note that it's the default here. */
+function penItems(range, group, marked) {
+  return PENS.map((pen, i) => {
+    // A colour item whose documentation is a colour string gets a swatch in the list.
+    const item = new vscode.CompletionItem(pen, vscode.CompletionItemKind.Color);
+    item.range = range;
+    item.detail = docs.penDetail(pen) + (pen === marked ? ' (the default for a graph)' : '');
+    item.documentation = vocabulary.pens[pen];
+    item.sortText = group + String(i).padStart(2, '0');
+    return item;
+  });
+}
+
 async function valueItems(at, position, after, document) {
   const range = rangeFor(position, at.start, after, at.quoted ? /^[^"]*/ : WORD_REST);
   if (at.key === 'font') return fontItems(at, position, after, document, range);
+  if (at.key === 'fill_pen') return penItems(range, '');
+  if (at.key === 'data' && at.decl === 'graph') {
+    const files = await pathItems(at, position, after, document, 'data');
+    if (!at.quoted) {
+      for (const item of files) item.insertText = `"${item.insertText}${item.kind === vscode.CompletionItemKind.File ? '"' : ''}`;
+    }
+    return files;
+  }
   if (at.key === 'scale') return scaleItems(at, range);
   const options = vocabulary.values[at.key] || [];
   const help = docs.values[at.key] || {};
@@ -212,7 +230,7 @@ function scaleItems(at, range) {
   });
 }
 
-/** Files and folders beside the document, for an include, an illustration or a custom font. */
+/** Files and folders beside the document, for an include, an illustration, a custom font or a graph's data. */
 async function pathItems(at, position, after, document, purpose) {
   if (document.uri.scheme !== 'file') return [];
   const slash = at.prefix.lastIndexOf('/');
@@ -226,7 +244,7 @@ async function pathItems(at, position, after, document, purpose) {
   } catch (err) {
     return [];
   }
-  const extension = purpose === 'include' ? '.axitl' : '.svg';
+  const extensions = { include: ['.axitl'], data: ['.csv', '.tsv', '.txt'] }[purpose] || ['.svg'];
   const close = at.quoted && !after.replace(/^[^"]*/, '').startsWith('"') ? '"' : '';
   const items = [];
   for (const [name, type] of entries.sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
@@ -237,7 +255,7 @@ async function pathItems(at, position, after, document, purpose) {
       item.insertText = `${name}/`;
       item.command = SUGGEST;
       item.sortText = `1${name}`;
-    } else if (name.toLowerCase().endsWith(extension)) {
+    } else if (extensions.some((extension) => name.toLowerCase().endsWith(extension))) {
       if (vscode.Uri.joinPath(folder, name).toString() === document.uri.toString()) continue;
       item = new vscode.CompletionItem(name, vscode.CompletionItemKind.File);
       item.insertText = name + close;
@@ -264,8 +282,10 @@ function describe(target) {
       return `**${target.name}**\n\n${docs.keywords[target.name]}`;
     case 'head':
       return `**${target.name}**\n\n${docs.head(target)}`;
-    case 'parameter':
-      return docs.parameters[target.name] && `**${target.name}=**\n\n${docs.parameters[target.name]}`;
+    case 'parameter': {
+      const help = docs.parameter(target.name, target.decl);
+      return help && `**${target.name}=**\n\n${help}`;
+    }
     case 'value': {
       const help = (docs.values[target.key] || {})[target.name];
       return help && `**${target.key}=${target.name}**\n\n${help}`;

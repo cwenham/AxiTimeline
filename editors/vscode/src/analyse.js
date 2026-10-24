@@ -5,7 +5,8 @@
  * Kept free of the vscode API so the tests can run it under plain node. It reads lines the way libaxitl's
  * preprocessor and grammar do (language spec §§3, 3.9, 3.10): `//` comments outside quotes, a declaration
  * continued on indented `key=value` lines, and each declaration shaped as a head, a quoted label, a date,
- * then items (pens, `key=value` parameters and `illustration(...)`).
+ * then items (pens, `key=value` parameters and `illustration(...)`). A graph (§15) has no date: its items follow
+ * its title, and its `{ }` body holds points rather than declarations.
  */
 
 const vocabulary = require('./vocabulary.json');
@@ -61,9 +62,9 @@ function isContinuation(line) {
   return /^[ \t]/.test(line) && KEY_START.test(splitComment(line).code.trim());
 }
 
-/** The kind of declaration a head word starts: timeline, include, an entity keyword, or null. */
+/** The kind of declaration a head word starts: timeline, include, graph, an entity keyword, or null. */
 function declarationKind(word) {
-  if (word === 'timeline' || word === 'include') return word;
+  if (word === 'timeline' || word === 'include' || word === 'graph') return word;
   const m = HEAD.exec(word);
   return m ? m[3] : null;
 }
@@ -125,16 +126,25 @@ function summarise(tokens) {
   return { keys, pen, illustration };
 }
 
-/** Whether the line sits inside a group's `{ }` body. */
-function insideBody(lines, line) {
-  let depth = 0;
+/**
+ * The `{ }` body the line sits inside, if any: the kind of declaration that opened it (group, or graph for a
+ * body of points), or null.
+ */
+function enclosingBody(lines, line) {
+  const open = [];
   for (let i = 0; i < line; i++) {
-    for (const t of tokenize(splitComment(lines[i]).code)) {
-      if (t.type === '{') depth++;
-      else if (t.type === '}') depth = Math.max(0, depth - 1);
+    const tokens = tokenize(splitComment(lines[i]).code);
+    for (const t of tokens) {
+      if (t.type === '{') {
+        const decl = isContinuation(lines[i]) ? declarationAbove(lines, i) : { tokens };
+        const head = decl && decl.tokens[0];
+        open.push((head && head.type === 'word' && declarationKind(head.text)) || 'group');
+      } else if (t.type === '}') {
+        open.pop();
+      }
     }
   }
-  return depth > 0;
+  return open.length ? open[open.length - 1] : null;
 }
 
 const NONE = Object.freeze({ kind: 'none' });
@@ -152,7 +162,7 @@ const NONE = Object.freeze({ kind: 'none' });
  * - `{kind: 'value', decl, key, prefix, start, quoted}`: the value after `key=`
  * - `{kind: 'path', purpose, prefix, start, quoted}`: a file name: `purpose` is include or illustration
  *
- * `decl` is timeline, include, illustration (inside its parentheses) or an entity keyword. `prefix` is what
+ * `decl` is timeline, include, graph, illustration (inside its parentheses) or an entity keyword. `prefix` is what
  * has been typed of the thing being completed, and `start` the column it starts at, so a suggestion replaces
  * the columns from `start` to the cursor.
  */
@@ -169,7 +179,9 @@ function completionContext(lines, line, character) {
   if (own.length === 0 || (own.length === 1 && touching && own[0].type === 'word')) {
     const m = /^([\^v]?)([!-]*)([A-Za-z_]*)$/.exec(own.length ? own[0].text : '');
     if (!m) return NONE;
-    const inBody = insideBody(lines, line);
+    const body = enclosingBody(lines, line);
+    if (body === 'graph') return NONE; // a graph's body holds points, a date and a value on each line
+    const inBody = body !== null;
     const hasTimeline = lines.some(
       (l, i) => i !== line && /^\s*timeline(?![\w])/.test(splitComment(l).code)
     );
@@ -203,6 +215,11 @@ function completionContext(lines, line, character) {
   let items;
   if (decl === 'timeline') {
     items = tokens.slice(1);
+  } else if (decl === 'graph') {
+    const title = tokens[1];
+    if (!title || title.type !== 'string' || !title.closed) return NONE; // typing the title
+    if (title === last && touching) return NONE;
+    items = tokens.slice(2);
   } else if (decl === 'include') {
     const path = tokens[1];
     if (!path || path.type !== 'string') return NONE;
@@ -274,7 +291,7 @@ function trailing(decl, items, summary, touching, character) {
   if (last && touching && items[n - 2] && items[n - 2].type === '=') return value(items[n - 3], last);
   if (last && last.type === 'string' && !last.closed) return NONE;
   if (last && touching && last.type !== 'word') return NONE; // straight after a ) or a closing quote
-  if (last && last.type === '{') return NONE; // a group's body has begun
+  if (last && last.type === '{') return NONE; // a group's (or graph's) body has begun
   const prefix = touching ? last.text : '';
   return {
     kind: 'item',
@@ -287,10 +304,21 @@ function trailing(decl, items, summary, touching, character) {
   };
 }
 
+/** The declaration a line belongs to (its own head, or the head it continues), or null. */
+function lineDeclaration(lines, line, tokens) {
+  if (isContinuation(lines[line])) {
+    const above = declarationAbove(lines, line);
+    const head = above && above.tokens[0];
+    return head && head.type === 'word' ? declarationKind(head.text) : null;
+  }
+  return tokens[0] && tokens[0].type === 'word' ? declarationKind(tokens[0].text) : null;
+}
+
 /**
  * What is written at a position, for hover help. Returns null, or `{type, name, start, end}` where type is
- * keyword, head (with `side`, `priority` and `mixed`), parameter, value (with `key`), pen or font, and
- * start/end are the columns it covers.
+ * keyword, head (with `side`, `priority` and `mixed`), parameter (with `decl`, the declaration it belongs to:
+ * illustration inside an illustration's parentheses), value (with `key`), pen or font, and start/end are the
+ * columns it covers.
  */
 function hoverTarget(lines, line, character) {
   const text = lines[line];
@@ -312,7 +340,9 @@ function hoverTarget(lines, line, character) {
   }
   if (t.type !== 'word') return null;
   if (i === 0 && !isContinuation(text)) {
-    if (t.text === 'timeline' || t.text === 'include') return Object.assign({ type: 'keyword', name: t.text }, span);
+    if (t.text === 'timeline' || t.text === 'include' || t.text === 'graph') {
+      return Object.assign({ type: 'keyword', name: t.text }, span);
+    }
     const m = HEAD.exec(t.text);
     if (m) {
       const run = m[2];
@@ -324,11 +354,20 @@ function hoverTarget(lines, line, character) {
   if (t.text === 'illustration' && next && next.type === '(') {
     return Object.assign({ type: 'keyword', name: 'illustration' }, span);
   }
-  if (next && next.type === '=') return Object.assign({ type: 'parameter', name: t.text }, span);
+  if (next && next.type === '=') {
+    let depth = 0;
+    for (const before of tokens.slice(0, i)) {
+      if (before.type === '(') depth++;
+      else if (before.type === ')') depth = Math.max(0, depth - 1);
+    }
+    const decl = depth > 0 ? 'illustration' : lineDeclaration(lines, line, tokens);
+    return Object.assign({ type: 'parameter', name: t.text, decl }, span);
+  }
   if (prev && prev.type === '=') {
     const key = tokens[i - 2];
     if (key && key.type === 'word') {
       if (key.text === 'font' && vocabulary.fonts.includes(t.text)) return Object.assign({ type: 'font', name: t.text }, span);
+      if (key.text === 'fill_pen' && PEN_SET.has(t.text)) return Object.assign({ type: 'pen', name: t.text }, span);
       return Object.assign({ type: 'value', key: key.text, name: t.text }, span);
     }
     return null;

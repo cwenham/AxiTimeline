@@ -2,6 +2,7 @@
   "comment": "The language's closed vocabularies. editors/vscode/test/test_vocabulary.py checks them against libaxitl. Pens map to the preview colour axitime renders them in.",
   "entities": ["person", "event", "span", "group"],
   "bandedEntities": ["person", "span", "group"],
+  "backgrounds": ["graph"],
   "pens": {
     "red": "#c62828", "orange": "#ef6c00", "yellow": "#f9a825", "green": "#2e7d32", "blue": "#1565c0",
     "indigo": "#3949ab", "violet": "#6a1b9a", "black": "#212121", "grey": "#757575",
@@ -14,6 +15,7 @@
     "fountain-violet": "#6a1b9a", "fountain-black": "#212121", "fountain-grey": "#757575"
   },
   "defaultPen": "black",
+  "defaultGraphPen": "HB-pencil",
   "fonts": [
     "HersheySans1", "HersheySansMed", "HersheySerifMed", "HersheySerifMedItalic", "HersheySerifBold",
     "HersheySerifBoldItalic", "HersheyScript1", "HersheyScriptMed", "HersheyGothEnglish", "EMSAllure",
@@ -27,9 +29,14 @@
     "baseline_offset", "above_baseline_offset", "below_baseline_offset",
     "ticks", "tick_label_every", "open_end_style", "font", "font_size", "time_label"
   ],
-  "entityParameters": ["fill", "font", "font_size", "time_label"],
+  "entityParameters": ["fill", "fill_pen", "font", "font_size", "time_label"],
   "includeParameters": ["priority", "side"],
   "illustrationParameters": ["height"],
+  "graphParameters": [
+    "data", "first_row", "last_row", "header", "separator", "time_column", "value_column", "time_format", "missing",
+    "origin", "y_scale", "height", "range", "line", "fill", "fill_pen", "fill_depth", "shadow", "value_scale",
+    "value_marks", "unit", "font", "font_size"
+  ],
   "values": {
     "fill": ["none", "solid", "diagonal", "crosshatch", "wave", "dots"],
     "time_label": ["none", "date", "year", "month", "day", "hour", "min", "sec"],
@@ -37,7 +44,15 @@
     "open_end_style": ["sawtooth", "sine"],
     "side": ["above", "below"],
     "ticks": ["off"],
-    "end": ["now"]
+    "end": ["now"],
+    "y_scale": ["linear", "log"],
+    "line": ["straight", "smooth", "step"],
+    "header": ["yes", "no"],
+    "separator": ["comma", "semicolon", "tab"],
+    "origin": ["first"],
+    "value_scale": ["off", "start"],
+    "value_marks": ["auto"],
+    "time_format": ["decimal_year"]
   },
   "scaleUnits": ["year", "day", "hour", "minute", "second"]
 }

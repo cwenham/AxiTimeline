@@ -94,3 +94,16 @@ def test_resource_hashes_include_includes_for_the_job_log(job):
 
 def test_normalised():
     assert normalised(b"\xef\xbb\xbfa\r\nb\rc\n") == b"a\nb\nc\n"
+
+
+def test_a_graphs_data_file_is_in_the_hash(tmp_path):
+    (tmp_path / "data").mkdir()
+    (tmp_path / "main.axitl").write_text(
+        'timeline start=1900 end=1999 length=1m width=210\ngraph "G" data="data/d.csv"\n'
+    )
+    (tmp_path / "data" / "d.csv").write_text("Date,Value\r\n1900,1\r\n1950,2\r\n")
+    digest, text = hash_of(str(tmp_path / "main.axitl"))
+    data = hashlib.sha256(b"Date,Value\n1900,1\n1950,2\n").hexdigest()  # line endings normalised
+    assert f"resource data {data} data/d.csv".encode() in text
+    (tmp_path / "data" / "d.csv").write_text("Date,Value\n1900,1\n1950,3\n")
+    assert hash_of(str(tmp_path / "main.axitl"))[0] != digest

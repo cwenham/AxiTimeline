@@ -11,21 +11,25 @@ Editor support for `.axitl` files: syntax highlighting, completion, hover help, 
   in its own colour, which makes two traps from the spec visible: `1910-12` has no separator because it is
   December 1910, not 1910 to 1912, and in `1963//1964` the end date turns into a comment (§§3.3, 3.9).
 - **Completion**, fitted to where the cursor is:
-  - at the start of a line: `timeline`, `include` and the entity keywords, inserted as templates to tab
-    through (`person "Name" 1900-1950`). After `^`, `v`, `!` or `-` marks, only entity keywords are offered;
+  - at the start of a line: `timeline`, `include`, the entity keywords and `graph`, inserted as templates to
+    tab through (`person "Name" 1900-1950`). `graph` isn't offered inside a group. After `^`, `v`, `!` or `-` marks, only entity keywords are offered;
     a second `timeline` is not.
   - after an entity's date: pens (with a swatch of their preview colour), the parameters that entity takes
     and haven't been given yet, and `illustration(…)`. `fill=` is offered only for bars and `time_label=`
     only for events and groups.
+  - after a graph's title (§15): pens, `HB-pencil` marked as its default, and a graph's parameters; nothing
+    inside its `{ }` body of points.
   - on a `timeline` or `include` line, or an indented continuation line under one (§3.10): their parameters.
     The timeline's required ones are marked, and `length=` and `scale=` exclude each other.
   - after `key=`: the values it takes (fills, time labels, `baseline=`, `end=now`, `ticks=off`, units for
-    `scale=`), and the built-in fonts for `font=`.
-  - file names: `.axitl` files for `include "…"`, `.svg` files for `illustration(…)` and custom fonts,
+    `scale=`), the built-in fonts for `font=`, and pens with their swatches for `fill_pen=`.
+  - file names: `.axitl` files for `include "…"`, `.svg` files for `illustration(…)` and custom fonts, `.csv`
+    files for a graph's `data=`,
     relative to the document, as libaxitl resolves them.
   - nothing inside labels, dates or comments.
 - **Hover help** for keywords, entity heads (spelling out the side and priority the marks give), pens,
-  parameters, values and built-in fonts, condensed from the language spec, with its section numbers.
+  parameters, values and built-in fonts, condensed from the language spec, with its section numbers. A
+  parameter shared between declarations, such as `height=` or `fill=`, is explained as it applies on its line.
 - **Errors and warnings** from `axitime check`, run when a file is opened and each time it's saved, so they're
   exactly what the real parser and layout report. Problems in an included file are shown in that file too.
   A file without a `timeline` is an include: checked on its own it's spared the missing-timeline error, and

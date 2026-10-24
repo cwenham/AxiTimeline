@@ -1,0 +1,18 @@
+// A graph in a file of its own, so any timeline covering these years can include it (language spec §15). The
+// CSV is read as it comes: notes above the header row, US-style dates, extra columns and a footer. The line is
+// in HB pencil and its shading in a lighter 2H.
+
+graph "Dow Jones Industrial Average (approximate closes)"
+    data="../data/dow-1928-1932.csv"
+    first_row=4
+    last_row=72
+    time_column=Date
+    value_column=Close
+    time_format="MM/DD/YYYY"
+    origin=first
+    y_scale=log
+    height=100mm
+    unit=points
+    fill=diagonal
+    fill_pen=2H-pencil
+    fill_depth=4mm

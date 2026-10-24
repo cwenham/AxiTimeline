@@ -9,6 +9,7 @@
     { "include": "#timeline" },
     { "include": "#include" },
     { "include": "#entity" },
+    { "include": "#graph" },
     { "include": "#illustration" },
     { "include": "#parameter" },
     { "include": "#pen" },
@@ -49,6 +50,11 @@
         "5": { "name": "storage.type.entity.axitl" }
       }
     },
+    "graph": {
+      "comment": "A background graph (language spec §15). It takes no side or priority marks.",
+      "match": "^\\s*(graph)(?![\\w])",
+      "captures": { "1": { "name": "storage.type.graph.axitl" } }
+    },
     "illustration": {
       "begin": "(?<![^\\s])(illustration)\\s*(\\()",
       "beginCaptures": {
@@ -75,7 +81,7 @@
           }
         },
         {
-          "match": "(?<![^\\s])(width|length|lane_height|above_lane_height|below_lane_height|baseline_offset|above_baseline_offset|below_baseline_offset|font_size|height)(=)(?:(\\d+(?:\\.\\d*)?|\\.\\d+)(mm|cm|m)?(?=[\\s{}()]|$|//))?",
+          "match": "(?<![^\\s])(width|length|lane_height|above_lane_height|below_lane_height|baseline_offset|above_baseline_offset|below_baseline_offset|font_size|height|fill_depth|shadow)(=)(?:(\\d+(?:\\.\\d*)?|\\.\\d+)(mm|cm|m)?(?=[\\s{}()]|$|//))?",
           "captures": {
             "1": { "name": "entity.other.attribute-name.axitl" },
             "2": { "name": "punctuation.separator.key-value.axitl" },
@@ -121,6 +127,14 @@
           }
         },
         {
+          "match": "(?<![^\\s])(fill_pen)(=)(?:(red|orange|yellow|green|blue|indigo|violet|black|grey|(?:[2-6]?B|HB|F|[2-6]?H)-pencil|fountain-(?:red|orange|yellow|green|blue|indigo|violet|black|grey))(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "support.constant.pen.axitl" }
+          }
+        },
+        {
           "match": "(?<![^\\s])(time_label)(=)(?:(none|date|year|month|day|hour|min|sec)(?=[\\s{}()]|$|//))?",
           "captures": {
             "1": { "name": "entity.other.attribute-name.axitl" },
@@ -158,6 +172,98 @@
             "1": { "name": "entity.other.attribute-name.axitl" },
             "2": { "name": "punctuation.separator.key-value.axitl" },
             "3": { "name": "support.constant.font.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(y_scale)(=)(?:(linear|log)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(line)(=)(?:(straight|smooth|step)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(header)(=)(?:(yes|no)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(separator)(=)(?:(comma|semicolon|tab)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(time_format)(=)(?:(decimal_year)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(value_scale)(=)(?:(?:(off|start)|(\\d+(?:\\.\\d*)?|\\.\\d+)(mm|cm|m)?)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" },
+            "4": { "name": "constant.numeric.axitl" },
+            "5": { "name": "keyword.other.unit.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(origin)(=)(?:(?:(first)|([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?))(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" },
+            "4": { "name": "constant.numeric.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(value_marks)(=)(?:(?:(auto)|([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?(?:,[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?)*))(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" },
+            "4": { "name": "constant.numeric.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(range)(=)(?:([+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.numeric.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(first_row|last_row|time_column|value_column)(=)(?:(\\d+)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.numeric.axitl" }
+          }
+        },
+        {
+          "comment": "Keys whose values are free text: a file name, a gap marker, a unit.",
+          "match": "(?<![^\\s])(data|missing|unit)(=)",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" }
           }
         },
         {

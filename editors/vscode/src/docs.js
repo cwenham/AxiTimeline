@@ -22,6 +22,10 @@ const keywords = {
   illustration:
     'Attaches an SVG drawing: `illustration(file.svg)`, or `illustration(file.svg height=40mm)`. ' +
     'The default height is 2 lanes, rounded up to whole lanes; the width keeps its aspect ratio (§3.5).',
+  graph:
+    'A background graph: a line of values against the timeline, its origin on the baseline, drawn under ' +
+    'everything else (in `HB-pencil` unless given a pen) and moving nothing. Points come from `data=` (a CSV ' +
+    'file) or a `{ }` body with a date and a value on each line (§15).',
 };
 
 const parameters = {
@@ -63,10 +67,54 @@ const parameters = {
   fill:
     'How a bar is filled: outline only by default. Hatching stops short of the label. Bars only, not ' +
     'events (§3.7).',
+  fill_pen:
+    "The pen a bar's fill pattern is drawn in, so the outline and label can be dark ink and the fill a soft " +
+    "pencil. Default: the bar's own pen; a group passes it to its members (§§3.7, 9).",
   priority: "On `include`: a whole number added to every included entity's priority, e.g. `-5` (§5).",
   side: 'On `include`: forces every included entity `above` or `below` the baseline (§5).',
   height: 'The illustration\'s height, rounded up to whole lanes. Default 2 lanes (§3.5).',
 };
+
+// A graph's parameters (§15). Where a name is shared with other declarations, this is its meaning on a graph.
+const graphParameters = {
+  data: 'The CSV file to read the points from, relative to this file. Read as it comes: see `first_row=`, ' +
+    '`time_column=` and the rest (§15.2).',
+  first_row: 'The first row of the CSV file to read, numbered as an editor numbers lines. Default 1 (§15.2).',
+  last_row: 'The last row of the CSV file to read, to skip a footer. Default: the end of the file (§15.2).',
+  header: 'Whether the first row read names the columns: `yes` (the default) or `no` (§15.2).',
+  separator: 'What separates the fields: `comma` (the default), `semicolon` or `tab` (§15.2).',
+  time_column: 'The column holding the times: a number counting from 1 (default 1), or a header name (§15.2).',
+  value_column: 'The column holding the values: a number counting from 1 (default 2), or a header name; quote ' +
+    'a name with spaces, `"Adj Close"` (§15.2).',
+  time_format: 'How the times are written, when not as the language writes dates: a pattern such as ' +
+    '`"MM/DD/YYYY"` or `"DD MMM YYYY"` (YYYY, MM, MMM, MMMM, DD, hh, mm, ss), or `decimal_year` (§15.2).',
+  missing: 'The text marking a gap in the data, such as `-999`, `.` or `***`. Blank cells are always gaps (§15.2).',
+  origin: 'The value drawn on the baseline: `0` by default, a number, or `first` for the first value inside ' +
+    'the timeline (§15.5).',
+  y_scale: '`linear` (the default) or `log`, where equal ratios are equal distances (§15.5).',
+  height: 'How far the line reaches from the baseline at its furthest. Default: as far as the paper allows (§15.5).',
+  range: 'With `height=`, pins the scale: a swing of this much from the origin (a ratio on a log scale) is ' +
+    '`height` from the baseline (§15.5).',
+  line: 'How the points are joined: `straight` (the default), `smooth` or `step` (§15.6).',
+  fill: 'Shading under the line, or as a shadow with `shadow=`: one of the bar fill patterns (§15.7).',
+  fill_pen: 'The pen the shading or shadow is drawn in, so the line and labels can be dark and the shading soft. ' +
+    "Default: the graph's own pen (§15.7).",
+  fill_depth: 'How deep the shading under the line reaches, measured from the line; or a shadow\'s thickness. ' +
+    'Default: down to the baseline (§15.7).',
+  shadow: 'Draws the shading as a drop shadow this far down and along from the line, `fill_depth` thick (§15.7).',
+  value_scale: 'Where value scales go: `off`, `start`, or a length to repeat them at. Default `1m` (§15.9).',
+  value_marks: 'The values the scales mark: `auto` (the default), or numbers separated by commas (§15.9).',
+  unit: 'The values\' unit, any text: `MW`, `%`, `$`, `"°C"`. Printed on every value scale, at the end of its ' +
+    'rule further from the baseline (§15.9).',
+  font: 'The font of the title and value labels. Default: the timeline\'s (§§3.8, 15.9).',
+  font_size: 'The size of the title; value labels are three-quarters of it. Default: the timeline\'s (§15.9).',
+};
+
+/** Help for a parameter of a declaration (graph, illustration, timeline, include or an entity keyword). */
+function parameter(key, decl) {
+  if (decl === 'graph') return graphParameters[key];
+  return parameters[key];
+}
 
 const values = {
   fill: {
@@ -104,6 +152,32 @@ const values = {
   ticks: {
     off: 'No ticks. Ticks are also the operator\'s measuring reference when resuming a plot (§10.4).',
   },
+  y_scale: {
+    linear: 'Distance from the baseline in proportion to the value less the origin (the default).',
+    log: 'Distance in proportion to the ratio to the origin: doubling and halving are equally far from the ' +
+      'baseline. Every value must be above zero (§15.5).',
+  },
+  line: {
+    straight: 'Straight lines from point to point (the default).',
+    smooth: 'A curve through every point that never overshoots them (§15.6).',
+    step: 'Each value held until the next point, as for an interest rate (§15.6).',
+  },
+  header: {
+    yes: 'The first row read names the columns (the default).',
+    no: 'Every row read is data; give columns by number.',
+  },
+  separator: {
+    comma: 'Fields separated by commas (the default).',
+    semicolon: 'Fields separated by semicolons.',
+    tab: 'Fields separated by tabs.',
+  },
+  origin: { first: 'The first value inside the timeline sits on the baseline: change since the start (§15.5).' },
+  value_scale: {
+    off: 'No value scales.',
+    start: 'One value scale, near the start of the paper.',
+  },
+  value_marks: { auto: '3 to 5 round values within those the graph draws (the default).' },
+  time_format: { decimal_year: 'A fractional year, such as `1958.2027` (§15.2).' },
   end: {
     now:
       'The moment the timeline is built, truncated to the precision of `start`. Pin it with ' +
@@ -149,4 +223,4 @@ function head(target) {
   return `${keywords[target.name]}\n\n${side} ${priority}`;
 }
 
-module.exports = { keywords, parameters, values, pen, penDetail, font, head };
+module.exports = { keywords, parameters, graphParameters, parameter, values, pen, penDetail, font, head };

@@ -15,11 +15,14 @@ from lark import Lark
 GRAMMAR = r"""
 start: _NL? _statement*
 
-_statement: timeline | entity
+_statement: timeline | entity | graph
 
 timeline: TIMELINE _item* _NL
 entity: HEAD STRING _item* (body | _NL)
 body: "{" _NL? _statement* "}" _NL
+graph: GRAPH STRING _item* (points | _NL)
+points: "{" _NL? point* "}" _NL
+point: WORD+ _NL
 
 _item: bare | param | illustration
 bare: WORD
@@ -30,6 +33,7 @@ _value: WORD | STRING
 TIMELINE: "timeline"
 ILLUSTRATION: "illustration"
 HEAD: /[\^v]?[!\-]*(person|event|span|group)(?![\w])/
+GRAPH: /[\^v]?[!\-]*graph(?![\w])/
 STRING: /"(?:[^"\\\n]|\\.)*"/
 WORD: /[^\s"{}()=]+/
 _NL: /\n+/

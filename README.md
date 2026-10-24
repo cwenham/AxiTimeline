@@ -108,7 +108,7 @@ up against.
   motors off. The job log then says where it stopped, so you know what `--start-offset` to resume from.
   Measure from a labelled tick, or from the pencil crop marks every 50cm.
 - **A job log** beside the SVGs records every run. Each SVG carries a job hash, a fingerprint of the source, the
-  software versions, `now` and every illustration and font used. `plot` refuses a file from a different version
+  software versions, `now` and every illustration, font and data file used. `plot` refuses a file from a different version
   of a timeline it has already started plotting, so passes drawn from different layouts can't end up on the same
   paper (`--force` overrides this, and the log records it).
 
@@ -131,9 +131,15 @@ The plotter's travel, strip length and pen settings can be adjusted in `~/.confi
 - **Pens** are named after what goes in the plotter: `red`, `blue` and so on, `HB-pencil` and other grades, and
   `fountain-blue`.
 - **Settings:**
-  - `fill=` shades bars: `diagonal`, `crosshatch`, `wave`, `dots` or `solid`.
+  - `fill=` shades bars: `diagonal`, `crosshatch`, `wave`, `dots` or `solid`. `fill_pen=` draws the fill in a
+    pen of its own: a soft pencil under a black outline, say.
   - `font=` takes a built-in Hershey font, or your own SVG stroke font, and `font_size=` sets the size.
   - `time_label=` writes an event's date under its name.
+- **Graphs:** `graph "Title" data="file.csv"` draws a line of values under everything else, in pencil by default,
+  with its origin on the baseline. It never moves anything; it's broken where it would run through text.
+  - Points come from a CSV file read as it comes (pick the rows, columns and date format), or are written inline.
+  - Linear or log scale, straight, smooth or stepped lines, and shading under the line or as a drop shadow,
+    in its own `fill_pen=` if you like. Value scales along the roll carry the `unit=`.
 - **Files:**
   - `include "file.axitl"` pulls in shared entries, optionally shifting their priority or side.
   - `illustration(file.svg)` attaches a drawing to an entry.
@@ -142,8 +148,9 @@ The plotter's travel, strip length and pen settings can be adjusted in `~/.confi
 
 The full rules are in [`docs/language-spec.md`](docs/language-spec.md). The other examples show more:
 [`industrial.axitl`](examples/industrial.axitl) uses includes, groups and an illustration,
-[`chernobyl.axitl`](examples/chernobyl.axitl) is a timeline to the second, and [`labels.axitl`](examples/labels.axitl)
-shows where labels go when they're longer than their bars.
+[`chernobyl.axitl`](examples/chernobyl.axitl) is a timeline to the second, [`labels.axitl`](examples/labels.axitl)
+shows where labels go when they're longer than their bars, and [`crash-1929.axitl`](examples/crash-1929.axitl) and
+[`reactor-power.axitl`](examples/reactor-power.axitl) draw graphs under their timelines.
 
 ## Editor support
 
@@ -161,11 +168,11 @@ Its [README](editors/vscode/README.md) explains how to install it.
 .axitl ──parse──> AST ──layout──> ResolvedLayout ──draw──> strokes ──render──> SVG, one per pen ──plot──> paper
   │                       ▲
   └── includes, fonts,    └── now (the clock, or --now)
-      illustrations
+      illustrations, data
 ```
 
 - `parse` is the only stage that reads anything beyond the text it's given, through a function its host supplies.
-  That function gives libaxitl its includes, illustrations and custom fonts.
+  That function gives libaxitl its includes, illustrations, custom fonts and graph data.
 - `layout` and `render` are pure: the same input always gives byte-identical output.
 - `plot` never reads `.axitl`, only a frozen per-pen SVG. So every pass of a job draws from exactly the same
   layout.

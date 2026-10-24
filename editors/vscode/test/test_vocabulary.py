@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from libaxitl import parser
+from libaxitl import graphdata, grammar, parser
 from libaxitl.fonts import BUILTIN_FONTS, DEFAULT_FONT
-from libaxitl.model import Baseline, Fill, Kind, OpenEndStyle, Side, TimeLabel
+from libaxitl.model import Baseline, Fill, Kind, LineMode, OpenEndStyle, Side, TimeLabel, ValueScaleMode, YScale
 from libaxitl.pens import DEFAULT_PEN, PENS
 from libaxitl.render import pen_colour
 from libaxitl.units import SCALE_UNITS
@@ -46,9 +46,16 @@ def test_entities():
     assert VOCABULARY["bandedEntities"] == [k.value for k in Kind if k.is_banded]
 
 
+def test_backgrounds():
+    assert VOCABULARY["backgrounds"] == ["graph"]
+    assert "graph(?![\\w])/" in grammar.GRAMMAR
+    assert VOCABULARY["defaultGraphPen"] == parser.DEFAULT_GRAPH_PEN
+
+
 def test_parameters():
     assert VOCABULARY["timelineParameters"] == list(parser._TIMELINE_KEYS)
     assert VOCABULARY["entityParameters"] == list(parser._ENTITY_KEYS)
+    assert VOCABULARY["graphParameters"] == list(parser._GRAPH_KEYS)
 
 
 def test_values():
@@ -57,12 +64,17 @@ def test_values():
                       ("open_end_style", OpenEndStyle), ("side", Side)):
         assert values[key] == [m.value for m in enum], key
     assert VOCABULARY["scaleUnits"] == list(SCALE_UNITS)
+    for key, enum in (("y_scale", YScale), ("line", LineMode)):
+        assert values[key] == [m.value for m in enum], key
+    assert values["value_scale"] == [m.value for m in ValueScaleMode if m is not ValueScaleMode.EVERY]
+    assert values["separator"] == list(graphdata.SEPARATORS)
+    assert values["header"] == ["yes", "no"]
 
 
 def _all_keys() -> list[str]:
     v = VOCABULARY
     return sorted(set(v["timelineParameters"] + v["entityParameters"] + v["includeParameters"]
-                      + v["illustrationParameters"]))
+                      + v["illustrationParameters"] + v["graphParameters"]))
 
 
 @pytest.mark.parametrize("key", _all_keys())

@@ -271,3 +271,14 @@ def test_render_is_deterministic():
 def test_strokes_are_all_finite():
     resolved, d = drawing(T + '^span "s" 1850- fill=dots\n')
     assert all(math.isfinite(v) for s in d.strokes for p in s.points for v in p)
+
+
+def test_a_bars_fill_is_drawn_in_its_fill_pen_and_plotted_before_other_pens():
+    resolved, d = drawing(T + 'span "S" 1910-1990 black fill=diagonal fill_pen=2H-pencil\nperson "P" 1920-1950 red fill=dots\n')
+    assert resolved.pens == ("black", "2H-pencil", "red")  # the fill pen straight after the axis pen
+    bars = strokes(d, Stage.BARS)
+    assert {s.pen for s in bars if s.pen != "red"} == {"black", "2H-pencil"}
+    outline_and_label = strokes(d, Stage.BARS, "black")
+    fill = strokes(d, Stage.BARS, "2H-pencil")
+    assert fill and all(len(s.points) == 2 for s in fill)  # hatching lines
+    assert len(outline_and_label) > 1  # the outline and the label's strokes stay in the bar's pen

@@ -1,14 +1,15 @@
 """The job hash: one SHA-256 that identifies a job exactly (interpreter spec, "Job log").
 
 The hash covers everything that decides what goes on the paper: the flattened source, both versions, the
-resolved ``now`` when the timeline uses it, and the content of every illustration and custom font. It is
+resolved ``now`` when the timeline uses it, and the content of every illustration, custom font and graph
+data file. It is
 computed over a text preimage with a fixed format, so two machines (or two implementations) always agree:
 
     axitimeline-job 1
     libaxitl 0.1.0
     axitime 0.1.0
     now 2026                                   (only when the timeline ends at now)
-    resource <kind> <sha256> <path>            (one per illustration and custom font, sorted)
+    resource <kind> <sha256> <path>            (one per illustration, custom font and data file, sorted)
     source <length of the flattened text in bytes>
     <the flattened text>
 
@@ -34,7 +35,7 @@ SCHEME = "axitimeline-job 1"
 
 @dataclass(frozen=True)
 class ResourceHash:
-    kind: str  # include, illustration or font
+    kind: str  # include, illustration, font or data
     path: str  # relative to the main file's folder
     sha256: str
 

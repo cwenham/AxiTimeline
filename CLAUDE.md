@@ -17,7 +17,8 @@ began as are superseded. Change the specs here, in the same commit as the code t
 - **Python** for both libaxitl and axitime; `pyaxidraw`/`pyserial` for the AxiDraw EBB board. Parser uses **Lark**.
 - **Pure three-stage pipeline in libaxitl:** `parse(source, resolve) -> AST`, `layout(ast, now) -> ResolvedLayout`,
   `render(layout, options) -> svg`. The library does no **host** I/O (file, network, database, clipboard,
-  clock); the host supplies `resolve(name)` for includes, illustrations and custom fonts, and supplies `now`.
+  clock); the host supplies `resolve(name)` for includes, illustrations, custom fonts and graph data (CSV), and supplies
+  `now`.
   Reading the library's own bundled package data (the built-in fonts) is allowed: it is identical on every
   host and pinned by the library version.
 - **Text is drawn by libaxitl as strokes** from SVG stroke fonts (never SVG `<text>`). The 18 Hershey Text
@@ -30,7 +31,7 @@ began as are superseded. Change the specs here, in the same commit as the code t
 - **Units:** bare number = millimetres, `cm` and `m` suffixes accepted, in both CLI flags and `.axitl`. Internal
   canonical unit is mm. `scale` is always an explicit rate (`mm/year` etc.).
 - **Job hash** = SHA-256 over flattened source + axitime/libaxitl version + resolved `now` (when used) + the
-  SHA-256 of each illustration and custom font fetched through `resolve`.
+  SHA-256 of each illustration, custom font and graph data file fetched through `resolve`.
   Job log filename = source basename + last 6 hex chars of the hash; `plot` verifies the full hash.
 - **Crop marks:** crosshairs every 50 cm, drawn in `2H-pencil` by the renderer; not part of the language. They are
   centred on both finished edges (arms 2.5mm), so the trim cuts through them.
@@ -51,6 +52,8 @@ began as are superseded. Change the specs here, in the same commit as the code t
 - To look at output, render it and export a PNG with Inkscape:
   `/Applications/Inkscape.app/Contents/MacOS/inkscape x.svg --export-type=png --export-dpi=100`.
 - Spacing constants live in `LayoutStyle` (`libaxitl/layout.py`) and `DrawStyle` (`libaxitl/draw.py`).
+- Background graphs (language spec §15) are laid out after everything else in `libaxitl/graphs.py`, and never
+  move the foreground; their points (CSV or inline) are read in `libaxitl/graphdata.py`.
 - Built-in fonts live in `libaxitl/src/libaxitl/fonts/data/` (copied from Inkscape's Hershey Text
   `svg_fonts`, with their licence notices). Keep `HERSHEY-NOTICE.txt` and `OFL.txt` beside them.
 - `editors/vscode/` is the VS Code extension (highlighting, completion, hover, and diagnostics from

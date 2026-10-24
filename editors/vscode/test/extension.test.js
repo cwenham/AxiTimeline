@@ -38,11 +38,12 @@ test('activation registers completion, with its trigger characters, and hover fo
 
 test('keywords go in as templates, ready to tab through', async () => {
   const items = await complete('|');
-  assert.deepStrictEqual(labels(items), ['timeline', 'include', 'person', 'event', 'span', 'group']);
+  assert.deepStrictEqual(labels(items), ['timeline', 'include', 'person', 'event', 'span', 'group', 'graph']);
   assert.strictEqual(find(items, 'person').insertText.value, 'person "${1:Name}" ${2:1900}-${3:1950}$0');
   assert.strictEqual(find(items, 'group').insertText.value, 'group "${1:Name}" ${2:1900}-${3:1950} {\n\t$0\n}');
   assert.ok(find(items, 'timeline').insertText.value.includes('\twidth=${4:210}'));
   assert.strictEqual(find(items, 'include').command.command, 'editor.action.triggerSuggest');
+  assert.strictEqual(find(items, 'graph').insertText.value, 'graph "${1:Title}"\n\tdata="${2}"$0');
 });
 
 test('after side and priority marks only entity keywords are offered, replacing just the word', async () => {
@@ -71,7 +72,7 @@ test('after an entity date: pens with colour swatches, the parameters it takes, 
   assert.strictEqual(red.kind, 'Color');
   assert.strictEqual(red.documentation, '#c62828');
   assert.strictEqual(find(span, 'HB-pencil').detail, 'HB pencil');
-  assert.deepStrictEqual(labels(span.filter((i) => i.kind === 'Property')), ['fill=', 'font=', 'font_size=']);
+  assert.deepStrictEqual(labels(span.filter((i) => i.kind === 'Property')), ['fill=', 'fill_pen=', 'font=', 'font_size=']);
   assert.strictEqual(find(span, 'illustration(…)').insertText.value, 'illustration($1)$0');
 
   const event = await complete('event "E" 1900 blue illustration(a.svg) |');
@@ -102,10 +103,13 @@ test('a scale keeps the number typed and offers each unit', async () => {
 
 test('include names .axitl files and folders beside the document, but not the document itself', async () => {
   const items = await complete('include "|"');
-  assert.deepStrictEqual(labels(items), ['century.axitl', 'chernobyl.axitl', 'labels.axitl', 'common/', 'illustrations/']);
+  assert.deepStrictEqual(labels(items), [
+    'century.axitl', 'chernobyl.axitl', 'crash-1929.axitl', 'labels.axitl', 'reactor-power.axitl',
+    'common/', 'data/', 'illustrations/',
+  ]);
   assert.strictEqual(find(items, 'common/').command.command, 'editor.action.triggerSuggest');
   const nested = await complete('include "common/w|"');
-  assert.deepStrictEqual(labels(nested), ['wars.axitl']);
+  assert.deepStrictEqual(labels(nested), ['dow-1929.axitl', 'wars.axitl']);
   assert.deepStrictEqual(nested[0].range.inserting.start, { line: 0, character: 16 });
 });
 
@@ -134,4 +138,49 @@ test('hover help for heads, pens and parameters, covering the whole word', () =>
   assert.ok(hover('timeline end=n|ow').contents.value.includes('truncated to the precision'));
   assert.strictEqual(hover('timeline colour=r|ed'), null);
   assert.strictEqual(hover('person "Ne|wton" 1642-1727'), null);
+});
+
+// -- graphs (language spec §15) -------------------------------------------------------------------------------
+
+test('a graph offers pens, HB-pencil marked as its default, and only its own parameters', async () => {
+  const items = await complete('graph "Dow" |');
+  assert.ok(find(items, 'HB-pencil').detail.includes('the default for a graph'));
+  assert.strictEqual(find(items, 'illustration(…)'), undefined);
+  const vocabulary = require('../src/vocabulary.json');
+  assert.deepStrictEqual(
+    labels(items.filter((i) => i.kind === 'Property')),
+    vocabulary.graphParameters.map((key) => `${key}=`)
+  );
+  assert.strictEqual(find(items, 'data=').command.command, 'editor.action.triggerSuggest');
+});
+
+test("a graph's values, with help", async () => {
+  assert.deepStrictEqual(labels(await complete('graph "Dow" y_scale=|')), ['linear', 'log']);
+  assert.deepStrictEqual(labels(await complete('graph "Dow" line=|')), ['straight', 'smooth', 'step']);
+  assert.ok(find(await complete('graph "Dow" origin=|'), 'first').documentation.value.includes('change since'));
+});
+
+test('data= names CSV files and folders, quoting a bare name', async () => {
+  const quoted = await complete('graph "Dow" data="data/|"');
+  assert.deepStrictEqual(labels(quoted), ['dow-1928-1932.csv']);
+  assert.strictEqual(quoted[0].insertText, 'dow-1928-1932.csv');
+  assert.ok(labels(await complete('graph "Dow" data=|')).includes('data/'));
+});
+
+test('hover help for a graph says what a shared parameter means on it', () => {
+  assert.ok(hover('gra|ph "Dow" data="d.csv"').contents.value.includes('background graph'));
+  assert.ok(hover('graph "Dow" hei|ght=40mm').contents.value.includes('furthest'));
+  assert.ok(hover('event "E" 1900 illustration(a.svg hei|ght=40mm)').contents.value.includes('whole lanes'));
+  assert.ok(hover('graph "Dow" fi|ll=solid').contents.value.includes('Shading under the line'));
+  assert.ok(hover('span "S" 1900-1950 fi|ll=solid').contents.value.includes('Bars only'));
+});
+
+test('fill_pen= offers every pen with its swatch, and hovering one says which pen it is', async () => {
+  const items = await complete('span "S" 1900-1950 black fill=diagonal fill_pen=|');
+  assert.strictEqual(items.length, Object.keys(require('../src/vocabulary.json').pens).length);
+  assert.strictEqual(find(items, '2H-pencil').documentation, '#8b8b93');
+  assert.ok(labels(await complete('graph "G" fill=solid fill_pen=|')).includes('HB-pencil'));
+  assert.ok(hover('span "S" 1900-1950 fill_pen=2H-pen|cil').contents.value.includes('2H pencil (hard and light)'));
+  assert.ok(hover('span "S" 1900-1950 fill_p|en=2H-pencil').contents.value.includes('soft'));
+  assert.ok(hover('graph "G" un|it=MW').contents.value.includes('every value scale'));
 });

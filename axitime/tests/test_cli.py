@@ -176,3 +176,23 @@ def test_render_a_calendar_window(tmp_path, capsys):
 def test_render_usage_errors(tmp_path, capsys, extra, message):
     assert main(["render", "-o", str(tmp_path), *extra, str(EXAMPLES / "chernobyl.axitl")]) == EXIT_USAGE
     assert message in capsys.readouterr().err
+
+
+def test_check_reports_each_graphs_scale(capsys):
+    assert main(["check", str(EXAMPLES / "crash-1929.axitl")]) == EXIT_OK
+    out = capsys.readouterr().out
+    assert "check passed with 0 errors and 0 warnings" in out
+    assert "13 events, 6 spans, 2 graphs" in out
+    assert '  graph:    "Dow Jones Industrial Average (approximate closes)", 141.107mm per power of ten from 210.76 points' in out
+    assert "  pens:     black, HB-pencil, 2H-pencil" in out  # graph pens straight after the axis pen
+
+
+def test_check_json_reports_graphs_and_their_data(capsys):
+    assert main(["check", "--json", str(EXAMPLES / "reactor-power.axitl")]) == EXIT_OK
+    report = json.loads(capsys.readouterr().out)
+    assert report["summary"]["graphs"] == 1
+    [graph] = report["layout"]["graphs"]
+    assert (graph["title"], graph["pen"], graph["fill_pen"], graph["unit"], graph["origin"], graph["rate_per"]) == (
+        "Reactor thermal power (approximate)", "HB-pencil", "2H-pencil", "MW", 3200.0, "power of ten",
+    )
+    assert graph["below_mm"] == pytest.approx(70.0)

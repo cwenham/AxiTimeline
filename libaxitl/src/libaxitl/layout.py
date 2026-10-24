@@ -14,6 +14,8 @@ Layout runs in three phases (§6):
   illustrations in a pole's path are nudged sideways;
 - **C** — colliding event flags are staggered, then flipped, then reported.
 
+Background graphs (§15) are placed after all three, around a foreground that is then fixed (``graphs.py``).
+
 Every ordering uses the spec's explicit tie-breaks (priority, then start, then document order), so the same
 document and ``now`` always give the same layout.
 """
@@ -26,8 +28,9 @@ from enum import Enum
 
 from .dates import DateRange, DateValue, time_label_text
 from .diagnostics import Diagnostic, Diagnostics
-from .geometry import Box, cut_out, keep_inside, segment_crosses
-from .model import Baseline, Entity, Illustration, Kind, Side, TimeLabel, TimelineDocument
+from .geometry import Box, cut_out, keep_inside, segment_box, segment_crosses
+from .graphs import GraphLayout, PlacedGraph
+from .model import Baseline, Entity, Fill, Illustration, Kind, Side, TimeLabel, TimelineDocument
 from .pens import PENS
 from .text import ShapedText, shape
 from .ticks import plan_ticks
@@ -64,6 +67,18 @@ class LayoutStyle:
     min_pole_segment: float = 1.0  # shorter pieces of a broken pole are left out
     leader_gap: float = 0.5  # between the end of a pulled-out label's leader and the label
     max_pull_lanes: int = 3  # a label is pulled out at most this many lanes from its bar (§7, settled)
+    # Background graphs (§15). Lines and shading are broken around text with pole_gap either side.
+    pen_half_width: float = 0.3  # how far a line's ink spreads either side, when keeping a graph's text clear
+    graph_fit_margin: float = 3.0  # a graph fitted to the paper stays this far inside the finished edges
+    graph_edge_margin: float = 1.0  # nothing of a graph comes closer than this to a finished edge
+    graph_simplify: float = 0.1  # a graph's drawn line stays within this of the exact line
+    graph_curve_piece: float = 0.25  # a smooth line is drawn as straight pieces about this long
+    graph_dot: float = 0.25  # an isolated point is drawn as a stroke this long
+    graph_title_gap: float = 1.5  # between a graph's line and its title
+    value_tick: float = 1.2  # a value scale's marks
+    value_label_gap: float = 0.6  # between a mark and its label
+    graph_search_step: float = 1.0  # a graph's text looks for free space in steps of this
+    graph_start_reach: float = 300.0  # how far value_scale=start may look along the roll
 
 
 DEFAULT_STYLE = LayoutStyle()
@@ -188,8 +203,9 @@ class ResolvedLayout:
     tick_label_interval: str | None
     axis_pen: str  # draws the baseline and ticks, in the first pass (§10.4)
     cap_depth_mm: float  # how far open-end caps reach into their bars; labels were placed clear of them
-    pens: tuple[str, ...]  # every pen the job needs, axis pen first
+    pens: tuple[str, ...]  # every pen the job needs, axis pen first, then graphs' and fills' pens (§§3.7, 15.10)
     omitted: tuple[Entity, ...]  # wholly outside the timeline window (§4.2)
+    graphs: tuple[PlacedGraph, ...]  # backgrounds (§15), in document order; graphs left out aren't here
     diagnostics: tuple[Diagnostic, ...]  # warnings; a layout with errors raises AxitlError instead
 
     def seconds_to_position(self, seconds: int) -> float:
@@ -1159,6 +1175,19 @@ class _Layout:
             (piece[0], piece[-1]) for piece in pieces if math.dist(piece[0], piece[-1]) >= st.min_pole_segment
         )
 
+    def graphs(self, bars: list[PlacedBar], events: list[PlacedEvent], ticks: tuple[Tick, ...]) -> tuple[PlacedGraph, ...]:
+        """Phase D: the background graphs, around a foreground that no longer moves (§15)."""
+        if not self.doc.graphs:
+            return ()
+        illustrations = [b.illustration for b in bars if b.illustration] + [e.illustration for e in events if e.illustration]
+        ink, text, tick_bottom = _graph_foreground(
+            self.baseline, self.length, bars, events, ticks, illustrations, self.style.pen_half_width
+        )
+        return GraphLayout(
+            baseline_y=self.baseline, width=self.t.width_mm, length=self.length, x=self.x, window=(self.t0, self.t1),
+            text=self.text, style=self.style, sink=self.sink, ink=ink, text_boxes=text, tick_bottom=tick_bottom,
+        ).place(self.doc.graphs)
+
     def result(self, ticks: tuple[Tick, ...]) -> ResolvedLayout:
         flag_boxes = {id(ev): self.flag_box(ev) for ev in self.events}
         bars = []
@@ -1195,8 +1224,14 @@ class _Layout:
                     self.placed_illustration(ev.illustration),
                 )
             )
+        graphs = self.graphs(bars, events, ticks)
         used = {e.entity.pen for e in bars} | {e.entity.pen for e in events} | {AXIS_PEN}
-        pens = (AXIS_PEN,) + tuple(p for p in PENS if p in used and p != AXIS_PEN)
+        # Shading goes down before the lines and lettering drawn over it: graphs' pens and fill pens come straight
+        # after the axis pen, graphs first, each in document order (§§3.7, 15.10).
+        shading = [g.graph.pen for g in graphs] + [g.graph.fill_pen for g in graphs if g.graph.fill is not Fill.NONE]
+        shading += [b.entity.fill_pen for b in bars if b.entity.fill is not Fill.NONE and b.entity.fill_pen != b.entity.pen]
+        early = tuple(dict.fromkeys(p for p in shading if p != AXIS_PEN))
+        pens = (AXIS_PEN,) + early + tuple(p for p in PENS if p in used and p != AXIS_PEN and p not in early)
         summaries = {
             side: SideSummary(side, g.space, g.inner, g.lane_height, g.capacity, self.lanes[side].used())
             for side, g in self.geom.items()
@@ -1222,8 +1257,27 @@ class _Layout:
             cap_depth_mm=self.style.cap_depth,
             pens=pens,
             omitted=tuple(self.omitted),
+            graphs=graphs,
             diagnostics=tuple(self.sink.items),
         )
+
+
+def _graph_foreground(baseline: float, length: float, bars, events, ticks, illustrations, half: float):
+    """Every piece of foreground ink as boxes, and the part of it a graph is broken around (text and
+    illustrations): the inputs to placing graphs (§15)."""
+    tick_bottom = max([baseline + t.length for t in ticks] + [t.label.box.y1 for t in ticks if t.label] + [baseline])
+    # The baseline and the whole tick band under it: a graph's label there would read as a tick label.
+    ink = [Box(0.0, baseline - half, length, tick_bottom + half)]
+    text = [t.label.box for t in ticks if t.label]
+    for b in bars:
+        ink.append(Box(b.x0 - half, b.y0 - half, b.x1 + half, b.y1 + half))
+        text.append(b.label.box)
+        ink += [segment_box(p, q, half) for p, q in b.leader_segments]
+    for e in events:
+        ink += [Box(e.x - half, min(a, b), e.x + half, max(a, b)) for a, b in e.pole_segments]
+        text.append(e.flag_box)
+    text += [ill.box for ill in illustrations]
+    return ink + text, text, tick_bottom
 
 
 def _readable_scale(mm_per_second: float, span_seconds: int) -> Scale:

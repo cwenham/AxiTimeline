@@ -1,4 +1,5 @@
-"""axitime's ``resolve(name)``: includes, illustrations and custom fonts come from the local filesystem.
+"""axitime's ``resolve(name)``: includes, illustrations, custom fonts and graph data come from the local
+filesystem.
 
 libaxitl hands over names already joined onto the including file's directory, relative to the same root as
 the top-level source path axitime passed in, so a plain read relative to the working directory is right.
