@@ -22,7 +22,7 @@ paper_w = 430;
 core_bore = 26;
 roller_d = 50;
 roller_face = 230;         // edge rollers run x -230..230, clear of the drive roller's bearing housings
-dancer_face = 235;         // dancers are a little shorter, to leave room for the endstop flag
+dancer_face = 235;         // dancers are a little shorter, leaving room for their spacers
 back_roller = [-128, -25];  // [y, z] of the axle
 front_roller = [460, -25];
 supply = [-73, -75];        // [y, z] of the roll's axis
@@ -79,6 +79,18 @@ drive_rod_end = 261;       // the drive rod runs from x 240 (its +x bearing) to 
 tail_travel = 15;          // the tailstock screw's travel
 
 // ---- Bought parts --------------------------------------------------------------------------------------
+// Omron EE-SX672 slot sensors, "T-shaped, slot centre 7mm" (datasheet p. 8): body 13.4 across the beam,
+// 6.35 thick, 26.2 high with a 5mm slot 9 deep; the beam is 2.9 below the arms' tops. The mounting tab
+// (26 x 6.2 x 3, slotted M3 holes 19 apart) has its face 7 from the slot's centre and its centre 15.9
+// below the arms' tops. Mounted flat on the guide's outer face: beam along x, slot opening towards the flag.
+sensor = [13.4, 6.35, 26.2];
+sensor_slot_x = 7;
+sensor_holes = 19;
+sensor_top_y = 20;          // the arms' tops, this far from the dancer's axle (away from its leg)
+sensor_tab_y = sensor_top_y + 15.9;
+flag_h = 30;                // the flag's height; each sensor's beam is level with its end at the end of travel
+flag_t = 2;
+sensor_beams_z = [dancer_top + flag_h / 2, dancer_bottom - flag_h / 2];
 b608 = [8, 22, 7];
 b604 = [4, 12, 4];
 nema = 42.3;

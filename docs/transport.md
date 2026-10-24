@@ -161,8 +161,9 @@ edge).
   brackets, with 15mm spacers. One end of the back roller's bolt is in a slot, front to back, as a tracking trim.
 - **Dancers:**
   - Each carries captive M8 × 70 bolts, heads inside, which drop into the guides' open slots.
-  - Two optical endstops sit at the top and bottom of one guide per dancer: back left, front right. A printed
-    flag on the dancer's bolt runs through them.
+  - Two Omron EE-SX672 slot sensors screw flat to one guide per dancer (back left, front right), at the top
+    and bottom of its travel. A printed flag on the dancer's bolt runs through their slots, and the axle's
+    slot runs 5mm past the bottom sensor so it trips before the bolt reaches its end.
   - The dancer halves' infill sets the weight: at 20% a dancer with its bolts is about 450g. Washers on the
     bolts add more if the paper's curl needs more tension.
 
@@ -194,9 +195,15 @@ edge).
   must stay powered through a plot, because if the roll motors switch off, the dancers' weight unwinds both
   rolls. So keep the currents low.
 - **Power:** the 24V 10A supply for the drivers, with its ground joined to the Pico's. The drivers make their
-  own logic supply and the sensors run from the Pico's 3.3V, so the 5V converter isn't needed.
+  own logic supply. The dancer sensors need 5V; take it from the Pico's VBUS pin (USB 5V) or from the 24V-to-5V
+  converter. The four draw about 140mA at most.
 - **Sensors:**
-  - Four optical endstops for the dancers, run at 3.3V: the Pico's inputs are not 5V tolerant.
+  - Four Omron EE-SX672-WR slot sensors for the dancers, wired so a broken wire reads as "at the limit":
+    - Brown to 5V and blue to ground.
+    - Black (an NPN open-collector output) to a Pico GPIO, with a 4.7–10kΩ pull-up to the Pico's 3.3V, never
+      to 5V: the Pico's inputs aren't 5V tolerant.
+    - Pink (L) to brown, for light-ON. The output then pulls the pin low while the beam is clear. When the
+      flag blocks the beam, or a wire breaks, the pull-up reads high, so the firmware treats high as "stop".
   - Optionally, a paper-out sensor.
   - The optical flow sensor, over SPI, to catch slipping rather than to measure moves (mouse-type sensors
     drift by around a percent).
@@ -226,7 +233,7 @@ edge).
 - **The full roll's outside diameter.** The roll axes at Z −75 clear a roll up to 90mm across.
 - **Where the AxiDraw's home sits across, relative to its legs.** With the paper centred on the travel it must
   still clear both legs: 35mm each side if the travel is centred between them.
-- **The pinch wheels' tread width** (`wheel_w`, 8 in the model) **and the endstop modules' hole spacing.**
+- **The pinch wheels' tread width** (`wheel_w`, 8 in the model).
 - **Whether the printed stand is stiff enough.** If the board sways while the AxiDraw moves, add a cross-brace
   between each pair of legs near the table, or clamp the feet down.
 - **The controller's serial protocol** and the `transport` setting in `plotter.toml` that will select it.

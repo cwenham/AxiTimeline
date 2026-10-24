@@ -27,10 +27,9 @@ Tested with OpenSCAD 2021.01 on macOS (Intel).
 | `front_bracket_left` | 1 | Take-up roll's drive cone and motor. |
 | `front_bracket_right` | 1 | Take-up tailstock, drive motor and coupler. The motor's face plate prints as a 42mm bridge. |
 | `drive_housing` | 2 | The drive roller's 608s. Oversize bolt holes let you set its height and squareness. |
-| `dancer_guide_full` | 2 | Back left and front right: the flag's recess and the endstops' slot. |
+| `dancer_guide_full` | 2 | Back left and front right: the flag slider's recess, and screw holes for two sensors. |
 | `dancer_guide_plain` | 2 | Back right and front left. |
-| `endstop_bracket` | 4 | Two per full guide, at the top and bottom of the dancer's travel. |
-| `flag_slider` | 2 | Rides in the full guide's recess on the dancer's bolt. |
+| `flag_slider` | 2 | Rides in the full guide's recess on the dancer's bolt. Print it in black: the sensors' infrared passes through light-coloured plastic. |
 | `roller_half` | 4 | Two per edge roller (back and front). Print upright. |
 | `dancer_half` | 4 | Two per dancer. Print upright; the infill sets the dancer's weight (below). |
 | `drive_cone` | 2 | 48-tooth gear and cone. Gear face down. |
@@ -45,10 +44,23 @@ Tested with OpenSCAD 2021.01 on macOS (Intel).
 | `foot` | 4 | One under each leg; screw holes if you want to fix them to the table. |
 
 **Material and settings.**
-- **Most parts:** PETG or PETG-CF, 0.2mm layers, 4 perimeters, 25–30% gyroid infill.
-- **Brackets:** PETG-CF is the stiffest choice.
+- **All parts:** 0.2mm layers, 4 perimeters, 25–30% gyroid infill unless noted below.
+- **PLA is fine for most of the plastic:** the roller and dancer halves (about half of it on their own),
+  both kinds of dancer guide, `back_bracket_right`, and the feet, board jaws, tail cones, tail knobs, flag
+  sliders (black) and spacers. Add a drop of retaining compound or CA glue to each bearing pressed
+  into PLA, because PLA lets a press fit relax over time. Keep the transport away from radiators and sunny
+  windows, since PLA softens at about 55°C.
+- **PETG or PETG-CF for the rest:**
+  - The three brackets that carry motors (`back_bracket_left`, `front_bracket_left`, `front_bracket_right`).
+    The drivers hold current all the time, so the motors stay warm, and PLA creeps when it's warm and under
+    load. The front two also hold the drive roller's alignment; PETG-CF is the stiffest choice for them.
+  - `drive_housing` (it sets the drive roller's alignment), `motor_gear` and `drive_cone` (or nylon for
+    both), `pinch_arm` and `pinch_block` (always under the spring's load), and `rod_collar`. Together these
+    are only a few percent of the plastic.
+  - If you want to save more, `back_bracket_left` is the one to risk in PLA, as long as its motor stays cool
+    enough to keep a hand on.
 - **No supports anywhere,** printed as exported.
-  - Recesses that print against the bed (the brackets' and guides' counterbores and M8 nut pockets) are
+  - Recesses that print against the bed (the brackets' and guides' counterbores and nut pockets) are
     roofed by two bridging layers, sized for 0.2mm layers. If you print those parts at another layer height,
     change `layer` in `params.scad`.
   - Steps inside the cones and roller halves narrow at 45°.
@@ -77,8 +89,8 @@ To buy or find:
 - **Coupler:** 1 × flexible beam coupler, 5mm to 8mm, about 19 × 25mm.
 - **Motors:** 3 × NEMA 17. The two roll motors bolt to their brackets' inner skins with M3 × 8 screws, from
   inside; the drive motor bolts the same way from inside the coupler's pocket.
-- **Endstops:** 4 × slotted optical endstop modules. The brackets' slots suit boards with M3 holes about
-  19mm apart; check yours.
+- **Dancer sensors:** 4 × Omron EE-SX672-WR slot sensors (NPN, 5mm slot), two on each full guide, each
+  held by 2 × M3 × 25 into nuts captured in the guide's inner face.
 - **Springs:** 2 × small extension springs, about 6mm across and 20mm long, for the pinch arms.
 - **Grit:** epoxy and 120–180 grit aluminium oxide.
 - **M8:**
@@ -104,9 +116,8 @@ To buy or find:
   - 12 × M3 × 8 for the motors.
   - 4 × M3 × 6 grub screws with nuts, for the motor gears and rod collars.
   - 4 × M3 × 20 with nuts, as the spring pins.
-  - 8 × M3 × 8 with nuts for the endstop boards.
-- **M4:** 4 × M4 × 25 with nuts for the endstop brackets (from the guide's inner face into a nut in the
-  bracket's base), and 16 × M4 wood screws if you fix the feet down.
+  - 8 × M3 × 25 with nuts for the dancer sensors.
+- **M4:** 16 × M4 wood screws, if you fix the feet down.
 
 ### Bolt heads
 
@@ -159,8 +170,11 @@ Everything else has room for any head:
    - Put each wheel on its arm and hook the springs on their pins.
 9. **Dancers.** Fit the 22mm spacers on the dancers' bolts and drop the bolts into the guides' open slots.
    Add the flag sliders on the full guides, then washers and nuts.
-10. **Endstops.** Drop an M4 nut into each endstop bracket's base, and screw the bracket on from the guide's
-    inner face through its slot. Set the top and bottom brackets so the flags pass through the sensors' gaps
-    at the ends of the dancers' travel, Z −150 and −260.
+10. **Sensors.**
+    - Press an M3 nut into each of the four hex pockets on the full guides' inner faces.
+    - Screw each EE-SX672 on by its tab, flat against the guide's outer face, with its slot facing the flag.
+    - Two go on each full guide, one above the other. The flag's fin then runs through the top sensor's slot
+      as the dancer reaches the top of its travel (Z −150), and through the bottom one at the bottom (Z −260).
+      The axle's slot runs 5mm further down, so the bottom sensor trips before the bolt reaches its end.
 
 The left and right sides here are as the operator sees them, standing at the front.

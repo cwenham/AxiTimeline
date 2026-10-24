@@ -10,7 +10,7 @@ use <lib.scad>
 
 show_paper = true;  // in the assembly: the paper and rolls
 show_board = true;  // in the assembly: the board and AxiDraw
-part = "assembly"; // [assembly, back_bracket_left, back_bracket_right, front_bracket_left, front_bracket_right, drive_housing, dancer_guide_full, dancer_guide_plain, endstop_bracket, flag_slider, roller_half, dancer_half, drive_cone, tail_cone, tail_knob, motor_gear, spacers, rod_collar, pinch_block, pinch_arm, board_jaw, foot]
+part = "assembly"; // [assembly, back_bracket_left, back_bracket_right, front_bracket_left, front_bracket_right, drive_housing, dancer_guide_full, dancer_guide_plain, flag_slider, roller_half, dancer_half, drive_cone, tail_cone, tail_knob, motor_gear, spacers, rod_collar, pinch_block, pinch_arm, board_jaw, foot]
 
 // ======================================================================================================
 // Brackets. Each is modelled on the +x side (the operator's left); the -x ones are built with side = -1,
@@ -155,35 +155,37 @@ module drive_housing() {
 
 // ======================================================================================================
 // Dancer guides: bolted to each leg's inner face, with a slot open at the top for the dancer's axle bolt.
-// The flag slider rides in a recess on the outer face; endstop brackets clamp anywhere along a slot.
+// On one guide per dancer, a flag slider rides the bolt in a recess on the outer face, and two Omron
+// EE-SX672 slot sensors screw flat to that face at the top and bottom of the travel.
 // ======================================================================================================
 
 guide_x = [257, plate_out];
-flag_offset = 16;   // the flag runs this far from the dancer's axle, away from the leg
 
 // dir = +1 at the back (the flag is in front of the axle), -1 at the front. Modelled on the +x side.
-// The endstops go on one guide per dancer: the "full" guide has the flag's recess and the endstop
-// brackets' slot. The other guide is "plain" and narrower, which keeps it clear of the take-up motor.
-// The back +x and front -x guides are full; each full (or plain) guide is the other turned end for end.
+// The "full" guide has the slider's recess and the sensors' screw holes; the other guide is "plain" and
+// narrower, which keeps it clear of the take-up motor. The back +x and front -x guides are full; each
+// full (or plain) guide is the other turned end for end.
 module dancer_guide(yd, yleg, dir, full = true) {
-    reach = full ? 32 : 14;
+    reach = full ? sensor_top_y + sensor[2] - 3 : 14;
     y0 = min(yleg - dir * (leg / 2 + 2), yd + dir * reach);
     y1 = max(yleg - dir * (leg / 2 + 2), yd + dir * reach);
     difference() {
-        box([guide_x[0], y0, dancer_bottom - 32], [guide_x[1], y1, dancer_top + 20]);
-        // the axle's slot, open at the top
+        box([guide_x[0], y0, dancer_bottom - 32], [guide_x[1], y1, full ? dancer_top + 32 : dancer_top + 20]);
+        // the axle's slot, open at the top; its bottom is 5 below the bottom of the travel, so the bottom
+        // sensor sees the flag before the bolt reaches the end of the slot
         hull() {
-            xcyl(yd, dancer_bottom, guide_x[0] - 1, guide_x[1] + 1, m8 + 0.2);
-            xcyl(yd, dancer_top + 25, guide_x[0] - 1, guide_x[1] + 1, m8 + 0.2);
+            xcyl(yd, dancer_bottom - 5, guide_x[0] - 1, guide_x[1] + 1, m8 + 0.2);
+            xcyl(yd, dancer_top + 45, guide_x[0] - 1, guide_x[1] + 1, m8 + 0.2);
         }
         if (full) {
-            // the flag slider's recess
-            box([guide_x[1] - 2.5, yd - 8.3, dancer_bottom - 20], [guide_x[1] + 1, yd + 8.3, dancer_top + 21]);
-            // a slot for the endstop brackets' M4s
-            yslot = yd + dir * 26;
-            hull() {
-                xcyl(yslot, dancer_bottom - 18, guide_x[0] - 1, guide_x[1] + 1, m4);
-                xcyl(yslot, dancer_top + 12, guide_x[0] - 1, guide_x[1] + 1, m4);
+            // the flag slider's recess, open at the top so an overshoot can't jam it
+            box([guide_x[1] - 2.5, yd - 8.3, dancer_bottom - 5 - flag_h / 2 - 3], [guide_x[1] + 1, yd + 8.3, dancer_top + 50]);
+            // each sensor's two M3s, through the guide into nuts in its inner face
+            for (zb = sensor_beams_z, dz = [-1, 1]) {
+                ys = yd + dir * sensor_tab_y;
+                xhex(ys, zb + dz * sensor_holes / 2, guide_x[0] - 1, guide_x[0] + nut_m3[1], nut_m3[0]);
+                bridge_layers_x(ys, zb + dz * sensor_holes / 2, guide_x[0] + nut_m3[1], nut_m3[0], m3);
+                xcyl(ys, zb + dz * sensor_holes / 2, guide_x[0] + nut_m3[1] + 2 * layer, guide_x[1] + 1, m3);
             }
         }
         // three M5s into T-nuts in the leg's inner slot
@@ -192,37 +194,36 @@ module dancer_guide(yd, yleg, dir, full = true) {
     }
 }
 
-// The flag slider: a block in the guide's recess, carrying a fin through the endstops' gaps.
+// The flag slider: a block that rides in the guide's recess on the dancer's bolt (washers and nut on its
+// outer face), and a carrier holding the flag: a fin parallel to the guide, sensor_slot_x out from its face,
+// reaching into each sensor's slot past the beam when the dancer is at that end of its travel. Every face
+// starts at z = -flag_h / 2, so it prints on its side. Print it in black: the sensors' infrared passes
+// through light-coloured plastic.
 module flag_slider(yd, dir) {
+    zs = [-flag_h / 2, flag_h / 2];
+    fx = guide_x[1] + sensor_slot_x;
     difference() {
         union() {
-            box([guide_x[1] - 2.2, yd - 8, -8], [guide_x[1] + 2, yd + 8, 8]);
-            box([guide_x[1], yd + dir * 7, -8], [guide_x[1] + 2, yd + dir * (flag_offset + 2), 8]);
-            box([guide_x[1], yd + dir * flag_offset - 1, -8], [guide_x[1] + 17, yd + dir * flag_offset + 1, 8]);
+            box([guide_x[1] - 2.2, yd - 8, zs[0]], [guide_x[1] + 2, yd + 8, zs[1]]);                  // block
+            box([guide_x[1], yd + dir * 8, zs[0]], [guide_x[1] + 2, yd + dir * 18, zs[1]]);          // carrier
+            box([guide_x[1], yd + dir * 9, zs[0]], [fx + flag_t / 2, yd + dir * 18, zs[1]]);
+            box([fx - flag_t / 2, yd + dir * 18, zs[0]], [fx + flag_t / 2, yd + dir * (sensor_top_y + 6), zs[1]]);   // fin
         }
         xcyl(yd, 0, guide_x[1] - 3, guide_x[1] + 3, m8);
     }
 }
 
-// An endstop bracket: holds a slotted optical endstop's board in the y-z plane at x 294..297, its sensor
-// facing the guide so the flag's fin runs through the gap. The board's holes are slotted to suit most modules.
-// An M4 x 25 from the guide's inner face, through the guide's slot, screws into a nut in the base; the arm
-// stands beside the base, away from the flag. Every face starts at z = -12, so it prints on its side.
-module endstop_bracket(yd, dir) {
-    yslot = yd + dir * 26;
-    yf = yd + dir * flag_offset;
-    base_x = guide_x[1] + 7;
-    arm = [yslot + dir * 4, yslot + dir * 10];
-    plate = [yf - dir * 6, arm[1]];
-    difference() {
-        union() {
-            box([guide_x[1], yslot - 4, -12], [base_x, yslot + 4, 12]);                       // base on the guide
-            box([guide_x[1], min(arm), -12], [294, max(arm), 12]);                            // arm
-            box([294, min(plate), -12], [297, max(plate), 12]);                               // board plate
+// An EE-SX672 sensor, for the assembly: its tab flat on the guide's outer face, its slot facing the
+// flag, the beam at height zb.
+module ee_sx672(yd, dir, zb) {
+    ytop = yd + dir * sensor_top_y;
+    color("dimgray") {
+        difference() {
+            box([guide_x[1] + sensor_slot_x - sensor[0] / 2, ytop, zb - sensor[1] / 2],
+                [guide_x[1] + sensor_slot_x + sensor[0] / 2, ytop + dir * sensor[2], zb + sensor[1] / 2]);
+            box([guide_x[1] + sensor_slot_x - 2.5, ytop - dir, zb - sensor[1]], [guide_x[1] + sensor_slot_x + 2.5, ytop + dir * 9, zb + sensor[1]]);
         }
-        xcyl(yslot, 0, guide_x[1] - 1, base_x + 1, m4);
-        xhex(yslot, 0, base_x - 3.4, base_x + 1, 7);                                          // M4 nut
-        for (dz = [-1, 1]) hull() for (dy = [-6, 6]) xcyl(yf + dy, dz * 9.5, 293, 298, m3);
+        box([guide_x[1], yd + dir * (sensor_tab_y - 3.1), zb - 13], [guide_x[1] + 3, yd + dir * (sensor_tab_y + 3.1), zb + 13]);
     }
 }
 
@@ -425,7 +426,7 @@ module assembly() {
     color("cornflowerblue") both_sides() drive_housing();
     color("cornflowerblue") { both_sides() board_jaw(board_y0, board_y0 + seat_depth, 1);
                               both_sides() board_jaw(board_y1 - seat_depth, board_y1, -1); }
-    // dancer guides, sliders and endstop brackets (endstops on the back +x and front -x guides)
+    // dancer guides, flag sliders and sensors (on the back +x and front -x guides)
     color("teal") {
         dancer_guide(dancer_y_back, leg_y_back, 1, true);
         mirror([1, 0, 0]) dancer_guide(dancer_y_back, leg_y_back, 1, false);
@@ -437,11 +438,8 @@ module assembly() {
             flag_slider(dancer_y_back, 1);
             mirror([1, 0, 0]) flag_slider(dancer_y_front, -1);
         }
-        for (z = [dancer_top, dancer_bottom]) translate([0, 0, z]) {
-            endstop_bracket(dancer_y_back, 1);
-            mirror([1, 0, 0]) endstop_bracket(dancer_y_front, -1);
-        }
     }
+    for (zb = sensor_beams_z) { ee_sx672(dancer_y_back, 1, zb); mirror([1, 0, 0]) ee_sx672(dancer_y_front, -1, zb); }
     // rollers and dancers
     color("white") both_sides() {
         translate([0, back_roller[0], back_roller[1]]) roller_half(roller_face, 18, false);
@@ -491,8 +489,7 @@ else if (part == "front_bracket_right") flat_x(-1) front_bracket(-1);
 else if (part == "drive_housing") translate([0, 0, plate_in]) rotate([0, 90, 0]) drive_housing();
 else if (part == "dancer_guide_full") translate([0, 0, -guide_x[0]]) rotate([0, -90, 0]) dancer_guide(dancer_y_back, leg_y_back, 1, true);
 else if (part == "dancer_guide_plain") translate([0, 0, -guide_x[0]]) rotate([0, -90, 0]) dancer_guide(dancer_y_front, leg_y_front, -1, false);
-else if (part == "endstop_bracket") translate([0, 0, 12]) endstop_bracket(dancer_y_back, 1);
-else if (part == "flag_slider") translate([0, 0, 8]) flag_slider(dancer_y_back, 1);
+else if (part == "flag_slider") translate([0, 0, flag_h / 2]) flag_slider(dancer_y_back, 1);
 else if (part == "roller_half") rotate([0, -90, 0]) roller_half(roller_face, 18, false);
 else if (part == "dancer_half") rotate([0, -90, 0]) dancer_half_print();
 else if (part == "drive_cone") translate([0, 0, gear_x[1]]) rotate([0, 90, 0]) drive_cone();
