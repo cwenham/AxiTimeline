@@ -6,7 +6,7 @@ Status: working draft, reflecting all decisions taken in design discussion so fa
 
 This file (`docs/language-spec.md` in the AxiTimeline repo) is the **canonical copy** of this spec, and changes are made here alongside the code. The claude.ai artifact it began as is superseded.
 
-History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7).
+History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Drafted 2026-10-24, not yet implemented: backgrounds, starting with graphs (§15).
 
 ## 1. System overview
 
@@ -16,7 +16,7 @@ The software architecture — `libaxitl` (parse → layout → render) and the `
 
 ## 2. Entity types
 
-`person`, `event`, `span`, `group`, `include`, plus the top-level `timeline` directive. Keywords are lowercase. Illustrations are attachments to entities, not entities in their own right (§3.5).
+`person`, `event`, `span`, `group`, `include`, plus the top-level `timeline` directive. Keywords are lowercase. Illustrations are attachments to entities, not entities in their own right (§3.5). A `graph` (§15, draft) isn't an entity either: it is a background, drawn under the entities and taking no part in their layout.
 
 ## 3. Compact line syntax
 
@@ -129,6 +129,7 @@ event "First explosion" 1986-04-26T01:23:44
 - Reserved styles: `none` (outline only, default), `solid` (in practice implemented as dense hatching — a pen plotter has no true flat-fill primitive, so this carries a real plot-time and pen-wear cost worth being aware of), `diagonal`, `crosshatch`, `wave`, `dots`
 - Applies uniformly to all three banded entity types, since they all render as the same kind of bar
 - A fill pattern never draws through its bar's label (§7): hatching stops at the label's bounding box plus a small margin. A plotter can't knock a pattern out from behind ink after the fact, and text drawn over hatching is illegible
+- A graph shades under its line, or casts a shadow, with the same patterns (§15.7)
 
 ### 3.8 Font and size
 
@@ -265,6 +266,7 @@ include "common/world_wars.axitl" side=below
 - `priority=` on an `include` is an **additive offset** applied to every contained entity's own priority (composes through nested includes)
 - `side=` on an `include`, if present, **overrides** every contained entity's side regardless of what each line says individually (since side is now usually determined automatically per-entity, this is a deliberate wholesale-flip escape hatch, not a default-filling mechanism)
 - Included files never contain `timeline`
+- An included file may declare graphs (§15); an include's `priority=` and `side=` don't apply to them
 - Provenance (source file + line) tracked per entity through the include tree
 - Duplicate entities across includes (same `(type, name)`, e.g. two files both defining `person "Julius Caesar"`): the **last one defined wins**, with a build warning naming both provenance locations (which lost, which won). Left to the operator to fix at the source if unintended.
 - An **event's identity also includes its date**, at the same precision: `event "General election" 1945` and `event "General election" 1950` are different events, and so are `1950` and `1950-02`. Two events are duplicates only when type, label and date all match
@@ -277,6 +279,8 @@ Layout runs in three phases, each consuming the results of the one before:
 1.  **Phase A** — banded entities (`person`, `span`, `group`) get a side and a lane (this section and §7), along with any illustrations attached to them (§3.5)
 2.  **Phase B** — events get a side (§6.1) and a base pole length (§8.1); illustrations attached to events are placed; illustrations in a pole's path are nudged
 3.  **Phase C** — label collisions involving event flags are resolved (§8.2)
+
+Backgrounds (§15, draft) are placed after all three phases, and nothing in them looks at backgrounds.
 
 For each banded entity without a forced `^`/`v`, side is resolved during layout (not parsing), jointly with lane assignment:
 
@@ -414,16 +418,17 @@ timeline ... tick_label_every=10   // override the derived n
 
 ### 10.4 Interaction with the plotting workflow
 
-- Ticks **must be drawn in the first pen pass**, since they are the alignment reference every subsequent pass and every resumption depends on. This is consistent with the interpreter spec's existing note that ticks are drawn with the first pen (typically black or a hard pencil)
+- Ticks **must be drawn in the first pen pass**, since they are the alignment reference every subsequent pass and every resumption depends on. This is consistent with the interpreter spec's existing note that ticks are drawn with the first pen (typically black or a hard pencil). Background pens (§15.10) come next, before the rest of the foreground
 - Because tick spacing is not perfectly uniform (§10.1), an operator measuring an offset should count ticks to a *labelled* tick and measure from there, rather than assuming a constant mm-per-tick across a long run
 - The interpreter's renderer also draws pencil crop marks every 50cm, giving a second, purely physical reference that's independent of tick spacing
 
 ## 11. Draw order (for the physical plot)
 
 1.  Baseline + tick marks (auto-generated, first pen pass — see §10.4)
-2.  Span / group fills
-3.  Event poles + flags (on top of fills)
-4.  Illustrations (last — fine detail, and by this point nothing should be crossing into their footprint)
+2.  Backgrounds: graphs, with their shading, titles and value scales (§15, draft)
+3.  Span / group fills
+4.  Event poles + flags (on top of fills)
+5.  Illustrations (last — fine detail, and by this point nothing should be crossing into their footprint)
 
 Crop marks (every 50cm, in pencil) are added by the interpreter's renderer and aren't under the author's control — see the interpreter spec.
 
@@ -442,3 +447,143 @@ No open questions in this spec. The remaining cross-cutting items live in the in
 Every numeric physical-length value anywhere in this language — `width=`, `length=`, `lane_height=`, `baseline_offset=`, `above_lane_height=`/`below_lane_height=`, `font_size=`, `ticks=` (target spacing), and an illustration's `height=` — follows one rule: a bare, unitless number is **millimetres**; `cm` and `m` suffixes are also accepted (`137cm`, `4.126m`), with no space between the number and the suffix. Decimal values are accepted throughout (`297.5`, `21.0cm`, `0.21m`). This matches the same convention `axitime`'s CLI flags use for the same reason — one shared parsing rule instead of the CLI defaulting to centimetres while the language defaulted to millimetres.
 
 This doesn't touch `scale`, which is always an explicit rate (`mm/year`, `mm/day`, etc.) rather than a bare length, and isn't affected by this rule. It also doesn't touch dates, priorities, or any other numeric field — only physical-length parameters.
+
+The same rule covers a graph's `height=`, `fill_depth=`, `shadow=`, and `value_scale=` when it is a length (§15).
+
+## 15. Backgrounds and graphs (draft, 2026-10-24: not yet implemented)
+
+Agreed in discussion on 2026-10-24 and tried in a throwaway mock-up (rendered from `renders/graph-mock/`, which git ignores); nothing in libaxitl implements it yet. Open points are in `docs/known-gaps.md`.
+
+A **background** is drawn underneath the timeline, usually in pencil, and everything else (the baseline and ticks, bars, events, their labels and illustrations: together the **foreground**) is drawn over it freely. Backgrounds take no part in laying out the foreground, which is laid out exactly as if they weren't there, so adding, removing or changing a background never moves any foreground ink. The one concession runs the other way: a background is broken where it would run through foreground text or an illustration (§15.8).
+
+The first kind of background is the **graph**: a line plotting a series of values against the timeline's own time axis, with the baseline as its neutral value. Shaded time ranges (recessions, wars, night-time) are a likely second kind and would follow the same rules.
+
+### 15.1 Declaration
+
+``` text
+graph "Dow Jones Industrial Average" HB-pencil
+    data="dow-1928-1932.csv"
+    time_column=Date
+    value_column=Close
+    origin=first
+    y_scale=log
+    fill=diagonal
+    fill_depth=4mm
+```
+
+- `graph` is a declaration of its own, not an entity. It may be written in the main file or in any included file, and a document may have any number of graphs. Inside a group's `{ }` body it is a parse error.
+- The quoted string is the graph's **title** (§15.9); `""` means no title.
+- A trailing pen keyword (§3.4) sets its pen, as for an entity. The default is `HB-pencil` rather than `black`, since a graph is a background.
+- Everything else is `key=value`, so a long declaration continues over indented lines (§3.10). Priority and side symbols (`!`, `-`, `^`, `v`) are a parse error on a graph, and an include's `priority=` and `side=` (§5) don't apply to the graphs it pulls in.
+- The points come from either a CSV file (`data=`, §15.2) or a `{ }` body (§15.3). Giving both, or neither, is a parse error.
+- Duplicates (§5): a graph's identity is its title. Two graphs with the same title from different files: the last wins, with a warning. Untitled graphs are never duplicates.
+
+| Parameter | Values | Default | |
+|---|---|---|---|
+| `data=` | a file name | none | §15.2 |
+| `first_row=`, `last_row=` | row numbers | `1`, the end of the file | §15.2 |
+| `header=` | `yes`, `no` | `yes` | §15.2 |
+| `separator=` | `comma`, `semicolon`, `tab` | `comma` | §15.2 |
+| `time_column=`, `value_column=` | a column number or header name | `1`, `2` | §15.2 |
+| `time_format=` | a pattern, or `decimal_year` | the language's own dates | §15.2 |
+| `missing=` | the text that marks a gap | blank cells only | §§15.2, 15.3 |
+| `origin=` | a number, or `first` | `0` | §15.5 |
+| `y_scale=` | `linear`, `log` | `linear` | §15.5 |
+| `height=` | a length | fitted to the paper | §15.5 |
+| `range=` | a number | none | §15.5 |
+| `line=` | `straight`, `smooth`, `step` | `straight` | §15.6 |
+| `fill=` | a §3.7 pattern | `none` | §15.7 |
+| `fill_depth=` | a length | all the way to the baseline | §15.7 |
+| `shadow=` | a length | none | §15.7 |
+| `value_scale=` | `off`, `start`, or a length | `1m` | §15.9 |
+| `value_marks=` | `auto`, or numbers separated by commas | `auto` | §15.9 |
+| `font=`, `font_size=` | as §3.8 | the timeline's | §15.9 |
+
+### 15.2 Data from a CSV file
+
+A CSV file is read as it comes, so a source that would be awkward to reformat can be used directly:
+
+``` text
+graph "Global temperature anomaly, °C" H-pencil
+    data="global-temps.csv"
+    first_row=5          // the header row: this source puts four lines of notes above it
+    time_column=Year
+    value_column=Anomaly
+    missing=-999
+```
+
+- `data=` names the file, relative to the file that declares the graph, and it is fetched through the host's `resolve` like an illustration or custom font (interpreter spec, "Library boundary"). It is UTF-8, with any byte-order mark ignored and any line endings.
+- Fields are separated by commas, or as `separator=semicolon` or `separator=tab` says, and may be quoted with `"`, a doubled `""` inside quotes standing for one (RFC 4180).
+- **Rows** are numbered the way a text editor numbers lines, from 1; a row whose quoted field runs over several lines takes the number of its first. `first_row=` is the first row read and `last_row=` the last, so notes above the data and a footer below it can be skipped. Wholly blank rows are skipped.
+- With `header=yes`, the first row read names the columns and the data starts on the row after it. With `header=no`, every row read is data.
+- `time_column=` and `value_column=` say where the times and values are. A whole number is a position, counting from 1; anything else is a header name, matched exactly against the header cell with surrounding spaces trimmed. A name with spaces is quoted: `value_column="Adj Close"`. A name with `header=no`, or one the header doesn't have, is an error that lists the header's names. Other columns are ignored.
+- **Times** are written in the language's date syntax (§3.3), with one allowance for CSV: a space may stand in for the `T` before a time (`1986-04-26 01:23:44`, as many sources write it).
+- **`time_format=`** reads times written some other way. It is a pattern in which `YYYY` is the year, `MM` the month's number, `MMM` an English month abbreviation (`Oct`), `MMMM` a full English month name, `DD` the day, and `hh`, `mm` and `ss` the hour, minute and second. Every other character must appear as written. Numbers may have one digit or two, the year up to four; month names ignore case. BC years and two-digit years can't be read this way. So `time_format="MM/DD/YYYY"` reads `10/29/1929`, and `time_format="DD MMM YYYY"` reads `29 Oct 1929`. A time read with a pattern has the precision of the finest part the pattern names. `time_format=decimal_year` reads a fractional year, such as `1958.2027` in climate records, as that fraction of the way through the year, to the second.
+- **Values** are numbers, with an optional sign, decimal point and exponent (`-0.5`, `1.2e4`). Thousands separators and decimal commas are errors. A blank value cell, or one that matches `missing=` (spaces trimmed), is a gap (§15.6). A row with a value but no time is an error.
+- Errors and warnings about the data name the file and row (`dow-1928-1932.csv:57`), so `check` and the editor point at the line to fix.
+
+### 15.3 Points written inline
+
+For a handful of points, a `{ }` body saves a separate file:
+
+``` text
+graph "Reactor thermal power, MW" origin=3200 y_scale=log {
+    1986-04-25T14:00:00   1600
+    1986-04-26T00:29:00     30
+    1986-04-26T01:23:44  30000
+}
+```
+
+- Each line of the body is a date (§3.3) and a value, separated by spaces or tabs. A value that matches `missing=` is a gap.
+- As with a group (§9), the `{` ends the declaration's last line.
+
+### 15.4 Points in time
+
+- A point sits at the start of its date's period, by §3.3's rule for a single date: a value dated `1929-10` sits at 1 October.
+- Points must be in time order, each strictly later than the one before. Anything else is an error naming the row, which catches an export sorted the wrong way and a day/month mix-up.
+- The line is clipped at the timeline's start and end, like a bar (§4.2): a stretch from a point before `start` to one after it is drawn from `start` on. A graph with no point inside the timeline is omitted with a warning.
+
+### 15.5 Vertical scale
+
+- **`origin=`** is the value drawn on the baseline: `0` by default, or `first` for the first value at or after the timeline's start, which gives "change since the start" for a stock index. Values above the origin are drawn above the baseline and values below it below, at the same rate on both sides.
+- **`y_scale=linear`**: the distance from the baseline is proportional to `value − origin`.
+- **`y_scale=log`**: the distance is proportional to `log(value ÷ origin)`, so equal ratios are equal distances: with `origin=300`, 600 and 150 are the same distance above and below the baseline. It needs the origin and every value to be above zero; a value of zero or less is an error naming its row, and the default origin of `0` always has to be replaced.
+- **The rate:**
+  - With neither `height=` nor `range=`, the graph is **fitted to the paper**: drawn as large as it can be while every part of its line inside the timeline stays at least 3mm inside the finished width. The golden-ratio split (§4) gives the two sides different room, so usually one side decides.
+  - With `height=` alone, the part of the line furthest from the baseline, on either side, is that far from it.
+  - `height=` and `range=` together pin the rate, so that graphs drawn on different timelines from the same data match: a swing of `range` from the origin is `height` from the baseline. For `linear` the swing is a difference; for `log` it is a ratio, so `range=10` puts one power of ten at `height`. `range=` without `height=` is an error.
+- A line pushed past the edge of the paper by `height=` is cut 1mm inside the finished edge, with a warning, since all ink stays inside the finished size (§4.1).
+- `check` reports each graph's resulting rate, such as `141mm per decade` or `5mm per unit`.
+
+### 15.6 The line
+
+- **`line=straight`** (the default) joins the points with straight lines.
+- **`line=smooth`** draws a curve through every point that never overshoots them: between two points it stays between their two values, so every peak and trough of the curve is a real point (monotone cubic interpolation, Steffen's method). The curve is fitted to the points as drawn, after `y_scale`. Smoothing implies a continuity the data may not have, so it suits a measured physical quantity better than prices; choosing it is the author's call.
+- **`line=step`** holds each value until the next point, where the line rises or falls straight to the new value. It suits interest rates and anything else set by decision. The line ends at the last point; to carry the last value further, repeat it at a later date (a point past the timeline's end is clipped as usual).
+- **Gaps** break the line. With `straight` and `smooth` it resumes at the next point; with `step`, the value before a gap holds until the gap's own time. A point with a gap, or the end of the data, on both sides is drawn as a dot.
+- The drawn line may be simplified, but never by more than 0.1mm from the exact line, so spikes survive and dense data (a century of daily closes) costs no more plotting than what can be seen.
+
+### 15.7 Shading
+
+- `fill=` takes the patterns of §3.7 (default `none`), anchored to the page like a bar's fill. Pieces of shading shorter than 0.5mm are left out, as stubs are from bar fills.
+- **Under the line** (the default): the area between the line and the baseline is shaded. `fill_depth=` limits it to the part within that distance of the line, measured from the line in any direction, so the band keeps its thickness where the line is steep; without `fill_depth=` it reaches the baseline. It never crosses the baseline: where the line is below the baseline, the shading lies above the line. A near-vertical spike encloses almost no area, so it gets almost no shading.
+- **Drop shadow**: `shadow=<length>` shades a shadow of the line instead. The shadow is the area the line would pass over if slid from `shadow` to `shadow + fill_depth` down the page and towards later dates at once, at 45°, less 0.75mm clear around the line itself. Under a flat stretch it is a band `fill_depth` thick, `shadow` below the line; beside a vertical stretch it is the same, on the later side; where the line runs down and to the right at 45° there is none, as with a real shadow. A shadow is cast on the paper, so it isn't stopped by the baseline and falls the same way on both sides of it. Unlike shading under the line, a shadow shows a spike plainly, which matters where events crowd the spike's moment. `shadow=` needs `fill_depth=`, its thickness.
+- `fill_depth=` or `shadow=` without a `fill=` pattern is an error.
+
+### 15.8 Breaking around the foreground
+
+- A graph's line, shading and value scale are broken, leaving 0.75mm either side as for a broken pole (§8), wherever they would run through a bar's label, an event's flag (its label and any time label), a tick label, an illustration, or any graph's own title or value labels.
+- They are never broken for lines. They cross bars, poles, leaders, ticks, the baseline and each other freely: the pencil lies underneath, and the reader tells the two apart by weight.
+- A steep stretch is broken like any other. Leaving stretches steeper than 45° whole, so that a spike would survive a stack of flags, was tried in the mock-up: it struck through letters without saving the spike (which lay under the pole of the event that caused it). A gap the height of a line of text is easily bridged by the eye, and `shadow=` keeps a crowded spike visible.
+
+### 15.9 Title and value scale
+
+- A graph's own text is drawn in its pen and font (`font=` and `font_size=`, inherited from `timeline` as for entities, §3.8): the title at `font_size`, and value labels at three-quarters of it, like tick labels. It is placed only where it is clear of all foreground ink (bars, their labels and leaders, poles, flags, illustrations, the baseline, and the ticks with their labels), and of other graphs' text. It never moves anything; where there is no room, it moves along or is left out.
+- **The title** is drawn once, beside the line near its start, on the side away from the baseline (or else the side towards it), 1.5mm from the line. Where there's no room, it moves later along the line, 1mm at a time, to the first place that has room. If there is none anywhere, it is left out with a warning.
+- **A value scale** is a vertical rule from the baseline to the outermost mark, with a short tick and a label at each mark. The origin's label sits just above the baseline, or if there's no room there, just below the tick labels. By default the marks are 3 to 5 round values within the values the graph draws, from the sequence 1, 2, 5, 10, 20, 50… (for `log`: powers of ten, or else 1 and 3, or 1, 2 and 5, in each power of ten). `value_marks=` lists them instead, e.g. `value_marks=-0.5,0,0.5,1`. A mark too close to the baseline to label clear of it, or whose label would overlap another mark's, is left out.
+- **`value_scale=`** sets where scales go: `off` for none, `start` for one near the start of the paper, or a length to repeat them at that interval along the roll, starting at the start (default `1m`), since a reader several metres in won't see one at the start. Each scale goes at the first place from its preferred position where all its labels have room, looking as far as the next scale's position (for `start`, 30cm). Failing that, it goes where the most labels have room, and the rest are left out with a warning. Two graphs' scales never stand in line with each other, so they can't be read as one.
+
+### 15.10 Layout, drawing and plotting
+
+- Graphs are placed in a fourth layout phase, after §6's phases A to C, in document order; nothing in phases A to C looks at them. Their searches step along the roll in fixed increments from fixed starting points, so placement is deterministic like the rest of layout (§12).
+- They are drawn after the baseline and ticks and before everything else (§11). Their pens come straight after the axis pen in pass order, so ink always goes over graphite rather than graphite over ink, and the ticks remain the first pass's measuring reference (§10.4). A graph in `2H-pencil` shares its pass with the crop marks; one in a pen the foreground also uses is drawn first in that pen's pass.

@@ -69,6 +69,39 @@ the paper's actual movement rather than trusting the motor), which would matter 
 edge only meet again if the paper moves exactly a strip's length. To decide with the hardware: the controller's
 serial protocol, its accuracy, and which way the paper feeds.
 
+## Background graphs (language spec §15, drafted 2026-10-24)
+
+Drafted and tried in a throwaway mock-up (`renders/graph-mock/`, which git ignores: example sources, sample data,
+and `mock_graph.py`, which draws graphs over libaxitl's own output). Not implemented. To settle before or while
+implementing:
+
+- **Averaged data.** A point sits at the start of its period (§15.4), but a monthly or yearly average belongs to
+  the middle of it: on a 5 mm/year timeline, a yearly average drawn at 1 January is 2.5mm early against the
+  events. An `at=start|middle` option was discussed; undecided, since no averaged data is planned yet.
+- **Flat background lines beside foreground lines.** In the mock-up, a stepped line running along a bar's edge
+  read as a doubled edge, and a flat line broken where it met a flag looked like a leader pointing at the flag.
+  Pencil against ink may tell them apart on paper; if not, options are a dashed line style for backgrounds
+  (slower to plot) or a wider gap where a flat line meets text.
+- **Value labels on a crowded roll.** Labels keep clear of bars entirely, so where long bars fill the lanes a
+  mark's label may find no room anywhere: in the mock-up, the discount rate's marks at 2 and 4 fell on lane edges
+  under bars that ran to the end of the roll. They are left out with a warning, and the author can change
+  `height=` or `value_marks=`.
+- **Several graphs.** Each has its own value scale, told apart only by position and pen, which is weak with two
+  pencil grades. Linking each scale to its title (the title beside the first scale, say) may be needed.
+- **On paper:** ink over pencil (graphite picked up by felt and fountain nibs, especially over dense `solid`
+  shading, and which grade to default to: HB may be too soft); the plotting time of `solid` shading, whose
+  horizontal hatching every 0.4mm becomes many short strokes in a narrow band; and whether the 2mm spacing of the
+  other patterns suits a band only a few millimetres deep.
+- **Spacing values** are provisional, like `LayoutStyle`'s: a fitted graph 3mm inside the finished edges; lines
+  cut 1mm inside them; 0.75mm gaps around text and around a shadow's own line; simplification within 0.1mm;
+  shading pieces under 0.5mm left out; the title 1.5mm from the line; value-scale ticks 1.2mm long with labels
+  0.6mm beyond them at 0.75 × `font_size`; label searches in 1mm steps.
+- **Left out for now:** decimal commas (`decimal=comma`), more than one `missing=` marker, timezones in
+  `time_format=`, and other kinds of background (shaded time ranges).
+- **When implementing:** CLAUDE.md's settled decisions say what `resolve` fetches and what the job hash covers;
+  both gain graph data files. The VS Code extension's vocabulary and grammar gain `graph` and its parameters in
+  the same commit (`uv run pytest` checks them against libaxitl).
+
 ## Smaller points
 
 - **Closed pen vocabulary** (language spec §3.4): no brown, pink, white, cyan or magenta. Adding one later is a
