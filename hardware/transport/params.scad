@@ -89,6 +89,7 @@ nut_m3 = [5.5, 2.5];       // across flats, thickness
 nut_m5 = [8, 4.2];
 nut_m8 = [13, 6.6];
 fit = 0.15;                // extra clearance on press fits
+layer = 0.2;               // print layer height, for the bridging layers over bed-side recesses
 
 // ---- Print bed (Prusa Core One) ------------------------------------------------------------------------
 bed = [250, 220, 270];

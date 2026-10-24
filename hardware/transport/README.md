@@ -46,7 +46,14 @@ Tested with OpenSCAD 2021.01 on macOS (Intel).
 
 **Material and settings.**
 - **Most parts:** PETG or PETG-CF, 0.2mm layers, 4 perimeters, 25–30% gyroid infill.
-- **Brackets:** PETG-CF is the stiffest choice. No supports are needed anywhere.
+- **Brackets:** PETG-CF is the stiffest choice.
+- **No supports anywhere,** printed as exported.
+  - Recesses that print against the bed (the brackets' and guides' counterbores and M8 nut pockets) are
+    roofed by two bridging layers, sized for 0.2mm layers. If you print those parts at another layer height,
+    change `layer` in `params.scad`.
+  - Steps inside the cones and roller halves narrow at 45°.
+  - The front-right bracket's drive motor plate is the one long bridge, 42mm, so slow your bridging speed
+    for that part.
 - **Gears:** PETG or nylon, at 40% infill or more.
 - **Edge roller halves:** 10–15% infill, to keep them light.
 - **Dancer halves:** the infill is the dancer's weight. At 20% a dancer with its bolts comes to about 450g,
@@ -77,25 +84,47 @@ To buy or find:
 - **M8:**
   - 4 × M8 × 60 for the edge rollers' axles.
   - 2 × M8 × 60 for the drive cones' axles, each with a nut.
-  - 4 × M8 × 70 for the dancers' axles, each with a nut and washers.
-  - 2 × M8 × 100 for the tailstocks, each with 4 nuts: one captured in the bracket, two clamping the
-    bearing, one jam nut.
+  - 4 × M8 × 70 for the dancers' axles, each with a nut and washers. Their heads are captive inside the
+    dancers, so they need a hex, button or pan head (see "Bolt heads").
+  - 2 × M8 × 100 hex-head bolts for the tailstocks (the head sits in the knob's hex pocket), each with 4 nuts:
+    one captured in the bracket, two clamping the bearing, one jam nut. A length of M8 threaded rod with a nut
+    in the knob does the same job.
   - 4 more M8 nuts, captured in the brackets for the edge rollers' axles.
 - **M5:**
   - 32 T-nuts for 2020.
   - Bracket to leg: 8 × M5 × 30 through the plate, and 8 × M5 × 10 through the cheeks.
   - Guide to leg: 12 × M5 × 16.
-  - Drive housings: 2 × M5 × 45 on the left, 2 × M5 × 20 with nuts on the right.
+  - Drive housings: 2 × M5 × 45 on the left, 2 × M5 × 20 with nuts on the right, all four with large
+    (penny) washers, because the housings' holes are oversize for adjustment.
   - Board jaws: 8 × M5 × 25 with nuts.
-  - Rail on its posts: 2 × M5 × 16.
-  - Pinch wheels: blocks on the rail 2 × M5 × 12; pivots 2 × M5 × 25 with nuts; wheel axles 2 × M5 × 25
-    with nuts and washers.
+  - Rail on its posts: 2 × M5 × 16, put in from the window in each post and turned from beneath.
+  - Pinch wheels: blocks on the rail 2 × M5 × 12, through each block's lip into the rail's rear slot; pivots
+    2 × M5 × 25 with nuts; wheel axles 2 × M5 × 25 with nuts and washers.
 - **M3:**
   - 12 × M3 × 8 for the motors.
   - 4 × M3 × 6 grub screws with nuts, for the motor gears and rod collars.
   - 4 × M3 × 20 with nuts, as the spring pins.
   - 8 × M3 × 8 with nuts for the endstop boards.
-- **M4:** 4 × M4 × 10 with nuts for the endstop brackets, and 16 × M4 wood screws if you fix the feet down.
+- **M4:** 4 × M4 × 25 with nuts for the endstop brackets (from the guide's inner face into a nut in the
+  bracket's base), and 16 × M4 wood screws if you fix the feet down.
+
+### Bolt heads
+
+Hex socket pan or button heads work everywhere, and nothing needs a countersunk head. Three places limit
+the choice:
+
+| Where | Head |
+|---|---|
+| Dancers' M8 × 70, captive inside the dancer | Hex, button or pan. The cavity is 18 across and 7 deep, so a socket cap head (8 tall) won't fit. |
+| Tailstocks' M8 × 100 | Hex head, to key into the knob. |
+| Rail on its posts, M5 × 16 | Any hex socket head, since it's turned from beneath inside the window. |
+
+Everything else has room for any head:
+- **Counterbores.** The bracket-to-leg and guide-to-leg M5s sit in counterbores 10 across, which take socket
+  cap, pan or button heads.
+- **Washers.** The drive housings' M5s need large washers under any head.
+- **Board jaws.** The jaw bolts sit 7 and 17mm in from the board's edge, so at the back they stay clear of the
+  AxiDraw's bar. A button head keeps them lowest on top of the board.
 
 ## Putting it together
 
@@ -125,11 +154,13 @@ To buy or find:
    cone's bearing, and a nut.
 8. **Pinch rail and arms.**
    - Bolt the rail onto the two posts on the front brackets.
-   - Hang a block under the rail above each wheel track, and hang each arm on its block.
+   - Fit a block under the rail above each wheel track, screwed through its lip into a T-nut in the rail's
+     rear slot, and hang each arm on its block.
    - Put each wheel on its arm and hook the springs on their pins.
 9. **Dancers.** Fit the 22mm spacers on the dancers' bolts and drop the bolts into the guides' open slots.
    Add the flag sliders on the full guides, then washers and nuts.
-10. **Endstops.** Set the top and bottom endstop brackets so the flags pass through their gaps at the ends
-    of the dancers' travel, Z −150 and −260.
+10. **Endstops.** Drop an M4 nut into each endstop bracket's base, and screw the bracket on from the guide's
+    inner face through its slot. Set the top and bottom brackets so the flags pass through the sensors' gaps
+    at the ends of the dancers' travel, Z −150 and −260.
 
 The left and right sides here are as the operator sees them, standing at the front.

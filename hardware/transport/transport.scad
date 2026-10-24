@@ -19,18 +19,16 @@ part = "assembly"; // [assembly, back_bracket_left, back_bracket_right, front_br
 // ======================================================================================================
 
 module leg_clamp_add(yc) {
-    // A cap over the leg's top end, and cheeks either side of it.
+    // A cap over the leg's top end, and cheeks either side of it. The cheeks stop below the roller axles'
+    // bolt heads, so any head fits there.
     box([plate_out, yc - leg / 2 - 5, leg_top], [plate_out + leg, yc + leg / 2 + 5, -2]);
     for (s = [-1, 1])
-        box([plate_out, yc + s * leg / 2, -80], [plate_out + leg, yc + s * (leg / 2 + 5), leg_top]);
+        box([plate_out, yc + s * leg / 2, -80], [plate_out + leg, yc + s * (leg / 2 + 5), -36]);
 }
 
 module leg_clamp_cut(yc) {
     // Two M5s through the plate into T-nuts in the leg's inner slot, and one through each cheek.
-    for (z = [-30, -65]) {
-        xcyl(yc, z, plate_in - 1, plate_out + 1, m5);
-        xcyl(yc, z, plate_in - 1, plate_in + 6, 10);
-    }
+    for (z = [-30, -65]) counterbored_x(yc, z, plate_in, 6, 10, m5, plate_out + 1);
     for (s = [-1, 1]) ycyl(leg_x, -45, yc + s * (leg / 2 - 1), yc + s * (leg / 2 + 6), m5);
 }
 
@@ -43,18 +41,25 @@ module seat_add(y0, y1) {
     }
 }
 
-module seat_cut(y0, y1) {
-    // Slots for the two clamp bolts, outside the board's edge, with a channel underneath for their nuts.
-    for (yy = [y0 + 7, y1 - 7]) {
+// The clamp bolts sit 7 and 17 in from the board's edge (at y0 when edge > 0, at y1 when edge < 0), which
+// keeps the back ones clear of the AxiDraw's bar.
+function jaw_bolts_y(y0, y1, edge) = edge > 0 ? [y0 + 7, y0 + 17] : [y1 - 7, y1 - 17];
+
+module seat_cut(y0, y1, edge) {
+    // Slots for the two clamp bolts, outside the board's edge, with a channel underneath for their nuts
+    // (corners up when printed, so its roof needs no bridge).
+    for (yy = jaw_bolts_y(y0, y1, edge)) {
         hull() for (xx = jaw_bolt_x) zcyl(xx, yy, -board_t - seat_t - 1, -board_t + 1, m5);
-        hull() for (xx = jaw_bolt_x) zhex(xx, yy, -board_t - seat_t - 1, -board_t - seat_t + nut_m5[1], nut_m5[0]);
+        hull() for (xx = jaw_bolt_x) zhex(xx, yy, -board_t - seat_t - 1, -board_t - seat_t + nut_m5[1], nut_m5[0], rot = 0);
     }
 }
 
 // A bolt through the plate for a 50mm roller's axle: head outside, captured nut on the inner face.
 module roller_axle_cut(p, slot = 0) {
-    hull() for (dy = [-slot, slot]) xcyl(p[0] + dy, p[1], plate_in - 1, plate_out + 1, m8);
-    hull() for (dy = [-slot, slot]) xhex(p[0] + dy, p[1], plate_in - 1, plate_in + nut_m8[1], nut_m8[0]);
+    roof = plate_in + nut_m8[1];
+    hull() for (dy = [-slot, slot]) xhex(p[0] + dy, p[1], plate_in - 1, roof, nut_m8[0]);
+    bridge_layers_x(p[0], p[1], roof, nut_m8[0], m8, slot);
+    hull() for (dy = [-slot, slot]) xcyl(p[0] + dy, p[1], roof + 2 * layer, plate_out + 1, m8);
 }
 
 // The roll motor's pocket, open on the outer side, leaving a skin on the inner face for its four screws.
@@ -82,7 +87,7 @@ module back_bracket(side) {
             seat_add(board_y0, board_y0 + seat_depth);
         }
         leg_clamp_cut(leg_y_back);
-        seat_cut(board_y0, board_y0 + seat_depth);
+        seat_cut(board_y0, board_y0 + seat_depth, 1);
         roller_axle_cut(back_roller, slot = left ? 0 : 4);   // the right-hand one is the tracking trim
         if (left) {
             xcyl(supply[0], supply[1], plate_in - 1, plate_out + 1, m8);   // the drive cone's axle bolt
@@ -117,12 +122,13 @@ module front_bracket(side) {
                 box([plate_out, drive[0] - 25, drive[1] - 25], [drive_motor_face_x, drive[0] + 25, 22]);
         }
         leg_clamp_cut(leg_y_front);
-        seat_cut(board_y1 - seat_depth, board_y1);
+        seat_cut(board_y1 - seat_depth, board_y1, -1);
         roller_axle_cut(front_roller);
         drive_housing_bolts_cut(!left);
-        // The pinch rail's screw: up through the post into a T-nut in the rail's bottom slot, from a window.
+        // The pinch rail's screw: up through the post into a T-nut in the rail's bottom slot. The window
+        // below is tall enough to stand an M5 x 16 up in and turn it with a hex key from beneath.
         zcyl((plate_in + plate_out) / 2, rail[0], 0, 26, m5);
-        box([plate_in - 1, rail[0] - 6, 2], [plate_out + 1, rail[0] + 6, 14]);
+        box([plate_in - 1, rail[0] - 6, -22], [plate_out + 1, rail[0] + 6, 14]);
         if (left) {
             xcyl(takeup[0], takeup[1], plate_in - 1, plate_out + 1, m8);
             motor_pocket_cut(takeup_motor);
@@ -182,7 +188,7 @@ module dancer_guide(yd, yleg, dir, full = true) {
         }
         // three M5s into T-nuts in the leg's inner slot
         for (z = [dancer_top, (dancer_top + dancer_bottom) / 2, dancer_bottom])
-            { xcyl(yleg, z, guide_x[0] - 1, guide_x[1] + 1, m5); xcyl(yleg, z, guide_x[0] - 1, guide_x[0] + 5, 10); }
+            counterbored_x(yleg, z, guide_x[0], 5, 10, m5, guide_x[1] + 1);
     }
 }
 
@@ -192,7 +198,7 @@ module flag_slider(yd, dir) {
         union() {
             box([guide_x[1] - 2.2, yd - 8, -8], [guide_x[1] + 2, yd + 8, 8]);
             box([guide_x[1], yd + dir * 7, -8], [guide_x[1] + 2, yd + dir * (flag_offset + 2), 8]);
-            box([guide_x[1], yd + dir * flag_offset - 1, -7], [guide_x[1] + 17, yd + dir * flag_offset + 1, 7]);
+            box([guide_x[1], yd + dir * flag_offset - 1, -8], [guide_x[1] + 17, yd + dir * flag_offset + 1, 8]);
         }
         xcyl(yd, 0, guide_x[1] - 3, guide_x[1] + 3, m8);
     }
@@ -200,16 +206,22 @@ module flag_slider(yd, dir) {
 
 // An endstop bracket: holds a slotted optical endstop's board in the y-z plane at x 294..297, its sensor
 // facing the guide so the flag's fin runs through the gap. The board's holes are slotted to suit most modules.
+// An M4 x 25 from the guide's inner face, through the guide's slot, screws into a nut in the base; the arm
+// stands beside the base, away from the flag. Every face starts at z = -12, so it prints on its side.
 module endstop_bracket(yd, dir) {
     yslot = yd + dir * 26;
     yf = yd + dir * flag_offset;
+    base_x = guide_x[1] + 7;
+    arm = [yslot + dir * 4, yslot + dir * 10];
+    plate = [yf - dir * 6, arm[1]];
     difference() {
         union() {
-            box([guide_x[1], yslot - 4, -12], [guide_x[1] + 4, yslot + 4, 12]);        // base on the guide
-            box([guide_x[1], yslot - 4, -12], [294, yslot + 4, 12]);                    // arm
-            box([294, yf - dir * 8, -12], [297, yslot + dir * 4, 12]);                  // board plate
+            box([guide_x[1], yslot - 4, -12], [base_x, yslot + 4, 12]);                       // base on the guide
+            box([guide_x[1], min(arm), -12], [294, max(arm), 12]);                            // arm
+            box([294, min(plate), -12], [297, max(plate), 12]);                               // board plate
         }
-        xcyl(yslot, 0, guide_x[1] - 1, guide_x[1] + 5, m4);
+        xcyl(yslot, 0, guide_x[1] - 1, base_x + 1, m4);
+        xhex(yslot, 0, base_x - 3.4, base_x + 1, 7);                                          // M4 nut
         for (dz = [-1, 1]) hull() for (dy = [-6, 6]) xcyl(yf + dy, dz * 9.5, 293, 298, m3);
     }
 }
@@ -223,13 +235,21 @@ module endstop_bracket(yd, dir) {
 // captive_head: the dancers carry their axle bolts captive, head inside, so they need a cavity for it.
 module roller_half(face, spine_d, captive_head) {
     pocket = b608[2] + 0.3;
-    cavity_d = captive_head ? 16.5 : 12;
+    cavity_d = captive_head ? 18 : 12;   // room for an M8 hex, button or pan head; the edge rollers' bolt tip
     cavity = captive_head ? 7 : 12;
+    shoulder = face - pocket - cavity;   // where the spine stops
+    bore = spine_d + 2 * fit;
     difference() {
         xcyl(0, 0, 0, face, roller_d);
         xcyl(0, 0, face - pocket, face + 1, b608[1] + 2 * fit);
-        xcyl(0, 0, face - pocket - cavity, face - pocket + 0.01, cavity_d);
-        xcyl(0, 0, -1, face - pocket - cavity + 0.01, spine_d + 2 * fit);
+        xcyl(0, 0, shoulder, face - pocket + 0.01, cavity_d);
+        xcyl(0, 0, -1, shoulder + 0.01, bore);
+        // Where the spine's bore narrows to a smaller cavity, step in at 45 degrees: the halves print
+        // upright, middle end down, so a flat step there would need support.
+        if (bore > cavity_d) hull() {
+            xcyl(0, 0, shoulder - 0.01, shoulder, bore);
+            xcyl(0, 0, shoulder + (bore - cavity_d) / 2, shoulder + (bore - cavity_d) / 2 + 0.01, cavity_d);
+        }
         // a small chamfer at the end face
         translate([face, 0, 0]) rotate([0, 90, 0])
             difference() { cylinder(d = roller_d + 2, h = 2, center = true); cylinder(d1 = roller_d - 2, d2 = roller_d + 2, h = 2, center = true); }
@@ -250,8 +270,15 @@ module drive_cone() {
             translate([gear_x[0], 0, 0]) rotate([0, 90, 0]) linear_extrude(gear_x[1] - gear_x[0]) gear2d(gear_m, gear_big);
         }
         xcyl(0, 0, gear_x[1] - b608[2] - 0.3, gear_x[1] + 1, b608[1] + 2 * fit);
-        xcyl(0, 0, cone_tip_x - 1, gear_x[1] - b608[2] - 0.29, 16);
+        cone_bore(gear_x[1] - b608[2] - 0.3, -1);
     }
+}
+
+// The bore through a cone, from its bearing's seat at x = seat towards its tip (dir = -1 along x): a 1.5mm
+// flat ring for the bearing's outer race to sit on, then 45 degrees in to 16mm, so it prints without support.
+module cone_bore(seat, dir) {
+    xcyl(0, 0, cone_tip_x - 1, seat + dir * 1.65, 16);
+    hull() { xcyl(0, 0, seat + dir * 1.65, seat + dir * 1.64, 16); xcyl(0, 0, seat - 0.01, seat + 0.01, 19.3); }
 }
 
 // The tailstock cone: runs on a 608 clamped between two nuts on an M8x100 bolt, which screws through the
@@ -264,10 +291,11 @@ module tail_cone() {
             for (a = [0 : 90 : 270]) rotate([a, 0, 0])
                 hull() { box([cone_tip_x + 1, -0.8, 9.5], [cone_tip_x + 1.5, 0.8, 10.5]); box([cone_base_x, -0.8, 15], [cone_base_x + 0.01, 0.8, 17]); }
             xcyl(0, 0, cone_base_x, hub[0], 40);
-            xcyl(0, 0, hub[0], hub[1], 30);
+            hull() { xcyl(0, 0, hub[0] - 0.01, hub[0], 40); xcyl(0, 0, hub[0] + 5, hub[0] + 5.01, 30); }   // 45 degrees under the flange
+            xcyl(0, 0, hub[0] + 5, hub[1], 30);
         }
         xcyl(0, 0, hub[1] - b608[2] - 0.3, hub[1] + 1, b608[1] + 2 * fit);
-        xcyl(0, 0, cone_tip_x - 1, hub[1] - b608[2] - 0.29, 16);
+        cone_bore(hub[1] - b608[2] - 0.3, -1);
     }
 }
 
@@ -314,8 +342,8 @@ module rod_collar() {
 
 // ======================================================================================================
 // Pinch wheels. Both parts are flat plates in the y-z plane, so they print without supports. The block
-// hangs under the rail on one M5 into a T-nut in its bottom slot, with a lip behind the rail; it can sit
-// anywhere along it. The arm pivots on the block, with the wheel on an M5 at its front end, beside it.
+// sits under the rail with a lip behind it, held by one M5 through the lip into a T-nut in the rail's rear
+// slot; it can sit anywhere along the rail. The arm pivots on the block, with the wheel on an M5 at its front end, beside it.
 // An extension spring between M3 pins on the block's lip and the arm's tail (both on the arm's wheel side)
 // pulls the tail up and the wheel down; press the tail down to lift the wheel for threading. Modelled for the wheel at x = wheel_x.
 // ======================================================================================================
@@ -324,7 +352,7 @@ arm_x = [wheel_x + wheel_w / 2 + 0.5, wheel_x + wheel_w / 2 + 6.5];   // the arm
 block_x = [arm_x[1] + 0.5, arm_x[1] + 12.5];                          // the block, beside the arm
 pivot = [487, 16];
 arm_spring = [501, 18];     // spring pins (M3): on the arm's tail, and on the block's lip
-block_spring = [490, 42];
+block_spring = [490, 44];
 
 module pinch_block() {
     r0 = rail[0] - rail_size / 2;   // the rail's rear face
@@ -333,8 +361,7 @@ module pinch_block() {
            [rail[0] + 8, rz - 9], [pivot[0] + 9, pivot[1] - 7], [pivot[0] - 8, pivot[1] - 7], [pivot[0] - 8, pivot[1] + 6], [r0 - 10, rz - 2]];
     difference() {
         yz_plate(pts, block_x[0], block_x[1]);
-        zcyl((block_x[0] + block_x[1]) / 2, rail[0], rz - 10, rz + 1, m5);           // up into the rail
-        box([block_x[0] - 1, rail[0] - 5, rz - 9 - 1], [block_x[1] + 1, rail[0] + 5, rz - 5]);  // its head's window
+        ycyl((block_x[0] + block_x[1]) / 2, rail[1], r0 - 11, r0 + 1, m5);         // through the lip into a T-nut
         xcyl(pivot[0], pivot[1], block_x[0] - 1, block_x[1] + 1, m5);
         xcyl(block_spring[0], block_spring[1], block_x[0] - 1, block_x[1] + 1, m3);
     }
@@ -357,10 +384,10 @@ module pinch_arm() {
 // Board clamp jaws and feet.
 // ======================================================================================================
 
-module board_jaw(y0, y1) {
+module board_jaw(y0, y1, edge) {
     difference() {
         box([board_w / 2 - 35, y0, 0], [seat_x1, y1, 5]);
-        for (yy = [y0 + 7, y1 - 7]) hull() for (xx = jaw_bolt_x) zcyl(xx, yy, -1, 6, m5);
+        for (yy = jaw_bolts_y(y0, y1, edge)) hull() for (xx = jaw_bolt_x) zcyl(xx, yy, -1, 6, m5);
     }
 }
 
@@ -396,8 +423,8 @@ module assembly() {
     // brackets
     color("steelblue") { back_bracket(1); back_bracket(-1); front_bracket(1); front_bracket(-1); }
     color("cornflowerblue") both_sides() drive_housing();
-    color("cornflowerblue") { both_sides() translate([0, 0, 0]) board_jaw(board_y0, board_y0 + seat_depth);
-                              both_sides() board_jaw(board_y1 - seat_depth, board_y1); }
+    color("cornflowerblue") { both_sides() board_jaw(board_y0, board_y0 + seat_depth, 1);
+                              both_sides() board_jaw(board_y1 - seat_depth, board_y1, -1); }
     // dancer guides, sliders and endstop brackets (endstops on the back +x and front -x guides)
     color("teal") {
         dancer_guide(dancer_y_back, leg_y_back, 1, true);
@@ -464,8 +491,8 @@ else if (part == "front_bracket_right") flat_x(-1) front_bracket(-1);
 else if (part == "drive_housing") translate([0, 0, plate_in]) rotate([0, 90, 0]) drive_housing();
 else if (part == "dancer_guide_full") translate([0, 0, -guide_x[0]]) rotate([0, -90, 0]) dancer_guide(dancer_y_back, leg_y_back, 1, true);
 else if (part == "dancer_guide_plain") translate([0, 0, -guide_x[0]]) rotate([0, -90, 0]) dancer_guide(dancer_y_front, leg_y_front, -1, false);
-else if (part == "endstop_bracket") translate([0, 0, 297]) rotate([0, 90, 0]) endstop_bracket(dancer_y_back, 1);
-else if (part == "flag_slider") translate([0, 0, -(guide_x[1] - 2.2)]) rotate([0, -90, 0]) flag_slider(dancer_y_back, 1);
+else if (part == "endstop_bracket") translate([0, 0, 12]) endstop_bracket(dancer_y_back, 1);
+else if (part == "flag_slider") translate([0, 0, 8]) flag_slider(dancer_y_back, 1);
 else if (part == "roller_half") rotate([0, -90, 0]) roller_half(roller_face, 18, false);
 else if (part == "dancer_half") rotate([0, -90, 0]) dancer_half_print();
 else if (part == "drive_cone") translate([0, 0, gear_x[1]]) rotate([0, 90, 0]) drive_cone();
@@ -476,7 +503,7 @@ else if (part == "spacers") spacers();
 else if (part == "rod_collar") rod_collar();
 else if (part == "pinch_block") translate([0, 0, -block_x[0]]) rotate([0, -90, 0]) pinch_block();
 else if (part == "pinch_arm") translate([0, 0, -arm_x[0]]) rotate([0, -90, 0]) pinch_arm();
-else if (part == "board_jaw") board_jaw(0, seat_depth);
+else if (part == "board_jaw") board_jaw(0, seat_depth, 1);
 else if (part == "foot") foot();
 
 module dancer_half_print() { roller_half(dancer_face, 14, true); }

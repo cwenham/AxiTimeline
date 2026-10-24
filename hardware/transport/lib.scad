@@ -17,15 +17,33 @@ module zcyl(x, y, z0, z1, d) {
     translate([x, y, min(z0, z1)]) cylinder(d = d, h = abs(z1 - z0));
 }
 
-// A hexagonal nut trap along z from z0 to z1, centred at [x, y].
-module zhex(x, y, z0, z1, af) {
-    translate([x, y, min(z0, z1)]) rotate([0, 0, 30]) cylinder(d = af / cos(30) + 2 * fit, h = abs(z1 - z0), $fn = 6);
+// A hexagonal nut trap along z from z0 to z1, centred at [x, y]. rot = 0 puts its corners on the x axis.
+module zhex(x, y, z0, z1, af, rot = 30) {
+    translate([x, y, min(z0, z1)]) rotate([0, 0, rot]) cylinder(d = af / cos(30) + 2 * fit, h = abs(z1 - z0), $fn = 6);
 }
 
 // A hexagonal nut trap along x from x0 to x1, centred at [y, z]; af is the size across flats.
 module xhex(y, z, x0, x1, af) {
     translate([min(x0, x1), y, z]) rotate([0, 90, 0]) rotate([0, 0, 30])
         cylinder(d = af / cos(30) + 2 * fit, h = abs(x1 - x0), $fn = 6);
+}
+
+// Two bridging layers that roof a recess printed against the bed (the part printed with +x up), so the
+// hole above it needs no support. The first layer leaves a slot as wide as the hole across the recess, so
+// it prints as two bridges; the second leaves a square, bridging the other way off the first. xr is the
+// recess's roof, D the recess's (inscribed) diameter, d the hole's diameter; slot lengthens both along y.
+// Sized for 0.2mm layers (`layer` in params.scad).
+module bridge_layers_x(y, z, xr, D, d, slot = 0) {
+    w = 2 * sqrt(pow(D / 2, 2) - pow(d / 2, 2));   // the slot ends where it meets the recess's edge
+    box([xr - 0.01, y - w / 2 - slot, z - d / 2], [xr + layer, y + w / 2 + slot, z + d / 2]);
+    box([xr + layer - 0.01, y - d / 2 - slot, z - d / 2], [xr + 2 * layer + 0.01, y + d / 2 + slot, z + d / 2]);
+}
+
+// A screw hole along x with a counterbore on the bed side (x0), roofed by bridging layers.
+module counterbored_x(y, z, x0, depth, cb_d, hole_d, x1) {
+    xcyl(y, z, x0 - 1, x0 + depth, cb_d);
+    bridge_layers_x(y, z, x0 + depth, cb_d, hole_d);
+    xcyl(y, z, x0 + depth + 2 * layer, x1, hole_d);
 }
 
 // A slot along x, from [y0, z0] to [y1, z1] in the y-z plane, width d.
