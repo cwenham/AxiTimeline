@@ -73,7 +73,8 @@ motor_skin = 3;            // roll motors bolt to a 3mm skin at the bracket's in
 motor_face_x = plate_in + motor_skin;              // 248
 supply_motor = [supply[0] + gear_cd, supply[1]];   // in front of the supply cone, under the board
 takeup_motor = [takeup[0], takeup[1] - gear_cd];   // below the take-up cone
-drive_motor_face_x = 285;  // the drive motor stands 10 off the bracket, so its shaft enters the coupler by 12
+drive_motor_face_x = 285;  // the drive motor's mount holds its face 10 off the bracket, so its shaft enters the
+                           // coupler by 12
 coupler = [19, 25];        // 5-to-8mm flexible beam coupler, bought: diameter, length
 drive_rod_end = 261;       // the drive rod runs from x 240 (its +x bearing) to -261, 11 into the coupler: 501 long
 tail_travel = 15;          // the tailstock screw's travel

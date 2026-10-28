@@ -45,7 +45,7 @@ in it:
   so it needs no precision.
 - **The drive roller does the measuring.** It is the only part whose movement has to be exact.
 - **Little rises above the board, and only beyond the pen carriage's reach:** the pinch wheels and their rail,
-  the drive roller's bearing housings (21 above the board) and its motor (17 above).
+  the drive roller's bearing housings (21 above the board), and its motor and mount (33 above).
 - **It feeds towards the front.** That matches the default `feed = "towards-front"`: supply at the back,
   finished roll at the front where the operator can see it.
 
@@ -135,7 +135,8 @@ edge).
     can be set flush with the board and square to the AxiDraw's Y axis. Printed collars locate it endwise.
   - Clean the patina off where the bearings sit, and roll the rod on something flat to check it's straight.
 - **Drive:** the motor drives the rod directly, through a 5-to-8mm flexible beam coupler in a pocket in the
-  right front bracket, with no belt.
+  right front bracket, with no belt. The motor bolts to a separate printed mount, which screws to the outside
+  of that bracket, so the motor and coupler can be fitted together on the bench.
   - An 8.5mm roller and 200 steps per turn give 0.13mm per full step, or 0.008mm at 1/16 microstepping. That's
     well inside the 0.1mm target, and the coupler adds no play.
 - **Grit:** bands of epoxy and 120–180 grit aluminium oxide under the wheel tracks (X ±200 to ±215 for the 430

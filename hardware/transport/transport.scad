@@ -10,7 +10,7 @@ use <lib.scad>
 
 show_paper = true;  // in the assembly: the paper and rolls
 show_board = true;  // in the assembly: the board and AxiDraw
-part = "assembly"; // [assembly, back_bracket_left, back_bracket_right, front_bracket_left, front_bracket_right, drive_housing, dancer_guide_full, dancer_guide_plain, flag_slider, roller_half, dancer_half, drive_cone, tail_cone, tail_knob, motor_gear, spacers, rod_collar, pinch_block, pinch_arm, board_jaw, foot]
+part = "assembly"; // [assembly, back_bracket_left, back_bracket_right, front_bracket_left, front_bracket_right, drive_motor_mount, drive_housing, dancer_guide_full, dancer_guide_plain, flag_slider, roller_half, dancer_half, drive_cone, tail_cone, tail_knob, motor_gear, spacers, rod_collar, pinch_block, pinch_arm, board_jaw, foot]
 
 // ======================================================================================================
 // Brackets. Each is modelled on the +x side (the operator's left); the -x ones are built with side = -1,
@@ -111,15 +111,13 @@ module front_bracket(side) {
     pts = left
         ? [[335, -board_t], [398, -board_t], [398, 22], [452, 22], [452, -2], [495, -2], [495, 25], [515, 25],
            [515, -82], [440, -82], [434, -152], [376, -152], [360, -100], [335, -100]]
-        : [[335, -board_t], [398, -board_t], [398, 22], [452, 22], [452, -2], [495, -2], [495, 25], [515, 25],
+        : [[335, -board_t], [398, -board_t], [398, 33], [452, 33], [452, -2], [495, -2], [495, 25], [515, 25],
            [515, -82], [430, -95], [335, -95]];
     mirror([left ? 0 : 1, 0, 0]) difference() {
         union() {
             yz_plate(pts, plate_in, plate_out);
             leg_clamp_add(leg_y_front);
             seat_add(board_y1 - seat_depth, board_y1);
-            if (!left)   // the drive motor stands 7 off the plate, so its shaft enters the coupler by 10
-                box([plate_out, drive[0] - 25, drive[1] - 25], [drive_motor_face_x, drive[0] + 25, 22]);
         }
         leg_clamp_cut(leg_y_front);
         seat_cut(board_y1 - seat_depth, board_y1, -1);
@@ -134,11 +132,32 @@ module front_bracket(side) {
             motor_pocket_cut(takeup_motor);
         } else {
             tail_nut_cut(takeup);
-            // The coupler's pocket, open at the top for a hex key, and the drive motor's face.
-            box([plate_in + 3, drive[0] - 21, drive[1] - 24], [drive_motor_face_x - 3, drive[0] + 21, 40]);
+            // The coupler's pocket: open at the top, for a hex key to its set screw and the drive housing's
+            // nuts, and on the outer face, where the drive motor's mount covers it.
+            box([plate_in + 3, drive[0] - 13, drive[1] - 25], [plate_out + 1, drive[0] + 13, 40]);
             xcyl(drive[0], drive[1], plate_in - 1, plate_in + 4, 14);
-            nema_face_holes(drive[0], drive[1], drive_motor_face_x - 4, drive_motor_face_x + 1);
+            // pilot holes for the motor mount's four M3s, which cut their own thread
+            for (p = drive_mount_screws) xcyl(drive[0] + p[0], drive[1] + p[1], plate_out - 16, plate_out + 1, 2.7);
         }
+    }
+}
+
+// The drive motor's mount: a 10mm block that holds the motor's face 10 out from the front-right bracket, so
+// its shaft enters the coupler by 12. The motor bolts to it on the bench, with four M3 x 8 from the bracket
+// side (heads in counterbores); the coupler then goes on the shaft, and the whole lot slides onto the drive
+// rod and screws to the bracket with four M3 x 25 beside the motor. It prints motor face down, with no
+// supports. Modelled on the +x side.
+drive_mount_screws = [[-20, -29], [20, -29], [-20, 29], [20, 29]];   // [dy, dz] from the motor's axis
+
+module drive_motor_mount() {
+    difference() {
+        box([plate_out, drive[0] - 26, drive[1] - 35], [drive_motor_face_x, drive[0] + 26, drive[1] + 35]);
+        xcyl(drive[0], drive[1], plate_out - 1, drive_motor_face_x + 1, nema_boss + 1);   // boss and shaft
+        for (dy = [-1, 1], dz = [-1, 1]) {
+            xcyl(drive[0] + dy * nema_holes / 2, drive[1] + dz * nema_holes / 2, plate_out - 1, drive_motor_face_x + 1, m3);
+            xcyl(drive[0] + dy * nema_holes / 2, drive[1] + dz * nema_holes / 2, plate_out - 1, plate_out + 6.5, 6.2);
+        }
+        for (p = drive_mount_screws) xcyl(drive[0] + p[0], drive[1] + p[1], plate_out - 1, drive_motor_face_x + 1, m3);
     }
 }
 
@@ -275,11 +294,14 @@ module drive_cone() {
     }
 }
 
-// The bore through a cone, from its bearing's seat at x = seat towards its tip (dir = -1 along x): a 1.5mm
-// flat ring for the bearing's outer race to sit on, then 45 degrees in to 16mm, so it prints without support.
+// The bore through a cone, from the bottom of its bearing's pocket at x = seat towards its tip (dir = -1
+// along x): it narrows at 45 degrees straight from the pocket's wall to 16mm, so it prints without support.
+// The bearing's outer race seats on that slope, about 0.4mm past the pocket's bottom.
 module cone_bore(seat, dir) {
-    xcyl(0, 0, cone_tip_x - 1, seat + dir * 1.65, 16);
-    hull() { xcyl(0, 0, seat + dir * 1.65, seat + dir * 1.64, 16); xcyl(0, 0, seat - 0.01, seat + 0.01, 19.3); }
+    pocket_d = b608[1] + 2 * fit;
+    rise = (pocket_d - 16) / 2;
+    xcyl(0, 0, cone_tip_x - 1, seat + dir * rise, 16);
+    hull() { xcyl(0, 0, seat + dir * rise, seat + dir * (rise - 0.01), 16); xcyl(0, 0, seat - 0.01, seat + 0.01, pocket_d); }
 }
 
 // The tailstock cone: runs on a 608 clamped between two nuts on an M8x100 bolt, which screws through the
@@ -424,6 +446,7 @@ module assembly() {
     // brackets
     color("steelblue") { back_bracket(1); back_bracket(-1); front_bracket(1); front_bracket(-1); }
     color("cornflowerblue") both_sides() drive_housing();
+    color("cornflowerblue") mirror([1, 0, 0]) drive_motor_mount();
     color("cornflowerblue") { both_sides() board_jaw(board_y0, board_y0 + seat_depth, 1);
                               both_sides() board_jaw(board_y1 - seat_depth, board_y1, -1); }
     // dancer guides, flag sliders and sensors (on the back +x and front -x guides)
@@ -486,6 +509,7 @@ else if (part == "back_bracket_left") flat_x(1) back_bracket(1);
 else if (part == "back_bracket_right") flat_x(-1) back_bracket(-1);
 else if (part == "front_bracket_left") flat_x(1) front_bracket(1);
 else if (part == "front_bracket_right") flat_x(-1) front_bracket(-1);
+else if (part == "drive_motor_mount") translate([0, 0, drive_motor_face_x]) rotate([0, 90, 0]) drive_motor_mount();
 else if (part == "drive_housing") translate([0, 0, plate_in]) rotate([0, 90, 0]) drive_housing();
 else if (part == "dancer_guide_full") translate([0, 0, -guide_x[0]]) rotate([0, -90, 0]) dancer_guide(dancer_y_back, leg_y_back, 1, true);
 else if (part == "dancer_guide_plain") translate([0, 0, -guide_x[0]]) rotate([0, -90, 0]) dancer_guide(dancer_y_front, leg_y_front, -1, false);

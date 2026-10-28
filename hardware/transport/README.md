@@ -25,7 +25,8 @@ Tested with OpenSCAD 2021.01 on macOS (Intel).
 | `back_bracket_left` | 1 | Supply roll's drive cone and motor. Lay on its large flat face (as exported). |
 | `back_bracket_right` | 1 | Supply tailstock. The back roller's bolt slot here is the tracking trim. |
 | `front_bracket_left` | 1 | Take-up roll's drive cone and motor. |
-| `front_bracket_right` | 1 | Take-up tailstock, drive motor and coupler. The motor's face plate prints as a 42mm bridge. |
+| `front_bracket_right` | 1 | Take-up tailstock, and the pocket for the drive roller's coupler. |
+| `drive_motor_mount` | 1 | Holds the drive motor 10mm off the front-right bracket. Print it motor face down. |
 | `drive_housing` | 2 | The drive roller's 608s. Oversize bolt holes let you set its height and squareness. |
 | `dancer_guide_full` | 2 | Back left and front right: the flag slider's recess, and screw holes for two sensors. |
 | `dancer_guide_plain` | 2 | Back right and front left. |
@@ -51,7 +52,8 @@ Tested with OpenSCAD 2021.01 on macOS (Intel).
   into PLA, because PLA lets a press fit relax over time. Keep the transport away from radiators and sunny
   windows, since PLA softens at about 55°C.
 - **PETG or PETG-CF for the rest:**
-  - The three brackets that carry motors (`back_bracket_left`, `front_bracket_left`, `front_bracket_right`).
+  - The three brackets that carry motors (`back_bracket_left`, `front_bracket_left`, `front_bracket_right`),
+    and `drive_motor_mount`.
     The drivers hold current all the time, so the motors stay warm, and PLA creeps when it's warm and under
     load. The front two also hold the drive roller's alignment; PETG-CF is the stiffest choice for them.
   - `drive_housing` (it sets the drive roller's alignment), `motor_gear` and `drive_cone` (or nylon for
@@ -64,8 +66,6 @@ Tested with OpenSCAD 2021.01 on macOS (Intel).
     roofed by two bridging layers, sized for 0.2mm layers. If you print those parts at another layer height,
     change `layer` in `params.scad`.
   - Steps inside the cones and roller halves narrow at 45°.
-  - The front-right bracket's drive motor plate is the one long bridge, 42mm, so slow your bridging speed
-    for that part.
 - **Gears:** PETG or nylon, at 40% infill or more.
 - **Edge roller halves:** 10–15% infill, to keep them light.
 - **Dancer halves:** the infill is the dancer's weight. At 20% a dancer with its bolts comes to about 450g,
@@ -87,8 +87,11 @@ To buy or find:
 - **Bearings:** 14 × 608ZZ: two in each edge roller, two in each dancer, two for the drive roller, one in
   each cone.
 - **Coupler:** 1 × flexible beam coupler, 5mm to 8mm, about 19 × 25mm.
-- **Motors:** 3 × NEMA 17. The two roll motors bolt to their brackets' inner skins with M3 × 8 screws, from
-  inside; the drive motor bolts the same way from inside the coupler's pocket.
+- **Motors:** 3 × NEMA 17 (yours are 37mm long).
+  - The two roll motors bolt to their brackets' inner skins with M3 × 8 screws, from inside.
+  - The drive motor bolts to `drive_motor_mount` with M3 × 8 screws from the mount's bracket side (their
+    heads sit in counterbores). The mount then screws to the bracket with 4 × M3 × 25 beside the motor; these
+    cut their own thread in the bracket's pilot holes, so don't overtighten them.
 - **Dancer sensors:** 4 × Omron EE-SX672-WR slot sensors (NPN, 5mm slot), two on each full guide, each
   held by 2 × M3 × 25 into nuts captured in the guide's inner face.
 - **Springs:** 2 × small extension springs, about 6mm across and 20mm long, for the pinch arms.
@@ -114,6 +117,7 @@ To buy or find:
     2 × M5 × 25 with nuts; wheel axles 2 × M5 × 25 with nuts and washers.
 - **M3:**
   - 12 × M3 × 8 for the motors.
+  - 4 × M3 × 25 to fix the drive motor's mount to its bracket.
   - 4 × M3 × 6 grub screws with nuts, for the motor gears and rod collars.
   - 4 × M3 × 20 with nuts, as the spring pins.
   - 8 × M3 × 25 with nuts for the dancer sensors.
@@ -155,9 +159,14 @@ Everything else has room for any head:
 5. **Drive roller.**
    - Grit the rod where the pinch wheels run: 200 to 215mm either side of the paper's centreline.
    - Press the 608s into the housings and slide them onto the rod with a collar inside each.
-   - Bolt the housings to the front brackets, loosely.
-   - Fit the coupler and the drive motor on the right.
+   - Bolt the housings to the front brackets, loosely. On the right, their nuts go inside the coupler's pocket,
+     reached from its open top.
    - Set the rod's top flush with the board and square to the AxiDraw's Y axis, then tighten the housings.
+   - On the bench, bolt the drive motor to `drive_motor_mount`, then fit the coupler on the motor's shaft and
+     tighten its motor-side set screw.
+   - Slide the motor, mount and coupler onto the end of the rod, so the coupler sits in the bracket's pocket.
+     Screw the mount to the bracket, then turn the rod until the coupler's other set screw faces up, and
+     tighten it through the pocket's open top.
 6. **Back and front rollers.** Hold each between its brackets and screw the M8 × 60 axles in from outside,
    through the brackets' captured nuts. Put a 15mm spacer between each bracket and roller.
 7. **Roll holders.** On the left, bolt each drive cone on with a 9mm spacer, and fit its motor and gear. On

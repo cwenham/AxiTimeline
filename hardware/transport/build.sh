@@ -4,7 +4,7 @@
 set -e
 cd "$(dirname "$0")"
 OPENSCAD=${OPENSCAD:-/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD}
-PARTS="back_bracket_left back_bracket_right front_bracket_left front_bracket_right drive_housing
+PARTS="back_bracket_left back_bracket_right front_bracket_left front_bracket_right drive_motor_mount drive_housing
 dancer_guide_full dancer_guide_plain flag_slider roller_half dancer_half drive_cone
 tail_cone tail_knob motor_gear spacers rod_collar pinch_block pinch_arm board_jaw foot"
 [ $# -gt 0 ] && PARTS="$*"

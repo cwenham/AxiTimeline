@@ -69,7 +69,7 @@ module nema_face_holes(y, z, x0, x1) {
 }
 
 // A NEMA 17 body, for the assembly: face at x = face_x, body running away from the paper.
-module nema_body(y, z, face_x, len = 38) {
+module nema_body(y, z, face_x, len = 37) {
     s = sign(face_x);
     color("dimgray") box([face_x, y - nema / 2, z - nema / 2], [face_x + s * len, y + nema / 2, z + nema / 2]);
     color("silver") xcyl(y, z, face_x, face_x - s * 22, 5);
