@@ -1,0 +1,120 @@
+/* The preview panel: a toolbar, a banner for render failures, and the drawing on white paper. */
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+#bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border, transparent);
+  flex: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+#bar button {
+  font: inherit;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+
+#bar button:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
+
+#bar button[aria-pressed='true'] {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+#bar button:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 1px;
+}
+
+#zoom {
+  min-width: 4.5em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+#status {
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--vscode-descriptionForeground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#banner {
+  flex: none;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+  color: var(--vscode-inputValidation-errorForeground, var(--vscode-foreground));
+  background: var(--vscode-inputValidation-errorBackground);
+  border-bottom: 1px solid var(--vscode-inputValidation-errorBorder, transparent);
+  max-height: 30%;
+  overflow: auto;
+}
+
+#banner[hidden] {
+  display: none;
+}
+
+#view {
+  flex: 1;
+  overflow: auto;
+  cursor: grab;
+}
+
+#view.dragging {
+  cursor: grabbing;
+}
+
+/* The stage is at least the view's size, so small drawings sit in the middle; margin:auto centres without
+   clipping the start of a drawing larger than the view. */
+#stage {
+  display: flex;
+  box-sizing: border-box;
+  min-width: 100%;
+  min-height: 100%;
+  width: max-content;
+  padding: 16px;
+}
+
+#paper {
+  margin: auto;
+  background: #fff;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  line-height: 0;
+}
+
+#paper.empty {
+  display: none;
+}
+
+#drawing {
+  display: block;
+  user-select: none;
+  -webkit-user-drag: none;
+}

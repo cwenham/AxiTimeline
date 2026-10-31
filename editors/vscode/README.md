@@ -1,7 +1,7 @@
 # AxiTimeline for VS Code
 
-Editor support for `.axitl` files: syntax highlighting, completion, hover help, and errors and warnings from
-`axitime check`. Plain JavaScript with no dependencies and no build step.
+Editor support for `.axitl` files: syntax highlighting, completion, hover help, errors and warnings from
+`axitime check`, and a rendered preview. Plain JavaScript with no dependencies and no build step.
 
 ## What it does
 
@@ -35,21 +35,32 @@ Editor support for `.axitl` files: syntax highlighting, completion, hover help, 
   A file without a `timeline` is an include: checked on its own it's spared the missing-timeline error, and
   saving it checks the open timelines again, since they may include it. axitime gives a line but no column,
   so each squiggle covers its line.
+- **A rendered preview** beside the source: the preview button in the editor's title bar, *AxiTimeline: Open
+  Preview to the Side* (`Cmd+K V`, or `Ctrl+K V`), or *Open Preview* (`Cmd+Shift+V`) to open it in place. It's
+  the every-pen preview SVG from `axitime render --preview-only`, drawn on white paper whatever the theme, and
+  like the checks it shows the file as saved: it renders when opened and again on each save. Saving an include
+  re-renders every open preview, as does saving an `.svg`, `.csv`, `.tsv` or `.txt` file, since illustrations,
+  custom fonts and graph data come from those. If a save has errors the last good drawing stays, under a banner
+  saying what's wrong. *Fit* shows the whole timeline and *Fit height* fits the roll's width to the panel so you
+  scroll along it; `−`, `+` and *1:1* (the size it will be plotted) zoom, as do Ctrl or Cmd and the scroll
+  wheel, or a pinch, around the pointer. Drag to pan; with nothing to scroll up and down, the wheel moves along
+  the timeline. Keys: `+` and `-`, `0` for fit, `h` for fit height, `1` for 1:1. The zoom and position survive
+  the panel being hidden or VS Code reloading, and an open preview comes back after a reload.
 - `//` comment toggling, bracket matching, auto-closing quotes and brackets, indentation inside a group's
   `{ }` and after a lone `timeline`, and folding of groups and multi-line declarations.
 
 ### Settings
 
 - `axitl.check.enabled` (default on): run `axitime check` on open and save.
-- `axitl.check.command`: how to run axitime, one word per item, e.g.
+- `axitl.check.command`: how to run axitime, for checks and previews, one word per item, e.g.
   `["/Users/me/AxiTimeline/.venv/bin/axitime"]`. Left empty, the extension uses the `axitime` in the nearest
   `.venv` folder at or above the file (so anything inside this repo works after `uv sync`), else `axitime` on
   the PATH. For timelines kept elsewhere, point it at the repo's `.venv/bin/axitime`. That's quicker than
   `uv run`, which checks the environment is up to date before every run, and outside the repo needs `--project`
   to find it.
 
-Checking runs a program found in the workspace, so it only happens in a trusted workspace (VS Code's
-*Workspace Trust*). If axitime can't be run, the extension says so once and logs the details to the
+Checking and previewing run a program found in the workspace, so they only happen in a trusted workspace (VS
+Code's *Workspace Trust*). If axitime can't be run, the extension says so once and logs the details to the
 *AxiTimeline* output panel.
 
 ## Installing
@@ -77,15 +88,19 @@ To try it without installing, open a window with it loaded:
   under plain node).
 - `src/extension.js`: the completion and hover providers, and wiring for the checks.
 - `src/check.js`: runs `axitime check --json` and turns its report into diagnostics.
+- `src/preview.js`: the preview panels: runs `axitime render --preview-only` into a temporary folder per panel
+  and sends the page the SVG it writes (`<name>-preview.svg`).
+- `media/preview.js` and `media/preview.css`: the preview panel's page, which shows the SVG and zooms it.
 - `src/vocabulary.json`: the language's closed vocabularies: pens and their preview colours, fonts, entity
   keywords, parameters and values.
 - `src/docs.js`: the help text.
 
 ## Tests and keeping in step with the language
 
-- `node test/run.js` (from this folder, any node from 12 up) runs the completion, hover and checking tests,
-  driving the extension through a stand-in for the `vscode` API. The checking tests run the repo's
-  `.venv/bin/axitime`, so `uv sync` first; without it they're skipped.
+- `node test/run.js` (from this folder, any node from 12 up) runs the completion, hover, checking and preview
+  tests, driving the extension through a stand-in for the `vscode` API. The checking and preview tests run the
+  repo's `.venv/bin/axitime`, so `uv sync` first; without it they're skipped. The preview page's zooming runs
+  only in a webview, so it isn't covered: try it by hand after changing `media/`.
 - `uv run pytest` (from the repo root) includes `test/test_vocabulary.py`, which checks `vocabulary.json`
   against libaxitl and that the grammar highlights every pen, font, parameter and value. When the language
   gains a pen, font, parameter or value, that test fails until `vocabulary.json` and the grammar's patterns

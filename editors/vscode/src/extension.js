@@ -1,11 +1,14 @@
 'use strict';
-// Completion and hover help for .axitl files, and diagnostics from axitime check (check.js). Highlighting is the
+// Completion and hover help for .axitl files, diagnostics from axitime check (check.js), and a rendered preview
+// (preview.js). Highlighting is the
 // TextMate grammar in syntaxes/; comments, brackets and indentation are in language-configuration.json. What fits
 // where is worked out in analyse.js.
 
 const vscode = require('vscode');
+const fs = require('fs');
 const { completionContext, hoverTarget, splitComment, PENS } = require('./analyse');
 const { Checker } = require('./check');
+const { Previewer, VIEW_TYPE } = require('./preview');
 const docs = require('./docs');
 const vocabulary = require('./vocabulary.json');
 
@@ -27,20 +30,46 @@ const TEMPLATES = {
 function activate(context) {
   const selector = { language: 'axitl' };
   const checker = new Checker();
+  const previewer = new Previewer(context.extensionUri);
+  const preview = (column) => (uri) => {
+    const editor = vscode.window.activeTextEditor;
+    const target = uri instanceof vscode.Uri ? uri : editor && editor.document.languageId === 'axitl' && editor.document.uri;
+    if (!target) return vscode.window.showInformationMessage('Open an .axitl timeline to preview it.');
+    return previewer.show(target, column);
+  };
   context.subscriptions.push(
     vscode.languages.registerCompletionItemProvider(selector, { provideCompletionItems }, '=', '"', '(', '/'),
     vscode.languages.registerHoverProvider(selector, { provideHover }),
     checker,
+    previewer,
+    vscode.commands.registerCommand('axitl.preview.show', preview(vscode.ViewColumn.Active)),
+    vscode.commands.registerCommand('axitl.preview.showToSide', preview(vscode.ViewColumn.Beside)),
+    vscode.window.registerWebviewPanelSerializer(VIEW_TYPE, {
+      async deserializeWebviewPanel(panel, state) {
+        if (state && state.file && fs.existsSync(state.file)) return previewer.attach(state.file, panel);
+        panel.dispose(); // the timeline it showed has gone
+      },
+    }),
     vscode.workspace.onDidOpenTextDocument((document) => checker.check(document)),
-    vscode.workspace.onDidSaveTextDocument((document) => checker.saved(document)),
+    vscode.workspace.onDidSaveTextDocument((document) => {
+      checker.saved(document);
+      previewer.saved(document);
+    }),
+    vscode.workspace.onDidChangeTextDocument((event) => previewer.changed(event.document)),
     vscode.workspace.onDidCloseTextDocument((document) => checker.forget(document.uri.fsPath)),
-    vscode.workspace.onDidGrantWorkspaceTrust(() => checker.checkAll()),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => {
+      checker.checkAll();
+      previewer.renderAll();
+    }),
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration('axitl.check')) checker.checkAll();
+      if (event.affectsConfiguration('axitl.check')) {
+        checker.checkAll();
+        previewer.renderAll();
+      }
     })
   );
   checker.checkAll(); // documents already open when the extension started
-  return { checker }; // for the tests
+  return { checker, previewer }; // for the tests
 }
 
 function deactivate() {}

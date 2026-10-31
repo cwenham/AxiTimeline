@@ -1,10 +1,10 @@
 'use strict';
 const assert = require('assert');
 const path = require('path');
-const { registered, document } = require('./vscode-stub');
+const { vscode, registered, document } = require('./vscode-stub');
 const extension = require('../src/extension');
 
-extension.activate({ subscriptions: [] });
+extension.activate({ subscriptions: [], extensionUri: vscode.Uri.file(path.join(__dirname, '..')) });
 
 // Documents are placed in the repo's examples folder, so file names complete against real files.
 const EXAMPLES = path.join(__dirname, '..', '..', '..', 'examples');

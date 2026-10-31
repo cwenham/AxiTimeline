@@ -1,7 +1,7 @@
 {
   "name": "axitl",
   "displayName": "AxiTimeline (.axitl)",
-  "description": "Syntax highlighting, completion and hover help for the .axitl timeline language.",
+  "description": "Syntax highlighting, completion, hover help, checking and a rendered preview for the .axitl timeline language.",
   "version": "0.1.0",
   "publisher": "axitimeline",
   "license": "MIT",
@@ -18,10 +18,13 @@
     "Programming Languages"
   ],
   "main": "./src/extension.js",
+  "activationEvents": [
+    "onWebviewPanel:axitl.preview"
+  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "Checking runs axitime, a program found in the workspace, so files are only checked in a trusted workspace.",
+      "description": "Checking and previewing run axitime, a program found in the workspace, so they only happen in a trusted workspace.",
       "restrictedConfigurations": ["axitl.check.command"]
     }
   },
@@ -49,6 +52,67 @@
         "path": "./syntaxes/axitl.tmLanguage.json"
       }
     ],
+    "commands": [
+      {
+        "command": "axitl.preview.show",
+        "title": "Open Preview",
+        "category": "AxiTimeline",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "axitl.preview.showToSide",
+        "title": "Open Preview to the Side",
+        "category": "AxiTimeline",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "axitl.preview.showToSide",
+          "when": "editorLangId == axitl",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "axitl.preview.showToSide",
+          "when": "resourceLangId == axitl",
+          "group": "1_open"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "axitl.preview.showToSide",
+          "when": "resourceLangId == axitl",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "axitl.preview.show",
+          "when": "editorLangId == axitl"
+        },
+        {
+          "command": "axitl.preview.showToSide",
+          "when": "editorLangId == axitl"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "axitl.preview.showToSide",
+        "key": "ctrl+k v",
+        "mac": "cmd+k v",
+        "when": "editorLangId == axitl && !notebookEditorFocused"
+      },
+      {
+        "command": "axitl.preview.show",
+        "key": "ctrl+shift+v",
+        "mac": "cmd+shift+v",
+        "when": "editorLangId == axitl && !notebookEditorFocused"
+      }
+    ],
     "configuration": {
       "title": "AxiTimeline",
       "properties": {
@@ -62,7 +126,7 @@
           "items": { "type": "string" },
           "default": [],
           "scope": "machine-overridable",
-          "markdownDescription": "The command that runs axitime, one word per item, e.g. `[\"/Users/me/AxiTimeline/.venv/bin/axitime\"]`. When empty, the `axitime` in the nearest `.venv` folder at or above the file is used, else `axitime` on the PATH. That's quicker than `uv run`, which checks the environment is up to date before every run."
+          "markdownDescription": "The command that runs axitime, for checks and previews, one word per item, e.g. `[\"/Users/me/AxiTimeline/.venv/bin/axitime\"]`. When empty, the `axitime` in the nearest `.venv` folder at or above the file is used, else `axitime` on the PATH. That's quicker than `uv run`, which checks the environment is up to date before every run."
         }
       }
     },

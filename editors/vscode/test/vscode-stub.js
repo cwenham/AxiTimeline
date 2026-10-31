@@ -87,7 +87,58 @@ const CompletionItemKind = {};
   (name) => (CompletionItemKind[name] = name)
 );
 
-const registered = {};
+/** A webview panel that records what it's sent, and can play the page saying it's ready. */
+class WebviewPanel {
+  constructor(viewType, title, column, options) {
+    this.viewType = viewType;
+    this.title = title;
+    this.column = column;
+    this.revealed = 0;
+    this.disposed = false;
+    this.posted = [];
+    this.listeners = { message: [], dispose: [] };
+    const panel = this;
+    this.webview = {
+      options,
+      html: '',
+      cspSource: 'vscode-webview://stub',
+      asWebviewUri: (uri) => `vscode-webview://stub${uri.fsPath}`,
+      postMessage(message) {
+        panel.posted.push(message);
+        return Promise.resolve(true);
+      },
+      onDidReceiveMessage(listener) {
+        panel.listeners.message.push(listener);
+        return { dispose() {} };
+      },
+    };
+    panels.push(this);
+  }
+  /** The last thing the page was told. */
+  get latest() {
+    return this.posted[this.posted.length - 1];
+  }
+  receive(message) {
+    for (const listener of this.listeners.message) listener(message);
+  }
+  reveal(column) {
+    this.revealed++;
+    this.column = column;
+  }
+  onDidDispose(listener) {
+    this.listeners.dispose.push(listener);
+    return { dispose() {} };
+  }
+  dispose() {
+    if (this.disposed) return;
+    this.disposed = true;
+    for (const listener of this.listeners.dispose) listener();
+  }
+}
+
+const panels = []; // every webview panel created
+const registered = { commands: {} };
+const information = []; // messages shown with window.showInformationMessage
 const settings = {}; // axitl.* settings, by key without the prefix
 const warnings = []; // messages shown with window.showWarningMessage
 const vscode = {
@@ -101,6 +152,7 @@ const vscode = {
   Hover,
   Uri,
   FileType,
+  ViewColumn: { Active: -1, Beside: -2 },
   languages: {
     registerCompletionItemProvider(selector, provider, ...triggers) {
       registered.completion = { selector, provider, triggers };
@@ -113,19 +165,36 @@ const vscode = {
     createDiagnosticCollection: (name) => new DiagnosticCollection(name),
   },
   window: {
+    activeTextEditor: undefined,
+    createWebviewPanel: (...args) => new WebviewPanel(...args),
+    registerWebviewPanelSerializer(viewType, serializer) {
+      registered.serializer = { viewType, serializer };
+      return { dispose() {} };
+    },
+    showInformationMessage(message) {
+      information.push(message);
+      return Promise.resolve(undefined);
+    },
     createOutputChannel: () => ({ lines: [], appendLine(line) { this.lines.push(line); }, show() {}, dispose() {} }),
     showWarningMessage(message) {
       warnings.push(message);
       return Promise.resolve(undefined);
     },
   },
-  commands: { executeCommand: () => Promise.resolve() },
+  commands: {
+    executeCommand: () => Promise.resolve(),
+    registerCommand(name, fn) {
+      registered.commands[name] = fn;
+      return { dispose() {} };
+    },
+  },
   workspace: {
     isTrusted: true,
     textDocuments: [],
     getConfiguration: () => ({ get: (key, fallback) => (key in settings ? settings[key] : fallback) }),
     onDidOpenTextDocument: disposable,
     onDidSaveTextDocument: disposable,
+    onDidChangeTextDocument: disposable,
     onDidCloseTextDocument: disposable,
     onDidGrantWorkspaceTrust: disposable,
     onDidChangeConfiguration: disposable,
@@ -154,7 +223,8 @@ function document(text, fsPath) {
     lineCount: lines.length,
     lineAt: (i) => ({ text: lines[i] }),
     getText: () => text,
+    isDirty: false,
   };
 }
 
-module.exports = { vscode, registered, settings, warnings, document };
+module.exports = { vscode, registered, settings, warnings, information, panels, document };
