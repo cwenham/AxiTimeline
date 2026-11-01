@@ -244,6 +244,52 @@ class Credits:
     location: SourceLocation
 
 
+class NoteAnchor(Enum):
+    """Where along the roll a note goes (§17), when it isn't anchored to a date."""
+
+    START = "start"
+    MIDDLE = "middle"
+    END = "end"
+
+
+class Edge(Enum):
+    """The finished edge a note is fixed to (§17)."""
+
+    TOP = "top"
+    BOTTOM = "bottom"
+
+
+NOTE_WIDTH_EMS = 30.0  # a note's default width, in ems of its font_size: about 60 characters a line (§17)
+
+
+@dataclass(frozen=True)
+class NoteParagraph:
+    text: str  # its lines in the source joined with single spaces; wrapped to the note's width by layout
+    heading: bool
+    location: SourceLocation
+
+
+@dataclass(frozen=True)
+class Note:
+    """A block of free text fixed to the top or bottom edge (§17): paragraphs, perhaps with headings, wrapped to
+    a width and anchored to the start, middle or end of the paper, or near a date."""
+
+    paragraphs: tuple[NoteParagraph, ...]
+    pen: str
+    font: str  # keys into TimelineDocument.fonts
+    font_size_mm: float
+    heading_font: str
+    heading_font_size_mm: float
+    anchor: NoteAnchor | DateValue
+    edge: Edge
+    width_mm: float | None  # the longest a line may be; None: NOTE_WIDTH_EMS of font_size, or the paper's length
+    align: Horizontal  # which way its lines are aligned
+    margin_mm: float  # from its finished edge, and from either end of the paper
+    clearance_mm: float  # along the roll, from the title, the credits and other notes beside it
+    order: int  # among notes, in document order
+    location: SourceLocation
+
+
 @dataclass(frozen=True)
 class TimelineDocument:
     timeline: TimelineSettings
@@ -252,6 +298,7 @@ class TimelineDocument:
     graphs: tuple[Graph, ...] = ()  # backgrounds (§15), in document order
     title: Title | None = None  # §16.1
     credits: Credits | None = None  # §16.2
+    notes: tuple[Note, ...] = ()  # §17, in document order
 
     def walk(self) -> Iterator[Entity]:
         """Every entity, groups before their members, in document order."""

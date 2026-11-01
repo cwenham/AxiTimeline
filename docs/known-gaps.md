@@ -125,6 +125,20 @@ Still open:
   of a line's size between one line's descenders and its capitals, 0.6 more above a heading, and 1.5mm kept clear
   around both.
 
+## Notes (language spec §17, added 2026-11-01)
+
+Implemented 2026-11-01 and tried on a render (`examples/notes.axitl`). Still open:
+
+- **Spacing values** are provisional (in `LayoutStyle`, the parser and `NOTE_WIDTH_EMS` in `model.py`): a 5mm
+  margin, 25mm clear of the title, credits and other notes, a default width of 30 ems, 0.5 of a line's size more
+  above a paragraph after another, and the title's and credits' line and heading spacing (§16).
+- **Only left and right alignment.** Justified text (spaces stretched so both edges are straight) would suit
+  narration; centred text could suit a note under a date. Neither is planned until one is wanted.
+- **A note under a period, not a date.** A note anchored to a date is centred on it. Anchoring one to a range
+  (centred on the period, or starting at its start) would suit a summary of the period.
+- **Notes beside each other keep the full clearance** (25mm by default), the same as from the title and credits.
+  On paper a smaller gap between two notes may read better.
+
 ## Smaller points
 
 - **Closed pen vocabulary** (language spec §3.4): no brown, pink, white, cyan or magenta. Adding one later is a

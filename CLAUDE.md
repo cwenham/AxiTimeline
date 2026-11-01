@@ -58,6 +58,8 @@ began as are superseded. Change the specs here, in the same commit as the code t
   move the foreground; their points (CSV or inline) are read in `libaxitl/graphdata.py`.
 - The title and credits (language spec §16) are laid out first, in `_Layout.corners` (`libaxitl/layout.py`),
   reserving the lanes they cross so the rest of the layout keeps clear of them.
+- Notes (language spec §17, free text on the top or bottom edge) are placed straight after them, in
+  `_Layout.notes`; inside a note's `{ }` body the preprocessor joins adjacent quoted lines into one paragraph.
 - `hardware/transport/` holds the paper transport's printed parts in OpenSCAD (the design is `docs/transport.md`).
   `./build.sh` there exports every part to its `stl/` (ignored by git) and checks each fits the Prusa Core One's bed.
 - Built-in fonts live in `libaxitl/src/libaxitl/fonts/data/` (copied from Inkscape's Hershey Text

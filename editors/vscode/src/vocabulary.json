@@ -4,6 +4,7 @@
   "bandedEntities": ["person", "span", "group"],
   "backgrounds": ["graph"],
   "corners": ["title", "credits"],
+  "notes": ["note"],
   "pens": {
     "red": "#c62828", "orange": "#ef6c00", "yellow": "#f9a825", "green": "#2e7d32", "blue": "#1565c0",
     "indigo": "#3949ab", "violet": "#6a1b9a", "black": "#212121", "grey": "#757575",
@@ -42,6 +43,10 @@
   ],
   "titleParameters": ["font", "font_size", "subtitle", "subtitle_font", "subtitle_font_size", "align", "margin", "gap"],
   "creditsParameters": ["font", "font_size", "heading_font", "heading_font_size", "max_height", "align", "margin", "gap"],
+  "noteParameters": [
+    "anchor", "edge", "width", "align", "font", "font_size", "heading_font", "heading_font_size", "margin",
+    "clearance"
+  ],
   "values": {
     "fill": ["none", "solid", "diagonal", "crosshatch", "wave", "dots"],
     "time_label": ["none", "date", "year", "month", "day", "hour", "min", "sec"],
@@ -60,7 +65,9 @@
     "time_format": ["decimal_year"],
     "at": ["left", "right"],
     "align": ["left", "right"],
-    "pens": ["auto"]
+    "pens": ["auto"],
+    "anchor": ["start", "middle", "end"],
+    "edge": ["top", "bottom"]
   },
   "scaleUnits": ["year", "day", "hour", "minute", "second"]
 }

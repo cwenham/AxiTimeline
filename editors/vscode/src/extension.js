@@ -31,6 +31,10 @@ const TEMPLATES = {
     'credits max_height=${1:25mm} illustration(${2:logo.svg}) {\n\theading "${3:Design and research}"\n\t"${4:Name, year}"\n}$0',
     'credits illustration(logo.svg) { … }',
   ],
+  note: [
+    'note anchor=${1:start} edge=${2:top} {\n\t"${3:A paragraph of text.}"\n}$0',
+    'note anchor=start edge=top { … }',
+  ],
   heading: ['heading "${1:Sources}"$0', 'heading "Sources"'],
 };
 
@@ -126,9 +130,9 @@ function statementItems(at, range, after) {
   // On a line that already has more after the cursor, a keyword goes in alone rather than as a template.
   const bare = splitComment(after).code.trim() !== '';
   const continuingSettings = at.continues && (at.continues.decl === 'timeline' || at.continues.decl === 'include');
-  const backgrounds = at.inBody ? [] : vocabulary.backgrounds.concat(vocabulary.corners); // not inside a group
+  const backgrounds = at.inBody ? [] : vocabulary.backgrounds.concat(vocabulary.corners, vocabulary.notes); // not inside a group
   let words;
-  if (at.body === 'credits') words = ['heading']; // a credits line is a quoted string, perhaps a heading
+  if (at.body === 'credits' || at.body === 'note') words = ['heading']; // a line is a quoted string, perhaps a heading
   else if (at.marks) words = vocabulary.entities;
   else words = (at.timeline ? ['timeline'] : []).concat('include', vocabulary.entities, backgrounds);
   const items = words.map((word, i) => {
@@ -139,7 +143,7 @@ function statementItems(at, range, after) {
     if (!bare) {
       item.insertText = new vscode.SnippetString(TEMPLATES[word][0]);
       item.detail = TEMPLATES[word][1];
-      if (word === 'include' || word === 'graph' || word === 'credits') item.command = SUGGEST;
+      if (word === 'include' || word === 'graph' || word === 'credits' || word === 'note') item.command = SUGGEST;
     }
     return item;
   });
@@ -159,6 +163,7 @@ function parameterItems(decl, used, range, group, owner) {
   } else if (decl === 'graph') keys = vocabulary.graphParameters;
   else if (decl === 'title') keys = vocabulary.titleParameters;
   else if (decl === 'credits') keys = vocabulary.creditsParameters;
+  else if (decl === 'note') keys = vocabulary.noteParameters;
   else {
     keys = vocabulary.entityParameters.filter(
       (key) =>
@@ -187,7 +192,7 @@ function itemItems(at, range) {
   const items = [];
   const entity = vocabulary.entities.includes(at.decl);
   const corner = vocabulary.corners.includes(at.decl);
-  if ((entity || corner || at.decl === 'graph') && !at.pen) {
+  if ((entity || corner || at.decl === 'graph' || at.decl === 'note') && !at.pen) {
     items.push(...penItems(range, '0', at.decl === 'graph' ? vocabulary.defaultGraphPen : null));
   }
   items.push(...parameterItems(at.decl, at.used, range, '1', at.owner));

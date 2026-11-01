@@ -38,7 +38,7 @@ test('activation registers completion, with its trigger characters, and hover fo
 
 test('keywords go in as templates, ready to tab through', async () => {
   const items = await complete('|');
-  assert.deepStrictEqual(labels(items), ['timeline', 'include', 'person', 'event', 'span', 'group', 'graph', 'title', 'credits']);
+  assert.deepStrictEqual(labels(items), ['timeline', 'include', 'person', 'event', 'span', 'group', 'graph', 'title', 'credits', 'note']);
   assert.strictEqual(find(items, 'person').insertText.value, 'person "${1:Name}" ${2:1900}-${3:1950}$0');
   assert.strictEqual(find(items, 'group').insertText.value, 'group "${1:Name}" ${2:1900}-${3:1950} {\n\t$0\n}');
   assert.ok(find(items, 'timeline').insertText.value.includes('\twidth=${4:210}'));
@@ -104,7 +104,7 @@ test('a scale keeps the number typed and offers each unit', async () => {
 test('include names .axitl files and folders beside the document, but not the document itself', async () => {
   const items = await complete('include "|"');
   assert.deepStrictEqual(labels(items), [
-    'century.axitl', 'chernobyl.axitl', 'crash-1929.axitl', 'labels.axitl', 'reactor-power.axitl', 'title-and-credits.axitl',
+    'century.axitl', 'chernobyl.axitl', 'crash-1929.axitl', 'labels.axitl', 'notes.axitl', 'reactor-power.axitl', 'title-and-credits.axitl',
     'common/', 'data/', 'illustrations/',
   ]);
   assert.strictEqual(find(items, 'common/').command.command, 'editor.action.triggerSuggest');
@@ -241,4 +241,39 @@ test('hover help for the title and credits and their parameters', () => {
   assert.ok(hover('credits illustration(logo.svg fi|ll=solid) {').contents.value.includes('dense hatch'));
   assert.ok(hover('credits illustration(logo.svg pe|ns=auto) {').contents.value.includes('own pass'));
   assert.ok(hover('credits illustration(logo.svg pens=au|to) {').contents.value.includes('#ff6600 to orange'));
+});
+
+// -- notes (language spec §17) --------------------------------------------------------------------------------
+
+test('a note offers pens and its own parameters, but no illustration', async () => {
+  const vocabulary = require('../src/vocabulary.json');
+  for (const source of ['note |', 'note "Dates are Gregorian." |', 'note anchor=end\n    |']) {
+    const items = await complete(source);
+    const props = labels(items.filter((i) => i.kind === 'Property'));
+    assert.ok(props.includes('clearance='), source);
+    assert.ok(!find(items, 'illustration(…)'), source);
+  }
+  const items = await complete('note |');
+  assert.ok(find(items, 'blue'));
+  assert.deepStrictEqual(labels(items.filter((i) => i.kind === 'Property')), vocabulary.noteParameters.map((k) => `${k}=`));
+});
+
+test("a note's anchor and edge offer their values", async () => {
+  assert.deepStrictEqual(labels(await complete('note anchor=|')), ['start', 'middle', 'end']);
+  assert.deepStrictEqual(labels(await complete('note edge=|')), ['top', 'bottom']);
+  assert.ok(labels(await complete('note heading_font=|')).includes('HersheySansMed'));
+});
+
+test("inside a note's body only a heading can start a line", async () => {
+  const items = await complete('note {\n  "A paragraph"\n  |\n}');
+  assert.deepStrictEqual(labels(items), ['heading']);
+  const top = await complete('|');
+  assert.ok(find(top, 'note').insertText.value.startsWith('note anchor=${1:start} edge=${2:top} {'));
+});
+
+test('hover explains a note and its parameters', () => {
+  assert.ok(hover('no|te anchor=start').contents.value.includes('§17'));
+  assert.ok(hover('note cle|arance=10mm').contents.value.includes('25mm'));
+  assert.ok(hover('note anchor=end wid|th=80mm').contents.value.includes('wrapped'));
+  assert.ok(hover('note anchor=mid|dle').contents.value.includes('middle of the paper'));
 });

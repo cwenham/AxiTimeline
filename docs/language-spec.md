@@ -6,7 +6,7 @@ Status: working draft, reflecting all decisions taken in design discussion so fa
 
 This file (`docs/language-spec.md` in the AxiTimeline repo) is the **canonical copy** of this spec, and changes are made here alongside the code. The claude.ai artifact it began as is superseded.
 
-History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7). Added 2026-11-01: the title and credits (§16), outline fonts converted to SVG fonts (§3.8), `illustration(…)` on an indented continuation line (§3.10), and an illustration's filled shapes hatched and its colours drawn in pens of their own (§3.5).
+History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7). Added 2026-11-01: the title and credits (§16), outline fonts converted to SVG fonts (§3.8), `illustration(…)` on an indented continuation line (§3.10), and an illustration's filled shapes hatched and its colours drawn in pens of their own (§3.5). Added the same day: notes, paragraphs of free text on the top or bottom edge (§17).
 
 ## 1. System overview
 
@@ -16,7 +16,7 @@ The software architecture — `libaxitl` (parse → layout → render) and the `
 
 ## 2. Entity types
 
-`person`, `event`, `span`, `group`, `include`, plus the top-level `timeline` directive. Keywords are lowercase. Illustrations are attachments to entities, not entities in their own right (§3.5). A `graph` (§15) isn't an entity either: it is a background, drawn under the entities and taking no part in their layout. Nor are the `title` and `credits` (§16), which sit in two corners of the paper and are kept clear of by everything else.
+`person`, `event`, `span`, `group`, `include`, plus the top-level `timeline` directive. Keywords are lowercase. Illustrations are attachments to entities, not entities in their own right (§3.5). A `graph` (§15) isn't an entity either: it is a background, drawn under the entities and taking no part in their layout. Nor are the `title` and `credits` (§16), which sit in two corners of the paper and are kept clear of by everything else, or a `note` (§17), free text on the top or bottom edge, kept clear of in the same way.
 
 ## 3. Compact line syntax
 
@@ -296,7 +296,7 @@ Layout runs in three phases, each consuming the results of the one before:
 2.  **Phase B** — events get a side (§6.1) and a base pole length (§8.1); illustrations attached to events are placed; illustrations in a pole's path are nudged
 3.  **Phase C** — label collisions involving event flags are resolved (§8.2)
 
-Backgrounds (§15) are placed after all three phases, and nothing in them looks at backgrounds. The title and credits (§16) are placed before Phase A, and every phase keeps clear of them.
+Backgrounds (§15) are placed after all three phases, and nothing in them looks at backgrounds. The title and credits (§16), then notes (§17), are placed before Phase A, and every phase keeps clear of them.
 
 For each banded entity without a forced `^`/`v`, side is resolved during layout (not parsing), jointly with lane assignment:
 
@@ -445,7 +445,7 @@ timeline ... tick_label_every=10   // override the derived n
 3.  Span / group fills
 4.  Event poles + flags (on top of fills)
 5.  Illustrations (fine detail, and by this point nothing should be crossing into their footprint)
-6.  The title and credits, with their illustrations (§16)
+6.  The title and credits, with their illustrations (§16), and notes (§17)
 
 Crop marks (every 50cm, in pencil) are added by the interpreter's renderer and aren't under the author's control — see the interpreter spec.
 
@@ -465,7 +465,7 @@ Every numeric physical-length value anywhere in this language — `width=`, `len
 
 This doesn't touch `scale`, which is always an explicit rate (`mm/year`, `mm/day`, etc.) rather than a bare length, and isn't affected by this rule. It also doesn't touch dates, priorities, or any other numeric field — only physical-length parameters.
 
-The same rule covers a graph's `height=`, `fill_depth=`, `shadow=`, and `value_scale=` when it is a length (§15), and the title's and credits' `font_size=`, `subtitle_font_size=`, `heading_font_size=`, `max_height=`, `margin=`, `gap=` and illustration `height=` (§16).
+The same rule covers a graph's `height=`, `fill_depth=`, `shadow=`, and `value_scale=` when it is a length (§15), the title's and credits' `font_size=`, `subtitle_font_size=`, `heading_font_size=`, `max_height=`, `margin=`, `gap=` and illustration `height=` (§16), and a note's `width=`, `font_size=`, `heading_font_size=`, `margin=` and `clearance=` (§17).
 
 ## 15. Backgrounds and graphs (added 2026-10-24)
 
@@ -680,3 +680,61 @@ credits max_height=25mm illustration(Logo-Colour.svg fill=solid pens=auto) {    
 - The text is drawn as strokes in the pen given, by the same text shaping as everything else (§3.8), so missing characters are replaced with a warning.
 - The illustration is drawn as every illustration is (§3.5): by default the outlines of its shapes, all in the block's pen; with `fill=` its filled shapes hatched; and with `pens=` its colours in pens of their own, so a logo in two colours is plotted in two passes.
 - They are drawn last, after illustrations (§11).
+
+## 17. Notes (added 2026-11-01)
+
+A **note** is free text, typically a paragraph or two, fixed to the top or bottom edge of the paper: narration that goes with the timeline, such as a summary of a period, or notes about the timeline itself. Like the title and credits (§16) it isn't an entity: it has no lane, it's placed before anything else, and everything else keeps clear of it.
+
+### 17.1 Declaration
+
+``` text
+note anchor=start {
+    heading "About this timeline"
+    "People are drawn above the line and wars below it. Each bar runs from birth to death,"
+    "or from the start of a war to its end; a torn end means the story carries on."
+
+    "Dates are Gregorian throughout."
+}
+
+note "The century ends with the web, a few years old." anchor=end edge=bottom align=right
+```
+
+- A note's text is either one quoted string after `note` (a single paragraph) or a `{ }` body, not both. As with a group (§9), the `{` ends the declaration's last line.
+- In the body, each line is a quoted string, or `heading` and a quoted string, as in the credits (§16.2). Quoted lines that follow one another make **one paragraph**, joined with a space, so a long paragraph can be written over several short lines; a blank line ends it, and the next quoted line starts another. A comment line (§3.9) doesn't end a paragraph. A heading is a paragraph of its own. Spaces inside the text are collapsed when it is wrapped.
+- A `//` inside the quotes is text, not a comment (§3.9).
+- A trailing pen keyword (§3.4) sets its pen. Default: `black`.
+- A document may have any number of notes, from the main file or included ones. A note can't be inside a group. An include's `priority=` and `side=` (§5) don't apply to notes, and a note can't have an illustration.
+
+| Parameter | Default | |
+|---|---|---|
+| `anchor=` | `start` | `start`, `middle`, `end`, or a date (§3.3): §17.2 |
+| `edge=` | `top` | `top` or `bottom`: which finished edge it sits against |
+| `width=` | 30 × `font_size`, or the paper's length inside the margins if that is shorter | the longest a line may be (a length, along the roll) |
+| `align=` | `left` | which way the lines are aligned: `left` or `right` |
+| `font=`, `font_size=` | the timeline's | §3.8 |
+| `heading_font=` | the note's `font` | |
+| `heading_font_size=` | 1.25 × the note's `font_size` | |
+| `margin=` | `5mm` | from its edge, and from either end of the paper |
+| `clearance=` | `25mm` | along the roll, from the title, the credits and other notes: §17.3 |
+
+### 17.2 Placement
+
+- **Across the roll.** A note on the `top` edge has its ink start `margin` below the finished top edge; one on the `bottom` edge has its ink end `margin` above the finished bottom edge. The default `5mm` clears the crop marks (interpreter spec, "Crop marks"). A top note is above the baseline and a bottom note below it, and each must keep 1.5mm clear of the inner edge of its side's first lane, as the title and credits do (§16.3); one that doesn't fit is a fatal error.
+- **Wrapping.** Each paragraph is broken into lines no longer than `width=`, measured by the fonts' advance widths, filling each line in turn. Lines aren't hyphenated or justified. A word too long for a line on its own gets a line anyway and runs past the width, with a warning. A `width=` longer than the paper inside its margins is a fatal error. At the default 30 ems a line holds about 60 characters of the built-in fonts.
+- **Lines** are spaced as in the title and credits (§16.3): from one line's descenders to the next line's capitals is 0.4 of the next line's size. A paragraph after another gets 0.5 of its size more, and a heading, unless it is the first line, 0.6 of its own size more. A paragraph straight after its heading gets nothing extra. These spacings are provisional (`docs/known-gaps.md`).
+- **Along the roll**, `anchor=` says where it would like to be, and margins and alignment are measured to the ink, as for the title and credits:
+  - `start`: its ink starts `margin` from the start of the paper;
+  - `end`: its ink ends `margin` from the end of the paper;
+  - `middle`: centred on the middle of the paper;
+  - a date: centred on where the date falls along the roll (the start of its period, as for an event, §3.3). A note anchored outside the timeline is left out with a warning, like an entity (§4.2). Near either end, it is moved inward just far enough to keep inside its margins.
+
+### 17.3 Keeping clear
+
+- **Of the title, the credits and other notes.** Notes are placed after the title and credits, in document order. Each keeps `clearance` (default `25mm`) along the roll from the title, the credits and every note placed before it, wherever the two would stand side by side across the roll (their line boxes, plus 1.5mm, overlapping across it). So a note at the `start` of the top edge begins 25mm past the end of the title, and one at the `end` of the bottom edge ends 25mm before the credits, while the title never pushes a note on the bottom edge. `clearance=` on the note changes the distance, `0` included.
+- A note that has to move away from its anchor for this moves the least distance it can, in either direction (later, if both are equal), staying inside its margins. One anchored to a date that no longer reaches its date is a warning naming what it moved for. If there is nowhere along its edge for it, that's a fatal error.
+- **By everything else**, exactly as for the title and credits (§16.3): every lane the note crosses, counting its lines' whole boxes plus 1.5mm across the roll, is reserved along its length, so no bar, bar label or illustration is placed there, and the reservation doesn't count towards how much of a side is in use when §6 breaks a tie. Event flags treat a note, plus 1.5mm, as a fixed obstacle (§8.2); poles and leaders are broken around it (§8); and graphs are broken around its text (§15.8).
+
+### 17.4 Drawing
+
+- The text is drawn as strokes in the note's pen, by the same text shaping as everything else (§3.8), so missing characters are replaced with a warning.
+- Notes are drawn last, with the title and credits (§11).

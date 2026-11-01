@@ -3,7 +3,9 @@
 Produces the canonical *flattened text* the grammar parses and the job hash covers (interpreter spec, "Public
 shape"): comments removed, continuation lines joined onto their declaration with one space, whitespace
 trimmed and (outside quoted strings) collapsed to single spaces, blank lines dropped, and every ``include`` replaced by the included file's own flattened text with
-the include's ``priority=`` offset and ``side=`` override written into each entity line's prefix.
+the include's ``priority=`` offset and ``side=`` override written into each entity line's prefix. Inside a
+note's ``{ }`` body (§17), lines that are each a quoted string and follow one another are joined into one
+string, a paragraph, so there a blank line (which ends the run) is what separates paragraphs.
 
 This pass has to understand comments (a commented-out include must not be followed, §3.9) and continuation
 lines (an include's ``priority=`` may be on an indented line of its own, §3.10), so it tracks string state
@@ -26,6 +28,8 @@ _ENTITY_HEAD = re.compile(r"^([\^v]?)([!\-]*)(person|event|span|group)(?![\w])")
 _INCLUDE = re.compile(r"^include(?![\w])(.*)$")
 _TIMELINE = re.compile(r"^timeline(?![\w])")
 _QUOTED = re.compile(r'^\s*"((?:[^"\\]|\\.)*)"(.*)$')
+_NOTE_OPEN = re.compile(r"^note(?![\w]).*\{$")  # a note declaration opening its body of paragraphs (§17)
+_PARAGRAPH_LINE = re.compile(r'^"(?:[^"\\]|\\.)*"$')  # a line that is one quoted string and nothing else
 
 
 @dataclass(frozen=True)
@@ -109,6 +113,7 @@ class Flattener:
         self._fetcher = fetcher
         self._sink = sink
         self.lines: list[LogicalLine] = []
+        self._in_note = False  # inside a note's { } body, where adjacent quoted lines make one paragraph
 
     def flatten(self, text: str, name: str) -> list[LogicalLine]:
         self._file(text, name, (name,), 0, None)
@@ -119,12 +124,19 @@ class Flattener:
         decl: list[str] = []
         decl_line = 0
         decl_glued = False
+        paragraph = False  # decl is a run of a note's quoted lines, which the next quoted line joins
 
         def flush() -> None:
-            nonlocal decl
+            nonlocal decl, paragraph
             if decl:
-                self._declaration(" ".join(decl), SourceLocation(name, decl_line), decl_glued, chain, offset, side)
+                joined = " ".join(decl)
+                self._declaration(joined, SourceLocation(name, decl_line), decl_glued, chain, offset, side)
+                if _NOTE_OPEN.match(joined):
+                    self._in_note = True
+                elif joined.startswith("}"):
+                    self._in_note = False
             decl = []
+            paragraph = False
 
         for lineno, raw in enumerate(text.split("\n"), 1):
             code, had_comment, glued, unterminated = _split_comment(raw)
@@ -157,9 +169,15 @@ class Flattener:
                 else:
                     decl.append(stripped)
                     decl_glued = decl_glued or glued
+                    paragraph = False
+                continue
+            quoted = _PARAGRAPH_LINE.match(stripped) is not None
+            if paragraph and quoted:
+                decl[-1] = decl[-1][:-1] + " " + stripped[1:]  # one paragraph: the strings joined with a space
                 continue
             flush()
             decl, decl_line, decl_glued = [stripped], lineno, glued
+            paragraph = quoted and self._in_note
         flush()
 
     def _declaration(

@@ -136,6 +136,7 @@ def _summary(result: ParseResult) -> dict:
     pens.update(e.fill_pen for e in entities if e.fill is not Fill.NONE and e.fill_pen != e.pen)
     pens.update(p for g in result.document.graphs for p in {g.pen, g.fill_pen})
     pens.update(c.pen for c in (result.document.title, result.document.credits) if c is not None)
+    pens.update(n.pen for n in result.document.notes)
     return {
         "entities": {k.value: kinds.get(k, 0) for k in Kind},
         "graphs": len(result.document.graphs),
@@ -182,6 +183,17 @@ def _layout_summary(resolved: ResolvedLayout) -> dict:
             for kind, block in (("title", resolved.title), ("credits", resolved.credits))
             if block is not None
         },
+        "notes": [
+            {
+                "pen": block.pen,
+                "edge": "top" if block.side.value == "above" else "bottom",
+                "from_mm": round(block.box.x0, 2),
+                "to_mm": round(block.box.x1, 2),
+                "height_mm": round(block.box.height, 2),
+                "lines": len(block.texts),
+            }
+            for block in resolved.notes
+        ],
     }
 
 
@@ -305,6 +317,10 @@ def cmd_check(args: argparse.Namespace) -> int:
         for kind in ("title", "credits"):
             if line := _block_line(resolved, kind):
                 print(line)
+        for block in resolved.notes:
+            edge = "top" if block.side.value == "above" else "bottom"
+            print(f"  note:     {_plural(len(block.texts), 'line')}, {_length(block.box.height)} tall on the {edge} edge, "
+                  f"from {_length(block.box.x0)} to {_length(block.box.x1)}")
     if job.drawing:
         print("  pens:     " + ", ".join(job.drawing.pens) + f"  ({resolved.axis_pen} draws the baseline and ticks first)")
     if job.hash:

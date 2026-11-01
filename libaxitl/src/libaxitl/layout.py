@@ -14,8 +14,8 @@ Layout runs in three phases (§6):
   illustrations in a pole's path are nudged sideways;
 - **C** — colliding event flags are staggered, then flipped, then reported.
 
-Before them, the title and credits (§16) are put in their corners, and the lanes they cross are reserved there
-so nothing else is placed on them. Background graphs (§15) are placed after all three phases, around a
+Before them, the title and credits (§16) are put in their corners, then any notes (§17) along the top and bottom
+edges, and the lanes they cross are reserved there so nothing else is placed on them. Background graphs (§15) are placed after all three phases, around a
 foreground that is then fixed (``graphs.py``).
 
 Every ordering uses the spec's explicit tie-breaks (priority, then start, then document order), so the same
@@ -32,7 +32,10 @@ from .dates import DateRange, DateValue, time_label_text
 from .diagnostics import Diagnostic, Diagnostics, SourceLocation
 from .geometry import Box, cut_out, keep_inside, segment_box, segment_crosses
 from .graphs import GraphLayout, PlacedGraph
-from .model import Baseline, Entity, Fill, Horizontal, Illustration, Kind, Side, TimeLabel, TimelineDocument
+from .model import (
+    NOTE_WIDTH_EMS, Baseline, Edge, Entity, Fill, Horizontal, Illustration, Kind, Note, NoteAnchor, Side, TimeLabel,
+    TimelineDocument,
+)
 from .pens import PENS
 from .text import ShapedText, shape
 from .ticks import plan_ticks
@@ -85,6 +88,7 @@ class LayoutStyle:
     corner_line_gap: float = 0.4  # from one line's descenders to the next line's capitals, in ems of the next line
     corner_section_gap: float = 0.6  # extra space above a heading in the credits (not the first line), in its ems
     corner_clearance: float = 1.5  # bars, labels, illustrations and flags keep this far from the title and credits
+    note_paragraph_gap: float = 0.5  # extra space above a note's paragraph after another, in its ems (§17)
 
 
 DEFAULT_STYLE = LayoutStyle()
@@ -173,16 +177,21 @@ class PlacedEvent:
 
 @dataclass(frozen=True)
 class PlacedBlock:
-    """The title or the credits (§16), placed in their corner."""
+    """The title or the credits (§16), placed in their corner, or a note (§17) on its edge."""
 
-    kind: str  # "title" or "credits"
+    kind: str  # "title", "credits" or "note"
     pen: str
     side: Side  # the side of the baseline it is on: above for the title, below for the credits
-    texts: tuple[PlacedText, ...]  # top to bottom: the title then any subtitle, or the credits' lines
+    texts: tuple[PlacedText, ...]  # top to bottom: the title then any subtitle, the credits' or a note's lines
     illustration: Illustration | None
     illustration_box: Box | None
     box: Box  # all of it together
     location: SourceLocation
+
+    @property
+    def name(self) -> str:
+        """What messages call it."""
+        return f"the note at {self.location}" if self.kind == "note" else f"the {self.kind}"
 
 
 @dataclass(frozen=True)
@@ -229,6 +238,7 @@ class ResolvedLayout:
     diagnostics: tuple[Diagnostic, ...]  # warnings; a layout with errors raises AxitlError instead
     title: PlacedBlock | None = None  # in the top-left corner (§16.1)
     credits: PlacedBlock | None = None  # in the bottom-right corner (§16.2)
+    notes: tuple[PlacedBlock, ...] = ()  # on the top and bottom edges (§17), in document order
 
     def seconds_to_position(self, seconds: int) -> float:
         return self.length_mm * (seconds - self.start_seconds) / (self.end_seconds - self.start_seconds)
@@ -283,8 +293,8 @@ class _Lanes:
             items[:] = [item for item in items if item[2] != owner]
 
     def used(self) -> int:
-        """How many lanes from the baseline outward are in use (the highest occupied lane + 1). The title and
-        credits, reserved at the paper's edge (§16), don't count: they would make their side look full."""
+        """How many lanes from the baseline outward are in use (the highest occupied lane + 1). The title, credits
+        and notes, reserved at the paper's edge (§§16, 17), don't count: they would make their side look full."""
         return max(
             (i + 1 for i, items in enumerate(self.items) if any(not o.startswith("corner:") for _, _, o in items)),
             default=0,
@@ -424,6 +434,7 @@ class _Layout:
         self.sink.raise_if_errors()
         self.sides()
         self.corners()
+        self.notes()
         self.collect()
         self.phase_a()
         self.phase_b()
@@ -628,12 +639,11 @@ class _Layout:
         """From the top of the first line's capitals to the last line's baseline: what an illustration matches."""
         return stack[-1][2] + stack[0][1].shaped.cap_height
 
-    def place_block(self, kind: str, pen: str, side: Side, lines, ill: Illustration | None, ill_height: float | None,
-                    at: Horizontal, align: Horizontal, gap: float, margin: float, location: SourceLocation) -> None:
-        """Lay out a title or the credits and put it in its corner. Its margins, the gap beside its illustration and
-        the lines' alignment are all measured to the ink, so they come out as written whatever each font's side
-        bearings."""
-        st = self.style
+    def arrange(self, lines, ill: Illustration | None, ill_height: float | None, at: Horizontal, align: Horizontal,
+                gap: float):
+        """Lines of text one under the next, aligned, with any illustration beside them, relative to the first
+        line's baseline. Returns the stack, each line's pen origin x, the illustration's box and the box of all
+        the ink. Alignment is measured to the ink, so it comes out as written whatever each font's side bearings."""
         stack = self.text_stack(lines)
         top = -stack[0][1].shaped.cap_height
         bottom = stack[-1][2]
@@ -656,53 +666,177 @@ class _Layout:
             origins = [left + text_width - ink[2] for ink in inks]
         ink_boxes = [Box(ox + i[0], y + i[1], ox + i[2], y + i[3]) for ox, i, (_, _, y) in zip(origins, inks, stack, strict=True)]
         placing = _union(ink_boxes + ([ill_box] if ill_box else []))
+        return stack, origins, ill_box, placing
+
+    def place_block(self, kind: str, pen: str, side: Side, lines, ill: Illustration | None, ill_height: float | None,
+                    at: Horizontal, align: Horizontal, gap: float, margin: float, location: SourceLocation) -> None:
+        """Lay out a title or the credits and put it in its corner. Its margins and the gap beside its illustration
+        are measured to the ink, so they come out as written."""
+        stack, origins, ill_box, placing = self.arrange(lines, ill, ill_height, at, align, gap)
         if side is Side.ABOVE:  # the top-left corner
             dx, dy = margin - placing.x0, margin - placing.y0
-            edge = "top edge"
         else:  # the bottom-right corner
             dx, dy = self.length - margin - placing.x1, self.t.width_mm - margin - placing.y1
-            edge = "bottom edge"
         texts = tuple(t.placed(label, ox + dx, y + dy) for ox, (label, t, y) in zip(origins, stack, strict=True))
         if ill_box is not None:
             ill_box = Box(ill_box.x0 + dx, ill_box.y0 + dy, ill_box.x1 + dx, ill_box.y1 + dy)
         # What everything else keeps clear of: the lines' whole boxes (ascenders and descenders included).
         box = _union([t.box for t in texts] + ([ill_box] if ill_box else []))
-
-        name = "the title" if kind == "title" else "the credits"
-        verb = "is" if kind == "title" else "are"
-        g = self.geom[side]
-        d_in, d_out = self.distance_range(side, box)
+        block = PlacedBlock(kind, pen, side, texts, ill, ill_box, box, location)
         ok = True
         if placing.width > self.length - 2 * margin + 1e-9:
             self.sink.error(
                 f"no-room-for-{kind}",
-                f"{name} {verb} {format_number(placing.width, 1)}mm wide, but the paper is only "
-                f"{format_number(self.length - 2 * margin, 1)}mm long inside its {format_number(margin)}mm margins",
+                f"{block.name} {'is' if kind == 'title' else 'are'} {format_number(placing.width, 1)}mm wide, but "
+                f"the paper is only {format_number(self.length - 2 * margin, 1)}mm long inside its "
+                f"{format_number(margin)}mm margins",
                 location,
             )
             ok = False
-        if d_in < g.inner + st.corner_clearance:
-            room = g.space - margin - g.inner - st.corner_clearance
-            self.sink.error(
-                f"no-room-for-{kind}",
-                f"{name} {verb} {format_number(box.height, 1)}mm tall, but there {'is' if room >= 0 else 'are'} only "
-                f"{format_number(max(room, 0.0), 1)}mm between the {edge} (less its {format_number(margin)}mm margin) "
-                "and the timeline's first lane",
-                location,
-            )
-            ok = False
-        if not ok:
-            return
-        for lane in range(g.capacity):
+        if self.fits_across(block, margin) and ok:
+            self.reserve_block(kind, block)
+
+    def fits_across(self, block: PlacedBlock, margin: float) -> bool:
+        """Whether a block on the paper's edge stays clear of its side's first lane (§16.3); an error if not."""
+        g = self.geom[block.side]
+        d_in, _ = self.distance_range(block.side, block.box)
+        if d_in >= g.inner + self.style.corner_clearance:
+            return True
+        room = g.space - margin - g.inner - self.style.corner_clearance
+        edge = "top edge" if block.side is Side.ABOVE else "bottom edge"
+        verb = "are" if block.kind == "credits" else "is"
+        self.sink.error(
+            f"no-room-for-{block.kind}",
+            f"{block.name} {verb} {format_number(block.box.height, 1)}mm tall, but there "
+            f"{'is' if room >= 0 else 'are'} only {format_number(max(room, 0.0), 1)}mm between the {edge} (less its "
+            f"{format_number(margin)}mm margin) and the timeline's first lane",
+            block.location,
+        )
+        return False
+
+    def reserve_block(self, key: str, block: PlacedBlock) -> None:
+        """Keep a placed block: every lane it crosses (plus the clearance) is reserved along its length."""
+        side, box, pad = block.side, block.box, self.style.corner_clearance
+        d_in, d_out = self.distance_range(side, box)
+        for lane in range(self.geom[side].capacity):
             a, b = self.band(side, lane)
-            if b > d_in - st.corner_clearance and a < d_out + st.corner_clearance:
-                self.lanes[side].add(lane, 1, box.x0, box.x1, f"corner:{kind}")
-        self.blocks[kind] = PlacedBlock(kind, pen, side, texts, ill, ill_box, box, location)
+            if b > d_in - pad and a < d_out + pad:
+                self.lanes[side].add(lane, 1, box.x0, box.x1, f"corner:{key}")
+        self.blocks[key] = block
+
+    # -- notes (§17) ---------------------------------------------------------------------------------------
+
+    def notes(self) -> None:
+        """Put each note on its edge, in document order, after the title and credits, which it keeps clear of."""
+        for note in self.doc.notes:
+            self.place_note(note)
+
+    def wrap(self, font: str, size: float, text: str, width: float) -> tuple[list[str], list[str]]:
+        """A paragraph broken into lines no longer than ``width``, filling each line in turn, and any words too
+        long for a line on their own (each gets a line anyway)."""
+        lines: list[str] = []
+        too_long: list[str] = []
+        line = ""
+        for word in text.split(" "):
+            if shape(self.doc.fonts[font], word, size).width > width + 1e-9:
+                too_long.append(word)
+            trial = f"{line} {word}" if line else word
+            if not line or shape(self.doc.fonts[font], trial, size).width <= width + 1e-9:
+                line = trial
+            else:
+                lines.append(line)
+                line = word
+        lines.append(line)
+        return lines, too_long
+
+    def place_note(self, note: Note) -> None:
+        st = self.style
+        anchor_x = None
+        if not isinstance(note.anchor, NoteAnchor):
+            s = note.anchor.first_second()
+            if not self.t0 <= s < self.t1:
+                self.sink.warning(
+                    "outside-window",
+                    f"the note anchored at {note.anchor} lies outside the timeline, so it is left out",
+                    note.location,
+                )
+                return
+            anchor_x = self.x(s)
+        margin = note.margin_mm
+        room = self.length - 2 * margin
+        if note.width_mm is not None and note.width_mm > room + 1e-9:
+            self.sink.error(
+                "no-room-for-note",
+                f"the note's width= is {format_number(note.width_mm, 1)}mm, but the paper is only "
+                f"{format_number(room, 1)}mm long inside its {format_number(margin)}mm margins",
+                note.location,
+            )
+            return
+        width = note.width_mm if note.width_mm is not None else min(NOTE_WIDTH_EMS * note.font_size_mm, room)
+        lines = []
+        previous = None
+        for para in note.paragraphs:
+            font, size = (note.heading_font, note.heading_font_size_mm) if para.heading else (note.font, note.font_size_mm)
+            wrapped, too_long = self.wrap(font, size, para.text, width)
+            for word in too_long:
+                self.sink.warning(
+                    "note-word-too-long",
+                    f"'{word}' is longer than the note's {format_number(width, 1)}mm width, so it runs past it",
+                    para.location,
+                )
+            extra = 0.0
+            if previous is not None:
+                extra = st.corner_section_gap if para.heading else 0.0 if previous.heading else st.note_paragraph_gap
+            lines += [(line, font, size, extra if i == 0 else 0.0) for i, line in enumerate(wrapped)]
+            previous = para
+        stack, origins, _, placing = self.arrange(lines, None, None, Horizontal.LEFT, note.align, 0.0)
+        side = Side.ABOVE if note.edge is Edge.TOP else Side.BELOW
+        dy = margin - placing.y0 if side is Side.ABOVE else self.t.width_mm - margin - placing.y1
+        texts = [t.placed(label, ox, y + dy) for ox, (label, t, y) in zip(origins, stack, strict=True)]
+        box = _union([t.box for t in texts])
+
+        # Along the roll: as near its anchor as it can be, inside the margins, and `clearance` from the title, the
+        # credits and earlier notes wherever they stand beside it across the roll.
+        lo, hi = margin - placing.x0, self.length - margin - placing.x1
+        centre = (placing.x0 + placing.x1) / 2
+        want = {NoteAnchor.START: lo, NoteAnchor.END: hi}.get(note.anchor) if anchor_x is None else anchor_x - centre
+        if want is None:  # the middle
+            want = self.length / 2 - centre
+        target = min(max(want, lo), hi)
+        c = note.clearance_mm
+        blocked = []  # the shifts that would bring it too close to another block, as open intervals
+        for other in self.blocks.values():
+            if other.box.y0 - st.corner_clearance < box.y1 and box.y0 < other.box.y1 + st.corner_clearance:
+                blocked.append((other.box.x0 - c - box.x1, other.box.x1 + c - box.x0, other.name))
+        options = [target, lo, hi] + [end for a, b, _ in blocked for end in (a, b)]
+        options = [x for x in options if lo - 1e-9 <= x <= hi + 1e-9 and not any(a + 1e-9 < x < b - 1e-9 for a, b, _ in blocked)]
+        if not options:
+            names = sorted({name for _, _, name in blocked})
+            self.sink.error(
+                "no-room-for-note",
+                f"there is no room on the {note.edge.value} edge for the note, {format_number(c)}mm clear of "
+                f"{_and(names)}; make it narrower with width=, move it with anchor=, or give a smaller clearance=",
+                note.location,
+            )
+            return
+        dx = min(options, key=lambda x: (abs(x - target), -x))
+        texts = tuple(replace(t, x=t.x + dx, box=Box(t.box.x0 + dx, t.box.y0, t.box.x1 + dx, t.box.y1)) for t in texts)
+        block = PlacedBlock("note", note.pen, side, texts, None, None, _union([t.box for t in texts]), note.location)
+        if anchor_x is not None and not placing.x0 + dx - 1e-9 <= anchor_x <= placing.x1 + dx + 1e-9:
+            pushed = sorted({name for a, b, name in blocked if a < target < b})
+            self.sink.warning(
+                "note-moved",
+                f"the note anchored at {note.anchor} was moved {format_number(abs(dx - want), 1)}mm along the roll "
+                f"to keep clear of {_and(pushed or ['the ends of the paper'])}, so it no longer reaches its date",
+                note.location,
+            )
+        if self.fits_across(block, margin):
+            self.reserve_block(f"note:{note.order}", block)
 
     def block_obstacles(self, side: Side) -> list[tuple[Box, str]]:
-        """The title or credits on one side, kept clear of like an illustration (§16)."""
+        """The title, credits and notes on one side, kept clear of like an illustration (§§16, 17)."""
         pad = self.style.corner_clearance
-        return [(b.box.padded(pad), f"the {b.kind}") for b in self.blocks.values() if b.side is side]
+        return [(b.box.padded(pad), b.name) for b in self.blocks.values() if b.side is side]
 
     # -- phase A: bars -------------------------------------------------------------------------------------------
 
@@ -1433,6 +1567,7 @@ class _Layout:
             diagnostics=tuple(self.sink.items),
             title=self.blocks.get("title"),
             credits=self.blocks.get("credits"),
+            notes=tuple(b for b in self.blocks.values() if b.kind == "note"),
         )
 
 
@@ -1454,6 +1589,11 @@ def _graph_foreground(baseline: float, length: float, bars, events, ticks, illus
     for block in blocks:
         text += [t.box for t in block.texts] + ([block.illustration_box] if block.illustration_box else [])
     return ink + text, text, tick_bottom
+
+
+def _and(names: list[str]) -> str:
+    """Names joined for a message: "a", "a and b", "a, b and c"."""
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
 def _union(boxes: list[Box]) -> Box:

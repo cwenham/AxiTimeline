@@ -254,3 +254,25 @@ test('hover: title and credits are keywords, and heading is one inside the credi
   assert.strictEqual(hover('title "T"\n    illustration(a.svg a|t=left)').decl, 'illustration');
   assert.strictEqual(hover('title "T"\n    ga|p=3').decl, 'title');
 });
+
+// -- notes (§17) ----------------------------------------------------------------------------------------------
+
+test('a note takes its items after its quoted text, or straight after the keyword', () => {
+  expect('note |', { kind: 'item', decl: 'note', used: [] });
+  expect('note anchor=end |', { kind: 'item', decl: 'note', used: ['anchor'] });
+  expect('note "Dates are Greg|', { kind: 'none' });
+  expect('note "Dates are Gregorian." edge=bottom |', { kind: 'item', decl: 'note', used: ['edge'] });
+  expect('note anchor=|', { kind: 'value', decl: 'note', key: 'anchor' });
+});
+
+test("a note's body holds paragraphs: only heading can start a line, and nothing continues them", () => {
+  expect('note {\n  "x"\n  |\n}', { kind: 'statement', body: 'note', inBody: true, continues: null, timeline: false });
+  expect('note anchor=end {\n  hea|', { kind: 'statement', body: 'note', prefix: 'hea' });
+  expect('note {\n  ^|', { kind: 'none' });
+});
+
+test('hover: note is a keyword, and heading is one inside a note', () => {
+  assert.deepStrictEqual(hover('no|te "x"'), { type: 'keyword', name: 'note', start: 0, end: 4 });
+  assert.strictEqual(hover('note {\n  head|ing "About"\n}').name, 'heading');
+  assert.strictEqual(hover('note "x"\n    clear|ance=3').decl, 'note');
+});

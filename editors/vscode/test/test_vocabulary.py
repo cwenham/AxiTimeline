@@ -16,7 +16,7 @@ import pytest
 from libaxitl import graphdata, grammar, parser
 from libaxitl.fonts import BUILTIN_FONTS, DEFAULT_FONT
 from libaxitl.model import (
-    Baseline, Fill, Horizontal, Kind, LineMode, OpenEndStyle, Side, TimeLabel, ValueScaleMode, YScale,
+    Baseline, Edge, Fill, Horizontal, Kind, LineMode, NoteAnchor, OpenEndStyle, Side, TimeLabel, ValueScaleMode, YScale,
 )
 from libaxitl.pens import DEFAULT_PEN, PENS
 from libaxitl.render import pen_colour
@@ -60,12 +60,18 @@ def test_corners():
     assert "heading(?![\\w])/" in grammar.GRAMMAR
 
 
+def test_notes():
+    assert VOCABULARY["notes"] == ["note"]
+    assert "note(?![\\w])/" in grammar.GRAMMAR
+
+
 def test_parameters():
     assert VOCABULARY["timelineParameters"] == list(parser._TIMELINE_KEYS)
     assert VOCABULARY["entityParameters"] == list(parser._ENTITY_KEYS)
     assert VOCABULARY["graphParameters"] == list(parser._GRAPH_KEYS)
     assert VOCABULARY["titleParameters"] == list(parser._TITLE_KEYS)
     assert VOCABULARY["creditsParameters"] == list(parser._CREDITS_KEYS)
+    assert VOCABULARY["noteParameters"] == list(parser._NOTE_KEYS)
     assert VOCABULARY["illustrationParameters"] == list(parser._ILLUSTRATION_KEYS)
     assert VOCABULARY["titleIllustrationParameters"] == list(parser._TITLE_ILLUSTRATION_KEYS)
     assert VOCABULARY["creditsIllustrationParameters"] == list(parser._CREDITS_ILLUSTRATION_KEYS)
@@ -84,13 +90,15 @@ def test_values():
     assert values["header"] == ["yes", "no"]
     assert values["at"] == values["align"] == [m.value for m in Horizontal]
     assert values["pens"] == ["auto"]
+    assert values["anchor"] == [m.value for m in NoteAnchor]
+    assert values["edge"] == [m.value for m in Edge]
 
 
 def _all_keys() -> list[str]:
     v = VOCABULARY
     return sorted(set(v["timelineParameters"] + v["entityParameters"] + v["includeParameters"]
                       + v["illustrationParameters"] + v["graphParameters"] + v["titleParameters"]
-                      + v["creditsParameters"] + v["titleIllustrationParameters"]))
+                      + v["creditsParameters"] + v["titleIllustrationParameters"] + v["noteParameters"]))
 
 
 @pytest.mark.parametrize("key", _all_keys())
@@ -115,6 +123,8 @@ def test_grammar_highlights_every_font_written_bare(key):
 def test_grammar_highlights_the_title_credits_and_headings():
     assert re.match(rule("corner"), "title \"T\"").group(1) == "title"
     assert re.match(rule("corner"), "  credits {").group(1) == "credits"
+    assert re.match(rule("corner"), "note anchor=start {").group(1) == "note"
+    assert not re.match(rule("corner"), "notes")
     assert not re.match(rule("corner"), "titles")
     assert re.match(rule("heading"), '  heading "Sources"').group(1) == "heading"
 

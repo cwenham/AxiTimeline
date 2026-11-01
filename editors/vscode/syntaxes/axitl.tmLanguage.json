@@ -58,12 +58,12 @@
       "captures": { "1": { "name": "storage.type.graph.axitl" } }
     },
     "corner": {
-      "comment": "The title and credits (language spec §16). They take no side or priority marks.",
-      "match": "^\\s*(title|credits)(?![\\w])",
+      "comment": "The title and credits (language spec §16), and notes (§17). They take no side or priority marks.",
+      "match": "^\\s*(title|credits|note)(?![\\w])",
       "captures": { "1": { "name": "storage.type.corner.axitl" } }
     },
     "heading": {
-      "comment": "A heading line in the credits' { } body (§16.2).",
+      "comment": "A heading line in the credits' or a note's { } body (§§16.2, 17).",
       "match": "^\\s*(heading)(?=\\s|\"|$)",
       "captures": { "1": { "name": "keyword.other.heading.axitl" } }
     },
@@ -93,7 +93,7 @@
           }
         },
         {
-          "match": "(?<![^\\s])(width|length|lane_height|above_lane_height|below_lane_height|baseline_offset|above_baseline_offset|below_baseline_offset|font_size|subtitle_font_size|heading_font_size|max_height|margin|gap|height|fill_depth|shadow)(=)(?:(\\d+(?:\\.\\d*)?|\\.\\d+)(mm|cm|m)?(?=[\\s{}()]|$|//))?",
+          "match": "(?<![^\\s])(width|length|lane_height|above_lane_height|below_lane_height|baseline_offset|above_baseline_offset|below_baseline_offset|font_size|subtitle_font_size|heading_font_size|max_height|margin|gap|clearance|height|fill_depth|shadow)(=)(?:(\\d+(?:\\.\\d*)?|\\.\\d+)(mm|cm|m)?(?=[\\s{}()]|$|//))?",
           "captures": {
             "1": { "name": "entity.other.attribute-name.axitl" },
             "2": { "name": "punctuation.separator.key-value.axitl" },
@@ -197,6 +197,22 @@
         },
         {
           "match": "(?<![^\\s])(at|align)(=)(?:(left|right)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(anchor)(=)(?:(start|middle|end)(?=[\\s{}()]|$|//))?",
+          "captures": {
+            "1": { "name": "entity.other.attribute-name.axitl" },
+            "2": { "name": "punctuation.separator.key-value.axitl" },
+            "3": { "name": "constant.language.axitl" }
+          }
+        },
+        {
+          "match": "(?<![^\\s])(edge)(=)(?:(top|bottom)(?=[\\s{}()]|$|//))?",
           "captures": {
             "1": { "name": "entity.other.attribute-name.axitl" },
             "2": { "name": "punctuation.separator.key-value.axitl" },

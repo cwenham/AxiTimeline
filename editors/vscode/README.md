@@ -11,10 +11,10 @@ Editor support for `.axitl` files: syntax highlighting, completion, hover help, 
   in its own colour, which makes two traps from the spec visible: `1910-12` has no separator because it is
   December 1910, not 1910 to 1912, and in `1963//1964` the end date turns into a comment (§§3.3, 3.9).
 - **Completion**, fitted to where the cursor is:
-  - at the start of a line: `timeline`, `include`, the entity keywords, `graph`, `title` and `credits`,
-    inserted as templates to tab through (`person "Name" 1900-1950`). `graph`, `title` and `credits` aren't
-    offered inside a group. After `^`, `v`, `!` or `-` marks, only entity keywords are offered; a second
-    `timeline` is not. Inside the credits' `{ }` body only `heading` is.
+  - at the start of a line: `timeline`, `include`, the entity keywords, `graph`, `title`, `credits` and
+    `note`, inserted as templates to tab through (`person "Name" 1900-1950`). `graph`, `title`, `credits` and
+    `note` aren't offered inside a group. After `^`, `v`, `!` or `-` marks, only entity keywords are offered; a
+    second `timeline` is not. Inside the credits' or a note's `{ }` body only `heading` is.
   - after an entity's date: pens (with a swatch of their preview colour), the parameters that entity takes
     and haven't been given yet, and `illustration(…)`. `fill=` is offered only for bars and `time_label=`
     only for events and groups.
@@ -22,6 +22,8 @@ Editor support for `.axitl` files: syntax highlighting, completion, hover help, 
     inside its `{ }` body of points.
   - after a title's text, or after `credits` (§16): pens, their parameters (`align=` among them) and
     `illustration(…)`, which takes `at=left` or `at=right` there.
+  - after `note` or a note's quoted text (§17): pens and a note's parameters, with the values of `anchor=`
+    (`start`, `middle`, `end`; a date works too) and `edge=` (`top`, `bottom`).
   - on a `timeline` or `include` line, or an indented continuation line under one (§3.10): their parameters.
     The timeline's required ones are marked, and `length=` and `scale=` exclude each other.
   - after `key=`: the values it takes (fills, time labels, `baseline=`, `end=now`, `ticks=off`, units for

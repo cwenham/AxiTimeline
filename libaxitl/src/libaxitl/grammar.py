@@ -15,7 +15,7 @@ from lark import Lark
 GRAMMAR = r"""
 start: _NL? _statement*
 
-_statement: timeline | entity | graph | title | credits
+_statement: timeline | entity | graph | title | credits | note
 
 timeline: TIMELINE _item* _NL
 entity: HEAD STRING _item* (body | _NL)
@@ -27,6 +27,7 @@ title: TITLE STRING _item* _NL
 credits: CREDITS _item* (credit_lines | _NL)
 credit_lines: "{" _NL? credit_line* "}" _NL
 credit_line: HEADING? STRING _NL
+note: NOTE STRING? _item* (credit_lines | _NL)
 
 _item: bare | param | illustration
 bare: WORD
@@ -40,6 +41,7 @@ HEAD: /[\^v]?[!\-]*(person|event|span|group)(?![\w])/
 GRAPH: /[\^v]?[!\-]*graph(?![\w])/
 TITLE: /title(?![\w])/
 CREDITS: /credits(?![\w])/
+NOTE: /note(?![\w])/
 HEADING: /heading(?![\w])/
 STRING: /"(?:[^"\\\n]|\\.)*"/
 WORD: /[^\s"{}()=]+/

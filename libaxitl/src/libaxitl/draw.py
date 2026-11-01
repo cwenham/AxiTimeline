@@ -6,7 +6,7 @@ windows. Curves are flattened here, once, so nothing downstream has to understan
 
 Strokes come out in the draw order of language spec §11: baseline and ticks, then background graphs (§15), then
 bars (outlines, labels and fills), then event poles and flags, then illustrations, then the title and credits
-(§16); crop marks (interpreter spec) are last.
+(§16) and notes (§17); crop marks (interpreter spec) are last.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ class Stage(Enum):
     BARS = "bars"
     EVENTS = "events"
     ILLUSTRATIONS = "illustrations"
-    TITLES = "titles"  # the title and credits (§16)
+    TITLES = "titles"  # the title and credits (§16), and notes (§17)
     CROP_MARKS = "crop-marks"
 
 
@@ -120,7 +120,7 @@ class _Drawer:
                 self.add(pen, Stage.EVENTS, self.text(ev.time_label))
         for ill in L.illustrations:
             self.illustration(ill.illustration, ill.box, ill.owner.pen, Stage.ILLUSTRATIONS, ill.owner.location)
-        for block in (L.title, L.credits):
+        for block in (L.title, L.credits, *L.notes):
             if block is not None:
                 self.block(block)
         self.crop_marks()

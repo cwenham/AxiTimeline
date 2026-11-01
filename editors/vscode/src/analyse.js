@@ -7,7 +7,8 @@
  * continued on indented `key=value` lines, and each declaration shaped as a head, a quoted label, a date,
  * then items (pens, `key=value` parameters and `illustration(...)`). A graph (§15) has no date: its items follow
  * its title, and its `{ }` body holds points rather than declarations. A title (§16.1) is like a graph's head; the
- * credits (§16.2) have no label, and their `{ }` body holds lines of text, each perhaps marked `heading`.
+ * credits (§16.2) have no label, and their `{ }` body holds lines of text, each perhaps marked `heading`. A note
+ * (§17) is like the title when given its text in quotes, or like the credits when given a `{ }` body of lines.
  */
 
 const vocabulary = require('./vocabulary.json');
@@ -16,7 +17,8 @@ const PENS = Object.keys(vocabulary.pens);
 const PEN_SET = new Set(PENS);
 const HEAD = /^([\^v]?)([!-]*)(person|event|span|group)$/;
 const KEY_START = /^(?:[A-Za-z_][A-Za-z0-9_]*=|illustration\s*\()/; // what an indented continuation starts with (§3.10)
-const DECLARATIONS = new Set(['timeline', 'include', 'graph', 'title', 'credits']);
+const DECLARATIONS = new Set(['timeline', 'include', 'graph', 'title', 'credits', 'note']);
+const TEXT_BODIES = new Set(['credits', 'note']); // whose `{ }` body holds lines of text, perhaps headings
 const TOKEN = /\s+|"((?:[^"\\]|\\.?)*)("?)|[{}()=]|[^\s"{}()=]+/g;
 
 /** The code on a line and the column its `//` comment starts at (-1 for none), skipping `//` inside quotes. */
@@ -64,7 +66,7 @@ function isContinuation(line) {
   return /^[ \t]/.test(line) && KEY_START.test(splitComment(line).code.trim());
 }
 
-/** The kind of declaration a head word starts: timeline, include, graph, title, credits, an entity keyword, or null. */
+/** The kind of declaration a head word starts: timeline, include, graph, title, credits, note, an entity keyword, or null. */
 function declarationKind(word) {
   if (DECLARATIONS.has(word)) return word;
   const m = HEAD.exec(word);
@@ -130,7 +132,7 @@ function summarise(tokens) {
 
 /**
  * The `{ }` body the line sits inside, if any: the kind of declaration that opened it (group, graph for a body of
- * points, or credits for a body of lines), or null.
+ * points, or credits or note for a body of lines), or null.
  */
 function enclosingBody(lines, line) {
   const open = [];
@@ -159,7 +161,7 @@ const FONT_KEYS = new Set(['font', 'subtitle_font', 'heading_font']);
  * - `{kind: 'statement', marks, prefix, start, timeline, inBody, body, continues}`: the start of a declaration.
  *   `marks` are side and priority marks already typed (only an entity can follow them); `timeline` says
  *   whether a timeline declaration is still possible here; `body` is the kind of `{ }` body the line is in
- *   (group or credits), or null; `continues`, on an indented line, describes the declaration the line could
+ *   (group, credits or note), or null; `continues`, on an indented line, describes the declaration the line could
  *   continue instead (`{decl, used, pen, illustration}`), or is null
  * - `{kind: 'item', decl, prefix, start, used, pen, illustration}`: an item on a declaration's line: a
  *   parameter (`used` lists those already given), a pen (`pen` says one is already given) or an illustration.
@@ -167,7 +169,7 @@ const FONT_KEYS = new Set(['font', 'subtitle_font', 'heading_font']);
  * - `{kind: 'value', decl, key, prefix, start, quoted}`: the value after `key=`
  * - `{kind: 'path', purpose, prefix, start, quoted}`: a file name: `purpose` is include or illustration
  *
- * `decl` is timeline, include, graph, title, credits, illustration (inside its parentheses) or an entity keyword.
+ * `decl` is timeline, include, graph, title, credits, note, illustration (inside its parentheses) or an entity keyword.
  * `prefix` is what
  * has been typed of the thing being completed, and `start` the column it starts at, so a suggestion replaces
  * the columns from `start` to the cursor.
@@ -187,7 +189,7 @@ function completionContext(lines, line, character) {
     if (!m) return NONE;
     const body = enclosingBody(lines, line);
     if (body === 'graph') return NONE; // a graph's body holds points, a date and a value on each line
-    if (body === 'credits' && (m[1] || m[2])) return NONE; // a credits line is text, perhaps a heading
+    if (TEXT_BODIES.has(body) && (m[1] || m[2])) return NONE; // a line of the credits or a note is text, perhaps a heading
     const inBody = body !== null;
     const hasTimeline = lines.some(
       (l, i) => i !== line && /^\s*timeline(?![\w])/.test(splitComment(l).code)
@@ -208,7 +210,7 @@ function completionContext(lines, line, character) {
       timeline: !hasTimeline && !indented && !inBody,
       inBody,
       body,
-      continues: body === 'credits' ? null : continues,
+      continues: TEXT_BODIES.has(body) ? null : continues,
     };
   }
 
@@ -223,9 +225,9 @@ function completionContext(lines, line, character) {
   let items;
   if (decl === 'timeline') {
     items = tokens.slice(1);
-  } else if (decl === 'credits') {
+  } else if (decl === 'credits' || (decl === 'note' && !(tokens[1] && tokens[1].type === 'string'))) {
     items = tokens.slice(1);
-  } else if (decl === 'graph' || decl === 'title') {
+  } else if (decl === 'graph' || decl === 'title' || decl === 'note') {
     const title = tokens[1];
     if (!title || title.type !== 'string' || !title.closed) return NONE; // typing the title
     if (title === last && touching) return NONE;
@@ -352,7 +354,7 @@ function hoverTarget(lines, line, character) {
   }
   if (t.type !== 'word') return null;
   if (i === 0 && !isContinuation(text)) {
-    if (DECLARATIONS.has(t.text) || (t.text === 'heading' && enclosingBody(lines, line) === 'credits')) {
+    if (DECLARATIONS.has(t.text) || (t.text === 'heading' && TEXT_BODIES.has(enclosingBody(lines, line)))) {
       return Object.assign({ type: 'keyword', name: t.text }, span);
     }
     const m = HEAD.exec(t.text);

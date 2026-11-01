@@ -27,6 +27,7 @@ from .model import (
     Baseline,
     CreditLine,
     Credits,
+    Edge,
     Entity,
     Fill,
     Graph,
@@ -34,6 +35,9 @@ from .model import (
     Illustration,
     Kind,
     LineMode,
+    Note,
+    NoteAnchor,
+    NoteParagraph,
     OpenEndStyle,
     Side,
     TimeLabel,
@@ -70,12 +74,17 @@ _GRAPH_KEYS = (
 _CSV_KEYS = ("first_row", "last_row", "header", "separator", "time_column", "value_column", "time_format")
 _TITLE_KEYS = ("font", "font_size", "subtitle", "subtitle_font", "subtitle_font_size", "align", "margin", "gap")
 _CREDITS_KEYS = ("font", "font_size", "heading_font", "heading_font_size", "max_height", "align", "margin", "gap")
+_NOTE_KEYS = (
+    "anchor", "edge", "width", "align", "font", "font_size", "heading_font", "heading_font_size", "margin",
+    "clearance",
+)
 _ILLUSTRATION_KEYS = ("height", "fill", "pens")  # inside an entity's illustration( ... )
 _TITLE_ILLUSTRATION_KEYS = ("height", "at", "fill", "pens")
 _CREDITS_ILLUSTRATION_KEYS = ("at", "fill", "pens")  # as tall as the credits' lines, always
 _UNCLOSED_GROUP = "this group's { body is never closed with }"
 _UNCLOSED_GRAPH = "this graph's { body of points is never closed with }"
 _UNCLOSED_CREDITS = "the credits' { body of lines is never closed with }"
+_UNCLOSED_NOTE = "this note's { body of paragraphs is never closed with }"
 DEFAULT_GRAPH_PEN = "HB-pencil"
 # The title and credits (§16).
 DEFAULT_TITLE_SIZE_MM = 12.0
@@ -83,6 +92,9 @@ SUBTITLE_SCALE = 0.5  # a subtitle's size, as a fraction of the title's
 HEADING_SCALE = 1.25  # a credits heading's size, as a multiple of the credits' font_size
 DEFAULT_CORNER_MARGIN_MM = 5.0  # from the finished edges, clear of the crop mark in the corner
 DEFAULT_CORNER_GAP_MM = 4.0  # between an illustration and the text beside it
+# Notes (§17).
+DEFAULT_NOTE_MARGIN_MM = 5.0  # from the finished edge and the ends of the paper, clear of the crop marks
+DEFAULT_NOTE_CLEARANCE_MM = 25.0  # along the roll, from the title, the credits and other notes
 
 
 @dataclass(frozen=True)
@@ -118,6 +130,8 @@ def parse(source: str, resolve: Resolver | None = None, source_name: str = "main
                     message = _UNCLOSED_GRAPH
                 elif opener.text.startswith("credits"):
                     message = _UNCLOSED_CREDITS
+                elif opener.text.startswith("note"):
+                    message = _UNCLOSED_NOTE
         elif message.startswith("a timeline declaration can't") and 1 <= line <= len(lines):
             if lines[line - 1].text.startswith("title"):
                 message = "a title can't have a { } body; give its second line as subtitle=\"...\""
@@ -142,15 +156,15 @@ def _syntax_message(exc: UnexpectedInput, text: str) -> str:
         found = "something unexpected"
     if "HEADING" in expected:
         return (
-            f"{found} can't start a line of the credits; each line is a quoted string, or heading and a quoted "
-            'string: heading "Sources"'
+            f"{found} can't start a line of the credits or a note; each line is a quoted string, or heading and a "
+            'quoted string: heading "Sources"'
         )
     if "HEAD" in expected or "TIMELINE" in expected:
         if found == "'}'":
             return "this } has no group { to close"
         return (
             f"{found} doesn't start a declaration; a line starts with timeline, person, event, span, group, "
-            "graph, title or credits (with optional ^/v side and !/- priority marks before an entity's keyword)"
+            "graph, title, credits or note (with optional ^/v side and !/- priority marks before an entity's keyword)"
         )
     if expected == {"STRING"}:
         return f'expected a quoted label, e.g. "Isaac Newton", but found {found}'
@@ -296,10 +310,15 @@ class _Builder:
                 else:
                     credits = self.credits(nodes[0], graph_context)
         self.check_corner_glyphs(title, credits)
+        notes = []
+        for node in (c for c in tree.children if c.data == "note"):
+            note = self.note(node, graph_context, len(notes))
+            if note is not None:
+                notes.append(note)
         if settings is None or self.sink.has_errors:
             return None
         return TimelineDocument(
-            settings, tuple(entities), dict(sorted(self.fonts.items())), tuple(graphs), title, credits
+            settings, tuple(entities), dict(sorted(self.fonts.items())), tuple(graphs), title, credits, tuple(notes)
         )
 
     def timeline(self, node: Tree) -> TimelineSettings | None:
@@ -539,10 +558,11 @@ class _Builder:
                         self.loc(child),
                     )
                     continue
-                if child.data in ("title", "credits"):
+                if child.data in ("title", "credits", "note"):
+                    what = "a note" if child.data == "note" else f"the {child.data}"
                     self.sink.error(
                         f"nested-{child.data}",
-                        f"the {child.data} can't be inside a group; declare it at the top level of a file (it can "
+                        f"{what} can't be inside a group; declare it at the top level of a file (it can "
                         "be an included file)",
                         self.loc(child),
                     )
@@ -828,6 +848,105 @@ class _Builder:
                 key = credits.heading_font if line.heading else credits.font
                 what = "a heading of the credits" if line.heading else "a line of the credits"
                 self.warn_missing_glyphs(self.fonts[key], key, line.text, what, line.location)
+
+    # -- notes (§17) ----------------------------------------------------------------------------------------
+
+    def note(self, node: Tree, context: tuple[str, float], order: int) -> Note | None:
+        location = self.loc(node)
+        _, *items = node.children
+        body = items.pop() if items and isinstance(items[-1], Tree) and items[-1].data == "credit_lines" else None
+        text_token = items.pop(0) if items and isinstance(items[0], Token) and items[0].type == "STRING" else None
+        ok = True
+        paragraphs = []
+        if text_token is not None and body is not None:
+            self.sink.error(
+                "bad-value",
+                "a note has either its text in quotes or a { } body of paragraphs, not both; put a heading in the "
+                'body as heading "..."',
+                location,
+            )
+            ok = False
+        elif text_token is not None:
+            paragraphs.append(NoteParagraph(self.value(text_token), False, location))
+        elif body is not None:
+            for line in body.children:
+                *heading, token = line.children
+                paragraphs.append(NoteParagraph(self.value(token), bool(heading), self.loc(line)))
+        paragraphs = [NoteParagraph(" ".join(p.text.split()), p.heading, p.location) for p in paragraphs]
+        if ok and not any(p.text for p in paragraphs):
+            self.sink.error(
+                "bad-value",
+                'a note needs some text: note "..." or a { } body of paragraphs, each one or more lines of quoted '
+                "text, with a blank line between paragraphs",
+                location,
+            )
+            ok = False
+        paragraphs = [p for p in paragraphs if p.text]
+        pen = None
+        param_nodes = []
+        for item in items:
+            if item.data == "param":
+                param_nodes.append(item)
+            elif item.data == "illustration":
+                self.sink.error("bad-value", "a note can't have an illustration", location)
+                ok = False
+            else:
+                word = str(item.children[0])
+                if pen is None and is_pen(word):
+                    pen = word
+                    continue
+                ok = False
+                if is_pen(word):
+                    self.sink.error("duplicate-pen", "the note has more than one pen", location)
+                else:
+                    hint = suggest_pen(word)
+                    extra = f"; did you mean {hint}?" if hint else ""
+                    self.sink.error("unknown-pen", f"'{word}' is not a pen{extra}", location)
+        p = self.params(
+            param_nodes, _NOTE_KEYS, "a note",
+            {"at": "anchor it with anchor=start, middle, end or a date", "side": "fix it to edge=top or edge=bottom",
+             "priority": "a note isn't an entity, so it has no priority"},
+        )
+        anchor: NoteAnchor | DateValue | None = NoteAnchor.START
+        if "anchor" in p:
+            text, where = p["anchor"]
+            try:
+                anchor = NoteAnchor(text)
+            except ValueError:
+                try:
+                    anchor = parse_date(text)
+                except DateError as exc:
+                    self.sink.error(
+                        "bad-value", f"anchor= takes start, middle, end or one date, not '{text}': {exc}", where
+                    )
+                    anchor = None
+        edge: Edge | None = Edge.TOP
+        if "edge" in p:
+            text, where = p["edge"]
+            try:
+                edge = Edge(text)
+            except ValueError:
+                self.sink.error("bad-value", f"edge= takes top or bottom, not '{text}'", where)
+                edge = None
+        align = self.horizontal(p, "align", Horizontal.LEFT)
+        inherited_font, inherited_size = context
+        font = self.font(*p["font"]) if "font" in p else inherited_font
+        size = self.corner_length(p, "font_size", inherited_size)
+        heading_font = self.font(*p["heading_font"]) if "heading_font" in p else font
+        heading_size = self.corner_length(p, "heading_font_size", size * HEADING_SCALE if size else None)
+        width = self.corner_length(p, "width", None)
+        margin = self.corner_length(p, "margin", DEFAULT_NOTE_MARGIN_MM, positive=False)
+        clearance = self.corner_length(p, "clearance", DEFAULT_NOTE_CLEARANCE_MM, positive=False)
+        if "width" in p and width is None:
+            ok = False
+        if not ok or None in (anchor, edge, font, size, heading_font, heading_size, align, margin, clearance):
+            return None
+        for para in paragraphs:
+            key = heading_font if para.heading else font
+            what = "a heading of a note" if para.heading else "a note"
+            self.warn_missing_glyphs(self.fonts[key], key, para.text, what, para.location)
+        return Note(tuple(paragraphs), pen or DEFAULT_PEN, font, size, heading_font, heading_size, anchor, edge, width,
+                    align, margin, clearance, order, location)
 
     # -- graphs (§15) ---------------------------------------------------------------------------------------
 

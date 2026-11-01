@@ -1,0 +1,52 @@
+// Notes: paragraphs of free text fixed to the top or bottom edge (language spec §17), alongside a title and
+// credits. A note anchored at the start or end keeps 25mm clear of the title or credits beside it; one anchored
+// near a date is centred on that date. Lines of quoted text one after another make one paragraph, and a blank
+// line starts the next.
+timeline start=1900 end=1999 length=80cm width=180
+
+title "A Century of Clever People" indigo
+    subtitle="Lives, wars and the race to the Moon"
+    font=HersheySerifBold font_size=10mm
+    subtitle_font=HersheySerifMedItalic
+
+credits max_height=16mm {
+    heading "Design and research"
+    "A. N. Author, 2026"
+    "Dates checked against Wikipedia"
+}
+
+note anchor=start {
+    heading "About this timeline"
+    "People are drawn above the line and wars below it. Each bar runs from birth to death,"
+    "or from the start of a war to its end; a torn end means the story carries on."
+
+    "Dates are Gregorian throughout, and every event sits at the start of its day."
+}
+
+note anchor=1945 edge=bottom width=90mm fountain-black {
+    heading "The war years"
+    "Two world wars took up a tenth of the century between them, and changed the"
+    "lives of nearly everyone on this roll."
+}
+
+note anchor=end edge=bottom align=right font=HersheySerifMedItalic {
+    "The century ends with the web, a few years old, about to change everything again."
+}
+
+^!!person "Marie Curie" 1867-1934 blue
+^!person "Albert Einstein" 1879-1955 blue
+^person "Grace Hopper" 1906-1992 violet
+^person "Alan Turing" 1912-1954 green
+^person "Tim Berners-Lee" 1955- green
+
+v!span "First World War" 1914-1918 red fill=crosshatch
+v!span "Second World War" 1939-1945 red fill=crosshatch
+v-span "Late century" 1960-1999 grey
+
+!group "Space Race" 1957-1975 orange fill=diagonal time_label=day {
+  event "Sputnik 1" 1957-10-04
+  event "Apollo 11 lands" 1969-07-20
+}
+
+event "First powered flight" 1903-12-17 time_label=year
+v-event "Berlin Wall falls" 1989-11-09

@@ -32,6 +32,7 @@ from .model import (
     Baseline,
     CreditLine,
     Credits,
+    Edge,
     Entity,
     Fill,
     Graph,
@@ -40,6 +41,9 @@ from .model import (
     Illustration,
     Kind,
     LineMode,
+    Note,
+    NoteAnchor,
+    NoteParagraph,
     OpenEndStyle,
     Side,
     TimelineDocument,
@@ -57,8 +61,8 @@ from .units import parse_length
 
 __all__ = [
     "draw", "layout", "page_for", "parse", "render", "stroke_lengths", "parse_date", "parse_length", "parse_when", "shape", "AxitlError", "BUILTIN_FONTS",
-    "Baseline", "Box", "CreditLine", "Credits", "Horizontal", "DrawStyle", "Drawing", "Page", "RenderError", "RenderOptions", "Stage", "Stroke", "DateRange", "DateValue", "Diagnostic", "Entity", "Fill", "FlagDirection", "LabelPlacement", "Font",
-    "Graph", "GraphPoint", "Illustration", "Kind", "LayoutStyle", "LineMode", "OpenEndStyle", "PENS", "ParseResult",
+    "Baseline", "Box", "CreditLine", "Credits", "Edge", "Horizontal", "DrawStyle", "Drawing", "Page", "RenderError", "RenderOptions", "Stage", "Stroke", "DateRange", "DateValue", "Diagnostic", "Entity", "Fill", "FlagDirection", "LabelPlacement", "Font",
+    "Graph", "GraphPoint", "Illustration", "Kind", "LayoutStyle", "LineMode", "Note", "NoteAnchor", "NoteParagraph", "OpenEndStyle", "PENS", "ParseResult",
     "PlacedBar", "PlacedBlock", "PlacedEvent", "PlacedGraph", "ValueScaleMode", "YScale",
     "PlacedIllustration", "PlacedText", "Precision", "ResolvedLayout", "Resource", "Severity", "ShapedText", "Side",
     "SourceLocation", "Tick", "TimelineDocument", "TimelineSettings", "Title", "__version__",

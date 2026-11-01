@@ -32,7 +32,14 @@ const keywords = {
   credits:
     'The credits, in the bottom-right corner: a `{ }` body of quoted lines, `heading "…"` for a heading, with ' +
     '`illustration(logo.svg)` to their right at their height. `max_height=` shrinks them to fit (§16.2).',
-  heading: 'A heading line in the credits, larger than the rest and with space above it: `heading "Sources"` (§16.2).',
+  note:
+    'Free text on the top or bottom edge: narration, or notes about the timeline. Its text in quotes, or a `{ }` ' +
+    'body where quoted lines together make a paragraph and a blank line starts the next. `anchor=` puts it at the ' +
+    '`start`, `middle` or `end`, or centred on a date; it keeps `clearance=` (25mm) from the title, the credits ' +
+    'and other notes, and nothing else is placed on it (§17).',
+  heading:
+    'A heading line in the credits or a note, larger than the rest and with space above it: `heading "Sources"` ' +
+    '(§§16.2, 17).',
 };
 
 const parameters = {
@@ -113,6 +120,24 @@ const cornerParameters = {
   gap: 'The space between the illustration and the text. Default `4mm` (§16).',
 };
 
+// A note's parameters (§17), where a name means something of its own there.
+const noteParameters = {
+  anchor: 'Where along the roll the note goes: `start` (the default), `middle`, `end`, or a date it is centred on, ' +
+    '`anchor=1945` (§17.2).',
+  edge: 'The finished edge it sits against: `top` (the default) or `bottom` (§17.2).',
+  width: 'The longest a line may be, along the roll; paragraphs are wrapped to it. Default: 30 times its ' +
+    '`font_size`, about 60 characters (§17.2).',
+  align: 'Which way the lines are aligned: `left` (the default) or `right` (§17.1).',
+  font: 'The font of the note\'s text. Default: the timeline\'s (§§3.8, 17).',
+  font_size: 'The size of the note\'s text, its em. Default: the timeline\'s `font_size` (§17).',
+  heading_font: 'The font of the note\'s headings. Default: the note\'s own font (§17).',
+  heading_font_size: 'The size of the note\'s headings. Default: 1.25 times its `font_size` (§17).',
+  margin: 'How far the ink keeps from its edge, and from either end of the paper. Default `5mm`, clear of the ' +
+    'crop marks (§17.2).',
+  clearance: 'How far along the roll it keeps from the title, the credits and other notes beside it. Default ' +
+    '`25mm`; `0` lets it touch (§17.3).',
+};
+
 // A graph's parameters (§15). Where a name is shared with other declarations, this is its meaning on a graph.
 const graphParameters = {
   data: 'The CSV file to read the points from, relative to this file. Read as it comes: see `first_row=`, ' +
@@ -148,9 +173,10 @@ const graphParameters = {
   font_size: 'The size of the title; value labels are three-quarters of it. Default: the timeline\'s (§15.9).',
 };
 
-/** Help for a parameter of a declaration (graph, title, credits, illustration, timeline, include or an entity). */
+/** Help for a parameter of a declaration (graph, title, credits, note, illustration, timeline, include or an entity). */
 function parameter(key, decl) {
   if (decl === 'graph') return graphParameters[key];
+  if (decl === 'note') return noteParameters[key];
   if (decl === 'illustration') return illustrationParameters[key];
   if (decl === 'title' || decl === 'credits') {
     if (key === 'font_size') {
@@ -234,8 +260,17 @@ const values = {
       'say. White is the paper and isn\'t drawn (§3.5).',
   },
   align: {
-    left: 'The lines aligned to the left (the default for the title).',
+    left: 'The lines aligned to the left (the default for the title and notes).',
     right: 'The lines aligned to the right (the default for the credits).',
+  },
+  anchor: {
+    start: 'At the start of the paper, its ink `margin` from the start (the default) (§17.2).',
+    middle: 'Centred on the middle of the paper (§17.2).',
+    end: 'At the end of the paper, its ink `margin` from the end (§17.2).',
+  },
+  edge: {
+    top: 'Against the finished top edge, above the baseline (the default) (§17.2).',
+    bottom: 'Against the finished bottom edge, below the baseline (§17.2).',
   },
   end: {
     now:
@@ -283,6 +318,6 @@ function head(target) {
 }
 
 module.exports = {
-  keywords, parameters, graphParameters, illustrationParameters, cornerParameters, parameter, values, pen, penDetail, font,
+  keywords, parameters, graphParameters, illustrationParameters, cornerParameters, noteParameters, parameter, values, pen, penDetail, font,
   head,
 };
