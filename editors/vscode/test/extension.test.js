@@ -38,7 +38,7 @@ test('activation registers completion, with its trigger characters, and hover fo
 
 test('keywords go in as templates, ready to tab through', async () => {
   const items = await complete('|');
-  assert.deepStrictEqual(labels(items), ['timeline', 'include', 'person', 'event', 'span', 'group', 'graph']);
+  assert.deepStrictEqual(labels(items), ['timeline', 'include', 'person', 'event', 'span', 'group', 'graph', 'title', 'credits']);
   assert.strictEqual(find(items, 'person').insertText.value, 'person "${1:Name}" ${2:1900}-${3:1950}$0');
   assert.strictEqual(find(items, 'group').insertText.value, 'group "${1:Name}" ${2:1900}-${3:1950} {\n\t$0\n}');
   assert.ok(find(items, 'timeline').insertText.value.includes('\twidth=${4:210}'));
@@ -104,7 +104,7 @@ test('a scale keeps the number typed and offers each unit', async () => {
 test('include names .axitl files and folders beside the document, but not the document itself', async () => {
   const items = await complete('include "|"');
   assert.deepStrictEqual(labels(items), [
-    'century.axitl', 'chernobyl.axitl', 'crash-1929.axitl', 'labels.axitl', 'reactor-power.axitl',
+    'century.axitl', 'chernobyl.axitl', 'crash-1929.axitl', 'labels.axitl', 'reactor-power.axitl', 'title-and-credits.axitl',
     'common/', 'data/', 'illustrations/',
   ]);
   assert.strictEqual(find(items, 'common/').command.command, 'editor.action.triggerSuggest');
@@ -115,7 +115,7 @@ test('include names .axitl files and folders beside the document, but not the do
 
 test('illustration names .svg files', async () => {
   const items = await complete('event "E" 1900 illustration(illustrations/|)');
-  assert.deepStrictEqual(labels(items), ['apple.svg']);
+  assert.deepStrictEqual(labels(items), ['apple.svg', 'badge.svg']);
   assert.strictEqual(items[0].insertText, 'apple.svg');
 });
 
@@ -183,4 +183,62 @@ test('fill_pen= offers every pen with its swatch, and hovering one says which pe
   assert.ok(hover('span "S" 1900-1950 fill_pen=2H-pen|cil').contents.value.includes('2H pencil (hard and light)'));
   assert.ok(hover('span "S" 1900-1950 fill_p|en=2H-pencil').contents.value.includes('soft'));
   assert.ok(hover('graph "G" un|it=MW').contents.value.includes('every value scale'));
+});
+
+// -- the title and credits (language spec §16) ------------------------------------------------------------------
+
+test('a title offers pens, its own parameters and an illustration; the credits likewise', async () => {
+  const vocabulary = require('../src/vocabulary.json');
+  const title = await complete('title "A Century" |');
+  assert.ok(find(title, 'blue') && find(title, 'illustration(…)'));
+  assert.deepStrictEqual(labels(title.filter((i) => i.kind === 'Property')), vocabulary.titleParameters.map((k) => `${k}=`));
+  const credits = await complete('credits |');
+  assert.deepStrictEqual(labels(credits.filter((i) => i.kind === 'Property')), vocabulary.creditsParameters.map((k) => `${k}=`));
+  assert.ok(find(credits, 'illustration(…)'));
+  const continued = await complete('title "A Century"\n    subtitle="Lives"\n    |');
+  assert.ok(!labels(continued).includes('subtitle=') && labels(continued).includes('subtitle_font='));
+});
+
+test("inside a title's or the credits' illustration: at= as well as (or instead of) height=", async () => {
+  const props = async (source) => labels((await complete(source)).filter((i) => i.kind === 'Property'));
+  assert.deepStrictEqual(await props('title "T" illustration(a.svg |)'), ['height=', 'at=', 'fill=', 'pens=']);
+  assert.deepStrictEqual(await props('title "T"\n    illustration(a.svg |)'), ['height=', 'at=', 'fill=', 'pens=']);
+  assert.deepStrictEqual(await props('credits illustration(logo.svg |) {'), ['at=', 'fill=', 'pens=']);
+  assert.deepStrictEqual(await props('event "E" 1900 illustration(a.svg |)'), ['height=', 'fill=', 'pens=']);
+  const at = await complete('title "T" illustration(a.svg at=|)');
+  assert.deepStrictEqual(labels(at), ['left', 'right']);
+  assert.ok(at[1].documentation.value.includes('right of the text'));
+  assert.deepStrictEqual(labels(await complete('credits align=|')), ['left', 'right']);
+  assert.deepStrictEqual(labels(await complete('credits illustration(logo.svg pens=|)')), ['auto']);
+  assert.ok(labels(await complete('credits illustration(logo.svg fill=|)')).includes('solid'));
+});
+
+test('subtitle and heading fonts offer the built-in fonts', async () => {
+  assert.ok(labels(await complete('title "T" subtitle="S" subtitle_font=|')).includes('HersheySerifMed'));
+  assert.ok(labels(await complete('credits heading_font=|')).includes('HersheySansMed'));
+});
+
+test('inside the credits only a heading can start a line', async () => {
+  const items = await complete('credits {\n  "Christopher Wenham, 2026"\n  |\n}');
+  assert.deepStrictEqual(labels(items), ['heading']);
+  assert.strictEqual(find(items, 'heading').insertText.value, 'heading "${1:Sources}"$0');
+  assert.deepStrictEqual(await complete('credits {\n  heading "|'), []);
+  const outside = await complete('credits {\n  "x"\n}\n|');
+  assert.ok(labels(outside).includes('person') && !labels(outside).includes('heading'));
+});
+
+test('hover help for the title and credits and their parameters', () => {
+  assert.ok(hover('tit|le "A Century"').contents.value.includes('top-left corner'));
+  assert.ok(hover('cred|its {').contents.value.includes('bottom-right corner'));
+  assert.ok(hover('title "T" subti|tle="Lives"').contents.value.includes('second, smaller line'));
+  assert.ok(hover('title "T" font_si|ze=12mm').contents.value.includes('`12mm`'));
+  assert.ok(hover('credits font_si|ze=3mm {').contents.value.includes("timeline's `font_size`"));
+  assert.ok(hover('credits max_hei|ght=25mm {').contents.value.includes('scaled down'));
+  assert.ok(hover('title "T" illustration(a.svg a|t=right)').contents.value.includes('right for the credits'));
+  assert.ok(hover('credits ali|gn=left {').contents.value.includes('Which way the lines are aligned'));
+  assert.ok(hover('credits align=ri|ght {').contents.value.includes('default for the credits'));
+  assert.ok(hover('title "T" subtitle_font=HersheySer|ifMed').contents.value.includes('Built-in stroke font'));
+  assert.ok(hover('credits illustration(logo.svg fi|ll=solid) {').contents.value.includes('dense hatch'));
+  assert.ok(hover('credits illustration(logo.svg pe|ns=auto) {').contents.value.includes('own pass'));
+  assert.ok(hover('credits illustration(logo.svg pens=au|to) {').contents.value.includes('#ff6600 to orange'));
 });

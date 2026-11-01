@@ -17,6 +17,19 @@ def test_check_passes_on_the_examples(capsys):
     assert "now:      " in out  # the example ends at now, so check says which value it used
 
 
+@pytest.mark.parametrize("example", sorted(p.name for p in EXAMPLES.glob("*.axitl")))
+def test_every_example_passes_check(example, capsys):
+    assert main(["check", "--now", "2026-10-12", str(EXAMPLES / example)]) == EXIT_OK, capsys.readouterr().out
+
+
+def test_check_reports_the_title_and_credits(capsys):
+    assert main(["check", str(EXAMPLES / "title-and-credits.axitl")]) == EXIT_OK
+    out = capsys.readouterr().out
+    assert '  title:    "A Century of Clever People", ' in out and " in the top-left corner" in out
+    assert "  credits:  5 lines, " in out and "20mm tall in the bottom-right corner; text " in out
+    assert "scaled down to max_height=20mm" in out
+
+
 def test_check_json_report(capsys):
     assert main(["check", "--json", str(EXAMPLES / "industrial.axitl")]) == EXIT_OK
     report = json.loads(capsys.readouterr().out)

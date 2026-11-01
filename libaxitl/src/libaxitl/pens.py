@@ -15,6 +15,26 @@ PENS: tuple[str, ...] = (
 DEFAULT_PEN = "black"
 _PEN_SET = frozenset(PENS)
 
+# Screen colours for previews; on paper the pen decides. They are also what an illustration's colours are
+# matched against with pens=auto (§3.5).
+_COLOURS = {
+    "red": "#c62828", "orange": "#ef6c00", "yellow": "#f9a825", "green": "#2e7d32", "blue": "#1565c0",
+    "indigo": "#3949ab", "violet": "#6a1b9a", "black": "#212121", "grey": "#757575",
+}
+
+
+def pen_colour(pen: str) -> str:
+    """The colour a pen is previewed in, as #rrggbb."""
+    if pen in _COLOURS:
+        return _COLOURS[pen]
+    if pen.startswith("fountain-"):
+        return _COLOURS.get(pen.removeprefix("fountain-"), "#212121")
+    grade = pen.removesuffix("-pencil")
+    if grade in PENCIL_GRADES:  # soft grades darker, hard grades lighter
+        shade = 0x55 + PENCIL_GRADES.index(grade) * 6
+        return f"#{shade:02x}{shade:02x}{shade + 8:02x}"
+    return "#212121"
+
 
 def is_pen(word: str) -> bool:
     return word in _PEN_SET

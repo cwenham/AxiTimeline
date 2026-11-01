@@ -1,7 +1,8 @@
-"""The ``axitime`` command line: ``check``, ``list-pens``, ``render`` and ``plot``.
+"""The ``axitime`` command line: ``check``, ``list-pens``, ``render``, ``plot`` and ``convert-font``.
 
 The first three run the same pipeline (parse, layout, draw) in memory; ``render`` then writes SVG files, a
 preview of every pen and one file per pen. ``plot`` never reads ``.axitl`` source: it draws one per-pen SVG.
+``convert-font`` turns a TrueType, OpenType or Type 1 font into an SVG font a timeline can use.
 """
 
 from __future__ import annotations
@@ -42,6 +43,7 @@ from libaxitl.units import UnitError, format_number, parse_length
 from . import __version__
 from . import joblog
 from .config import ConfigError, PlotterConfig, load_config
+from .fontconvert import FontConvertError, convert_font
 from .jobhash import job_hash, resource_hashes
 from .plotfile import PlotFileError, load_plot_file
 from .plotting import Cancelled, ManualTransport, PlotError, plan_strips, run, stop_signals_cancel, window_for
@@ -133,6 +135,7 @@ def _summary(result: ParseResult) -> dict:
     pens = Counter(e.pen for e in entities)
     pens.update(e.fill_pen for e in entities if e.fill is not Fill.NONE and e.fill_pen != e.pen)
     pens.update(p for g in result.document.graphs for p in {g.pen, g.fill_pen})
+    pens.update(c.pen for c in (result.document.title, result.document.credits) if c is not None)
     return {
         "entities": {k.value: kinds.get(k, 0) for k in Kind},
         "graphs": len(result.document.graphs),
@@ -169,7 +172,37 @@ def _layout_summary(resolved: ResolvedLayout) -> dict:
             }
             for g in resolved.graphs
         ],
+        **{
+            kind: {
+                "pen": block.pen,
+                "width_mm": round(block.box.width, 2),
+                "height_mm": round(block.box.height, 2),
+                "font_sizes_mm": sorted({round(t.shaped.size_mm, 2) for t in block.texts}),
+            }
+            for kind, block in (("title", resolved.title), ("credits", resolved.credits))
+            if block is not None
+        },
     }
+
+
+def _block_line(resolved: ResolvedLayout, kind: str) -> str | None:
+    """The title or credits for check's summary: size and where, and the credits' text size if max_height=
+    shrank it, since that is when it may get too small to read."""
+    block = resolved.title if kind == "title" else resolved.credits
+    if block is None:
+        return None
+    corner = "top-left" if kind == "title" else "bottom-right"
+    what = f'"{block.texts[0].text}"' if kind == "title" else _plural(len(block.texts), "line")
+    first, last = block.texts[0], block.texts[-1]
+    tall = last.y - first.y + first.shaped.cap_height  # capitals to last baseline, as max_height= measures it
+    line = f"  {kind + ':':<9} {what}, {_length(block.box.width)} wide and {_length(tall)} tall in the {corner} corner"
+    credits = resolved.document.credits
+    if kind == "credits" and credits is not None and credits.max_height_mm is not None:
+        sizes = sorted({t.shaped.size_mm for t in block.texts})
+        if sizes[-1] < max(credits.font_size_mm, credits.heading_font_size_mm) - 1e-9:
+            line += (f"; text {format_number(sizes[0], 1)} to {format_number(sizes[-1], 1)}mm, scaled down to "
+                     f"max_height={format_number(credits.max_height_mm)}mm")
+    return line
 
 
 def _plural(n: int, word: str) -> str:
@@ -269,6 +302,9 @@ def cmd_check(args: argparse.Namespace) -> int:
                 f"{number_text(g.origin)}{' ' + g.graph.unit if g.graph.unit else ''} "
                 f"on the baseline; reaches {_length(g.above_mm)} above and {_length(g.below_mm)} below"
             )
+        for kind in ("title", "credits"):
+            if line := _block_line(resolved, kind):
+                print(line)
     if job.drawing:
         print("  pens:     " + ", ".join(job.drawing.pens) + f"  ({resolved.axis_pen} draws the baseline and ticks first)")
     if job.hash:
@@ -493,6 +529,37 @@ def _confirm_and_run(args, plot_file, strips, window, config, plotter, lookup, f
     return EXIT_ERRORS
 
 
+# -- convert-font ------------------------------------------------------------------------------------------
+
+
+def cmd_convert_font(args: argparse.Namespace) -> int:
+    source = Path(args.font)
+    out = Path(args.out) if args.out else Path(source.stem + ".svg")
+    if out.suffix.lower() != ".svg":
+        raise UsageError(f"the output must end .svg, since a timeline names a custom font by its .svg file: {out}")
+    if out.resolve() == source.resolve():
+        raise UsageError("the output would overwrite the font being converted")
+    try:
+        converted = convert_font(source, args.characters, args.index)
+    except FontConvertError as exc:
+        print(f"{source}: {exc}", file=sys.stderr)
+        return EXIT_ERRORS
+    try:
+        out.write_text(converted.svg, encoding="utf-8")
+    except OSError as exc:
+        print(f"{out}: can't write it: {exc.strerror or exc}", file=sys.stderr)
+        return EXIT_ERRORS
+    print(f"wrote {out}: {converted.characters} characters of {converted.family}, "
+          f"{format_number(converted.units_per_em)} units to the em")
+    if converted.missing:
+        print(f"  not in the font, so left out: {' '.join(converted.missing)}")
+    for note in converted.skipped:
+        print(f"  left out, its outline couldn't be read: {note}")
+    print("  each letter is the font's outline, so the plotter draws it hollow; it suits large text such as a title")
+    print(f'  use it with font="{out.name}" (relative to the .axitl file that names it)')
+    return EXIT_OK
+
+
 # -- the command line -----------------------------------------------------------------------------------------
 
 
@@ -537,6 +604,17 @@ def build_parser() -> argparse.ArgumentParser:
     plot.add_argument("--simulate", action="store_true", help="show the strips that would be plotted, then stop")
     plot.add_argument("--config", metavar="FILE", help="plotter settings (default: ~/.config/axitime/plotter.toml)")
     plot.set_defaults(handler=cmd_plot)
+
+    font = commands.add_parser(
+        "convert-font", help="turn a TrueType, OpenType or Type 1 font into an SVG font a timeline can use"
+    )
+    font.add_argument("font", help="the font file: .ttf, .otf, .ttc, .woff, .pfa or .pfb")
+    font.add_argument("-o", "--out", metavar="FILE", help="the SVG font to write (default: the font's name, .svg, here)")
+    font.add_argument("--characters", metavar="TEXT",
+                      help="only these characters (default: every character the font has)")
+    font.add_argument("--index", type=int, default=0, metavar="N",
+                      help="which font of a collection (.ttc) to convert, counting from 0")
+    font.set_defaults(handler=cmd_convert_font)
     return parser
 
 

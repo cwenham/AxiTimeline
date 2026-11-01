@@ -6,7 +6,8 @@
  * preprocessor and grammar do (language spec §§3, 3.9, 3.10): `//` comments outside quotes, a declaration
  * continued on indented `key=value` lines, and each declaration shaped as a head, a quoted label, a date,
  * then items (pens, `key=value` parameters and `illustration(...)`). A graph (§15) has no date: its items follow
- * its title, and its `{ }` body holds points rather than declarations.
+ * its title, and its `{ }` body holds points rather than declarations. A title (§16.1) is like a graph's head; the
+ * credits (§16.2) have no label, and their `{ }` body holds lines of text, each perhaps marked `heading`.
  */
 
 const vocabulary = require('./vocabulary.json');
@@ -14,7 +15,8 @@ const vocabulary = require('./vocabulary.json');
 const PENS = Object.keys(vocabulary.pens);
 const PEN_SET = new Set(PENS);
 const HEAD = /^([\^v]?)([!-]*)(person|event|span|group)$/;
-const KEY_START = /^[A-Za-z_][A-Za-z0-9_]*=/;
+const KEY_START = /^(?:[A-Za-z_][A-Za-z0-9_]*=|illustration\s*\()/; // what an indented continuation starts with (§3.10)
+const DECLARATIONS = new Set(['timeline', 'include', 'graph', 'title', 'credits']);
 const TOKEN = /\s+|"((?:[^"\\]|\\.?)*)("?)|[{}()=]|[^\s"{}()=]+/g;
 
 /** The code on a line and the column its `//` comment starts at (-1 for none), skipping `//` inside quotes. */
@@ -62,9 +64,9 @@ function isContinuation(line) {
   return /^[ \t]/.test(line) && KEY_START.test(splitComment(line).code.trim());
 }
 
-/** The kind of declaration a head word starts: timeline, include, graph, an entity keyword, or null. */
+/** The kind of declaration a head word starts: timeline, include, graph, title, credits, an entity keyword, or null. */
 function declarationKind(word) {
-  if (word === 'timeline' || word === 'include' || word === 'graph') return word;
+  if (DECLARATIONS.has(word)) return word;
   const m = HEAD.exec(word);
   return m ? m[3] : null;
 }
@@ -127,8 +129,8 @@ function summarise(tokens) {
 }
 
 /**
- * The `{ }` body the line sits inside, if any: the kind of declaration that opened it (group, or graph for a
- * body of points), or null.
+ * The `{ }` body the line sits inside, if any: the kind of declaration that opened it (group, graph for a body of
+ * points, or credits for a body of lines), or null.
  */
 function enclosingBody(lines, line) {
   const open = [];
@@ -148,21 +150,25 @@ function enclosingBody(lines, line) {
 }
 
 const NONE = Object.freeze({ kind: 'none' });
+const FONT_KEYS = new Set(['font', 'subtitle_font', 'heading_font']);
 
 /**
  * What fits at the cursor, for completion. One of:
  *
  * - `{kind: 'none'}`: a label, a date, a comment, or somewhere nothing can be suggested
- * - `{kind: 'statement', marks, prefix, start, timeline, inBody, continues}`: the start of a declaration.
+ * - `{kind: 'statement', marks, prefix, start, timeline, inBody, body, continues}`: the start of a declaration.
  *   `marks` are side and priority marks already typed (only an entity can follow them); `timeline` says
- *   whether a timeline declaration is still possible here; `continues`, on an indented line, describes the
- *   declaration the line could continue instead (`{decl, used, pen, illustration}`), or is null
+ *   whether a timeline declaration is still possible here; `body` is the kind of `{ }` body the line is in
+ *   (group or credits), or null; `continues`, on an indented line, describes the declaration the line could
+ *   continue instead (`{decl, used, pen, illustration}`), or is null
  * - `{kind: 'item', decl, prefix, start, used, pen, illustration}`: an item on a declaration's line: a
- *   parameter (`used` lists those already given), a pen (`pen` says one is already given) or an illustration
+ *   parameter (`used` lists those already given), a pen (`pen` says one is already given) or an illustration.
+ *   Inside an illustration's parentheses `decl` is illustration and `owner` the declaration it belongs to
  * - `{kind: 'value', decl, key, prefix, start, quoted}`: the value after `key=`
  * - `{kind: 'path', purpose, prefix, start, quoted}`: a file name: `purpose` is include or illustration
  *
- * `decl` is timeline, include, graph, illustration (inside its parentheses) or an entity keyword. `prefix` is what
+ * `decl` is timeline, include, graph, title, credits, illustration (inside its parentheses) or an entity keyword.
+ * `prefix` is what
  * has been typed of the thing being completed, and `start` the column it starts at, so a suggestion replaces
  * the columns from `start` to the cursor.
  */
@@ -181,6 +187,7 @@ function completionContext(lines, line, character) {
     if (!m) return NONE;
     const body = enclosingBody(lines, line);
     if (body === 'graph') return NONE; // a graph's body holds points, a date and a value on each line
+    if (body === 'credits' && (m[1] || m[2])) return NONE; // a credits line is text, perhaps a heading
     const inBody = body !== null;
     const hasTimeline = lines.some(
       (l, i) => i !== line && /^\s*timeline(?![\w])/.test(splitComment(l).code)
@@ -200,13 +207,14 @@ function completionContext(lines, line, character) {
       start: character - m[3].length,
       timeline: !hasTimeline && !indented && !inBody,
       inBody,
-      continues,
+      body,
+      continues: body === 'credits' ? null : continues,
     };
   }
 
   let tokens = own;
-  if (own[0].type === 'word' && own[1] && own[1].type === '=') {
-    if (!above) return NONE; // a key=value line with nothing above to continue
+  if (own[0].type === 'word' && own[1] && (own[1].type === '=' || (own[0].text === 'illustration' && own[1].type === '('))) {
+    if (!above) return NONE; // a continuation line with nothing above to continue
     tokens = above.tokens.concat(own);
   }
   const decl = tokens[0].type === 'word' ? declarationKind(tokens[0].text) : null;
@@ -215,7 +223,9 @@ function completionContext(lines, line, character) {
   let items;
   if (decl === 'timeline') {
     items = tokens.slice(1);
-  } else if (decl === 'graph') {
+  } else if (decl === 'credits') {
+    items = tokens.slice(1);
+  } else if (decl === 'graph' || decl === 'title') {
     const title = tokens[1];
     if (!title || title.type !== 'string' || !title.closed) return NONE; // typing the title
     if (title === last && touching) return NONE;
@@ -238,7 +248,9 @@ function completionContext(lines, line, character) {
   const after = text.slice(character).replace(/^[^\s"{}()=]*/, ''); // the rest of the line, less the word at the cursor
   const following = tokenize(splitComment(after).code).concat(continuationBelow(lines, line));
   const before = touching ? items.slice(0, -1) : items;
-  return itemContext(decl, items, before.concat(following), touching, character);
+  const context = itemContext(decl, items, before.concat(following), touching, character);
+  if (context.kind !== 'none' && context.decl === 'illustration') context.owner = decl;
+  return context;
 }
 
 function pathContext(purpose, token, character) {
@@ -333,14 +345,14 @@ function hoverTarget(lines, line, character) {
   const span = { start: t.start, end: t.end };
   if (t.type === 'string') {
     const key = tokens[i - 2];
-    if (prev && prev.type === '=' && key && key.text === 'font' && vocabulary.fonts.includes(t.content)) {
+    if (prev && prev.type === '=' && key && FONT_KEYS.has(key.text) && vocabulary.fonts.includes(t.content)) {
       return Object.assign({ type: 'font', name: t.content }, span);
     }
     return null;
   }
   if (t.type !== 'word') return null;
   if (i === 0 && !isContinuation(text)) {
-    if (t.text === 'timeline' || t.text === 'include' || t.text === 'graph') {
+    if (DECLARATIONS.has(t.text) || (t.text === 'heading' && enclosingBody(lines, line) === 'credits')) {
       return Object.assign({ type: 'keyword', name: t.text }, span);
     }
     const m = HEAD.exec(t.text);
@@ -366,7 +378,7 @@ function hoverTarget(lines, line, character) {
   if (prev && prev.type === '=') {
     const key = tokens[i - 2];
     if (key && key.type === 'word') {
-      if (key.text === 'font' && vocabulary.fonts.includes(t.text)) return Object.assign({ type: 'font', name: t.text }, span);
+      if (FONT_KEYS.has(key.text) && vocabulary.fonts.includes(t.text)) return Object.assign({ type: 'font', name: t.text }, span);
       if (key.text === 'fill_pen' && PEN_SET.has(t.text)) return Object.assign({ type: 'pen', name: t.text }, span);
       return Object.assign({ type: 'value', key: key.text, name: t.text }, span);
     }

@@ -16,16 +16,21 @@ from lark import Token, Tree
 from lark.exceptions import UnexpectedCharacters, UnexpectedInput, UnexpectedToken
 
 from . import grammar, graphdata
+from .colours import WHITE, ColourError, nearest_pen, parse_colour
 from .dates import DateError, DateRange, DateValue, parse_date, parse_when, time_label_text
 from .diagnostics import AxitlError, Diagnostic, Diagnostics, SourceLocation
 from .fetch import Fetcher, Resolver, Resource, no_resolver, relative_name
 from .fonts import BUILTIN_FONTS, DEFAULT_FONT, Font, FontError, load_builtin_font, parse_svg_font
+from .illustrate import illustration_colours
 from .illustration import IllustrationError, intrinsic_size
 from .model import (
     Baseline,
+    CreditLine,
+    Credits,
     Entity,
     Fill,
     Graph,
+    Horizontal,
     Illustration,
     Kind,
     LineMode,
@@ -34,6 +39,7 @@ from .model import (
     TimeLabel,
     TimelineDocument,
     TimelineSettings,
+    Title,
     ValueScaleMode,
     YScale,
 )
@@ -62,9 +68,21 @@ _GRAPH_KEYS = (
     "value_marks", "unit", "font", "font_size",
 )
 _CSV_KEYS = ("first_row", "last_row", "header", "separator", "time_column", "value_column", "time_format")
+_TITLE_KEYS = ("font", "font_size", "subtitle", "subtitle_font", "subtitle_font_size", "align", "margin", "gap")
+_CREDITS_KEYS = ("font", "font_size", "heading_font", "heading_font_size", "max_height", "align", "margin", "gap")
+_ILLUSTRATION_KEYS = ("height", "fill", "pens")  # inside an entity's illustration( ... )
+_TITLE_ILLUSTRATION_KEYS = ("height", "at", "fill", "pens")
+_CREDITS_ILLUSTRATION_KEYS = ("at", "fill", "pens")  # as tall as the credits' lines, always
 _UNCLOSED_GROUP = "this group's { body is never closed with }"
 _UNCLOSED_GRAPH = "this graph's { body of points is never closed with }"
+_UNCLOSED_CREDITS = "the credits' { body of lines is never closed with }"
 DEFAULT_GRAPH_PEN = "HB-pencil"
+# The title and credits (§16).
+DEFAULT_TITLE_SIZE_MM = 12.0
+SUBTITLE_SCALE = 0.5  # a subtitle's size, as a fraction of the title's
+HEADING_SCALE = 1.25  # a credits heading's size, as a multiple of the credits' font_size
+DEFAULT_CORNER_MARGIN_MM = 5.0  # from the finished edges, clear of the crop mark in the corner
+DEFAULT_CORNER_GAP_MM = 4.0  # between an illustration and the text beside it
 
 
 @dataclass(frozen=True)
@@ -98,6 +116,11 @@ def parse(source: str, resolve: Resolver | None = None, source_name: str = "main
                 location = opener.location
                 if opener.text.startswith("graph"):
                     message = _UNCLOSED_GRAPH
+                elif opener.text.startswith("credits"):
+                    message = _UNCLOSED_CREDITS
+        elif message.startswith("a timeline declaration can't") and 1 <= line <= len(lines):
+            if lines[line - 1].text.startswith("title"):
+                message = "a title can't have a { } body; give its second line as subtitle=\"...\""
         sink.error("syntax", message, location)
         raise AxitlError(sink.items) from None
     document = _Builder(lines, fetcher, sink, source_name).build(tree)
@@ -117,12 +140,17 @@ def _syntax_message(exc: UnexpectedInput, text: str) -> str:
         found = f"'{exc.char}'"
     else:
         found = "something unexpected"
+    if "HEADING" in expected:
+        return (
+            f"{found} can't start a line of the credits; each line is a quoted string, or heading and a quoted "
+            'string: heading "Sources"'
+        )
     if "HEAD" in expected or "TIMELINE" in expected:
         if found == "'}'":
             return "this } has no group { to close"
         return (
-            f"{found} doesn't start a declaration; a line starts with timeline, person, event, span, group or "
-            "graph (with optional ^/v side and !/- priority marks before an entity's keyword)"
+            f"{found} doesn't start a declaration; a line starts with timeline, person, event, span, group, "
+            "graph, title or credits (with optional ^/v side and !/- priority marks before an entity's keyword)"
         )
     if expected == {"STRING"}:
         return f'expected a quoted label, e.g. "Isaac Newton", but found {found}'
@@ -169,7 +197,9 @@ class _Builder:
             return None
         return mm
 
-    def params(self, nodes: list[Tree], allowed: tuple[str, ...], where: str) -> dict[str, tuple[str, SourceLocation]]:
+    def params(
+        self, nodes: list[Tree], allowed: tuple[str, ...], where: str, hints: dict[str, str] | None = None
+    ) -> dict[str, tuple[str, SourceLocation]]:
         found: dict[str, tuple[str, SourceLocation]] = {}
         for node in nodes:
             key_token, value_token = node.children
@@ -177,7 +207,9 @@ class _Builder:
             if key not in allowed:
                 hint = difflib.get_close_matches(key, allowed, n=1)
                 extra = f"; did you mean {hint[0]}=?" if hint else ""
-                if where != "timeline" and key in ("side", "priority"):
+                if hints and key in hints:
+                    extra = f"; {hints[key]}"
+                elif where != "timeline" and key in ("side", "priority"):
                     extra = "; set an entity's side with a ^ or v prefix and its priority with ! or - marks"
                 self.sink.error("unknown-parameter", f"{where} has no {key}= parameter{extra}", location)
                 continue
@@ -249,9 +281,26 @@ class _Builder:
                 self.warn_missing_glyphs(self.fonts[g.font], g.font, g.title, f'graph "{g.title}"', g.location)
                 self.warn_missing_glyphs(self.fonts[g.font], g.font, g.unit, f'the unit of graph "{g.title}"',
                                          g.location)
+        title = credits = None
+        for kind in ("title", "credits"):
+            nodes = [c for c in tree.children if c.data == kind]
+            for extra in nodes[1:]:
+                self.sink.error(
+                    f"duplicate-{kind}",
+                    f"only one {kind} declaration is allowed; the first is at {self.loc(nodes[0])}",
+                    self.loc(extra),
+                )
+            if nodes:
+                if kind == "title":
+                    title = self.title(nodes[0], graph_context)
+                else:
+                    credits = self.credits(nodes[0], graph_context)
+        self.check_corner_glyphs(title, credits)
         if settings is None or self.sink.has_errors:
             return None
-        return TimelineDocument(settings, tuple(entities), dict(sorted(self.fonts.items())), tuple(graphs))
+        return TimelineDocument(
+            settings, tuple(entities), dict(sorted(self.fonts.items())), tuple(graphs), title, credits
+        )
 
     def timeline(self, node: Tree) -> TimelineSettings | None:
         location = self.loc(node)
@@ -490,6 +539,14 @@ class _Builder:
                         self.loc(child),
                     )
                     continue
+                if child.data in ("title", "credits"):
+                    self.sink.error(
+                        f"nested-{child.data}",
+                        f"the {child.data} can't be inside a group; declare it at the top level of a file (it can "
+                        "be an included file)",
+                        self.loc(child),
+                    )
+                    continue
                 inherited = (pen, font or inherited_font, font_size or inherited_size, time_label,
                              fill_pen or inherited_fill_pen)
                 built = self.entity(child, inherited, label)
@@ -543,22 +600,234 @@ class _Builder:
         return when
 
     def illustration(self, node: Tree) -> Illustration | None:
+        """An entity's illustration (§3.5)."""
+        hints = {
+            "at": "at= places the illustration of a title or the credits; an entity's illustration is placed "
+            "automatically (§3.5)",
+        }
+        return self.attached_illustration(node, _ILLUSTRATION_KEYS, hints, Horizontal.LEFT)[0]
+
+    def horizontal(self, p: dict, key: str, default: Horizontal) -> Horizontal | None:
+        """A left or right parameter (at= or align=, §16), or ``default``; None after an error."""
+        if key not in p:
+            return default
+        text, where = p[key]
+        try:
+            return Horizontal(text)
+        except ValueError:
+            self.sink.error("bad-value", f"{key}= takes left or right, not '{text}'", where)
+            return None
+
+    def attached_illustration(
+        self, node: Tree, allowed: tuple[str, ...], hints: dict[str, str], default_at: Horizontal
+    ) -> tuple[Illustration | None, Horizontal]:
+        """An illustration and which side of its text it goes (at=, for a title or the credits, §16)."""
         location = self.loc(node)
         _, file_token, *param_nodes = node.children
-        p = self.params(param_nodes, ("height",), "illustration")
+        p = self.params(param_nodes, allowed, "illustration", hints)
+        at = self.horizontal(p, "at", default_at)
+        if at is None:
+            return None, default_at
         height = self.length("height", *p["height"]) if "height" in p else None
         if "height" in p and height is None:
-            return None
+            return None, at
         name = relative_name(location.source, self.value(file_token))
         content = self.fetcher.fetch("illustration", name, location)
         if content is None:
-            return None
+            return None, at
         try:
             width, intrinsic_height = intrinsic_size(content, name)
         except IllustrationError as exc:
             self.sink.error("bad-illustration", str(exc), location)
+            return None, at
+        fill = Fill.NONE
+        if "fill" in p:
+            text, where = p["fill"]
+            try:
+                fill = Fill(text)
+            except ValueError:
+                options = ", ".join(f.value for f in Fill)
+                self.sink.error("bad-value", f"fill= takes one of {options}, not '{text}'", where)
+                return None, at
+        pens = None
+        if "pens" in p:
+            pens = self.illustration_pens(name, content, *p["pens"])
+            if pens is None:
+                return None, at
+        return Illustration(name, content, width, intrinsic_height, height, fill, pens), at
+
+    def illustration_pens(self, name: str, content: bytes, text: str, where: SourceLocation):
+        """pens= on an illustration (§3.5): auto, or colour:pen pairs. Returns the mapping for every colour it
+        settles, sorted by colour; None after an error."""
+        colours, unreadable = illustration_colours(content)
+        if unreadable:
+            self.sink.warning(
+                "illustration-colour",
+                f"illustration '{name}' has paint that isn't a plain colour (a gradient or pattern), which is drawn "
+                "in its owner's pen",
+                where,
+            )
+        if text == "auto":
+            return tuple(sorted((c, nearest_pen(c)) for c in colours if c != WHITE))
+        mapping: dict[str, str] = {}
+        for item in re.split(r"[\s,]+", text.strip()):
+            colour_text, colon, pen = item.rpartition(":")
+            if not colon or not colour_text:
+                self.sink.error(
+                    "bad-value",
+                    f"pens= takes auto, or colours and pens such as \"#ff6600:orange #000000:black\", not '{item}'",
+                    where,
+                )
+                return None
+            try:
+                colour = parse_colour(colour_text)
+            except ColourError:
+                colour = None
+            if colour is None:
+                self.sink.error("bad-value", f"pens=: '{colour_text}' isn't a colour, such as #ff6600 or black", where)
+                return None
+            if not is_pen(pen):
+                hint = suggest_pen(pen)
+                self.sink.error("unknown-pen", f"pens=: '{pen}' is not a pen{f'; did you mean {hint}?' if hint else ''}",
+                                where)
+                return None
+            if colour not in colours:
+                self.sink.warning(
+                    "illustration-colour", f"pens=: illustration '{name}' doesn't use the colour {colour_text}", where
+                )
+            mapping[colour] = pen
+        return tuple(sorted(mapping.items()))
+
+    # -- title and credits (§16) ----------------------------------------------------------------------------
+
+    def corner_items(self, items: list[Tree], what: str, location: SourceLocation, allowed: tuple[str, ...],
+                     hints: dict[str, str], corner: Horizontal):
+        """A title's or the credits' items: a pen, an illustration and key=value parameters. ``corner`` is the
+        side its corner is on, where its illustration goes unless at= says otherwise."""
+        pen = None
+        illustration = None
+        at = corner
+        param_nodes = []
+        ok = True
+        for item in items:
+            if item.data == "param":
+                param_nodes.append(item)
+            elif item.data == "illustration":
+                if illustration is not None:
+                    self.sink.error("duplicate-illustration", "only one illustration can be attached", location)
+                    ok = False
+                    continue
+                illustration, at = self.attached_illustration(item, allowed, hints, corner)
+                ok = ok and illustration is not None
+            else:
+                word = str(item.children[0])
+                if pen is None and is_pen(word):
+                    pen = word
+                    continue
+                ok = False
+                if is_pen(word):
+                    self.sink.error("duplicate-pen", f"the {what} has more than one pen", location)
+                else:
+                    hint = suggest_pen(word)
+                    extra = f"; did you mean {hint}?" if hint else ""
+                    self.sink.error("unknown-pen", f"'{word}' is not a pen{extra}", location)
+        return pen or DEFAULT_PEN, illustration, at, param_nodes, ok
+
+    def corner_length(self, p: dict, key: str, default: float | None, *, positive: bool = True) -> float | None:
+        """A length parameter, or ``default``; None after an error (reported) when it was given."""
+        if key not in p:
+            return default
+        mm = self.length(key, *p[key], positive=positive)
+        if mm is not None and mm < 0:
+            self.sink.error("bad-value", f"{key}= can't be negative", p[key][1])
             return None
-        return Illustration(name, content, width, intrinsic_height, height)
+        return mm
+
+    def title(self, node: Tree, context: tuple[str, float]) -> Title | None:
+        location = self.loc(node)
+        _, text_token, *items = node.children
+        text = self.value(text_token)
+        ok = True
+        if not text.strip():
+            self.sink.error("bad-value", "the title has no text", location)
+            ok = False
+        pen, illustration, at, param_nodes, good = self.corner_items(
+            items, "title", location, _TITLE_ILLUSTRATION_KEYS,
+            {"side": "put it left or right of the text with at=left or at=right"}, Horizontal.LEFT,
+        )
+        p = self.params(param_nodes, _TITLE_KEYS, "title")
+        align = self.horizontal(p, "align", Horizontal.LEFT)
+        inherited_font, _ = context
+        font = self.font(*p["font"]) if "font" in p else inherited_font
+        size = self.corner_length(p, "font_size", DEFAULT_TITLE_SIZE_MM)
+        subtitle = p["subtitle"][0] if "subtitle" in p else ""
+        for key in ("subtitle_font", "subtitle_font_size"):
+            if key in p and not subtitle:
+                self.sink.error("bad-value", f"{key}= needs a subtitle= to apply to", p[key][1])
+                ok = False
+        subtitle_font = self.font(*p["subtitle_font"]) if "subtitle_font" in p else font
+        subtitle_size = self.corner_length(p, "subtitle_font_size", size * SUBTITLE_SCALE if size else None)
+        margin = self.corner_length(p, "margin", DEFAULT_CORNER_MARGIN_MM, positive=False)
+        gap = self.corner_length(p, "gap", DEFAULT_CORNER_GAP_MM, positive=False)
+        if not (ok and good) or None in (font, size, subtitle_font, subtitle_size, align, margin, gap):
+            return None
+        return Title(text, subtitle, pen, font, size, subtitle_font, subtitle_size, illustration, at, align, margin,
+                     gap, location)
+
+    def credits(self, node: Tree, context: tuple[str, float]) -> Credits | None:
+        location = self.loc(node)
+        _, *items = node.children
+        body = items.pop() if items and isinstance(items[-1], Tree) and items[-1].data == "credit_lines" else None
+        ok = True
+        lines = []
+        if body is None or not body.children:
+            self.sink.error(
+                "bad-value",
+                'the credits need a { } body of lines: each a quoted string, or heading and a quoted string '
+                '(heading "Sources")',
+                location,
+            )
+            ok = False
+        else:
+            for line in body.children:
+                *heading, text_token = line.children
+                lines.append(CreditLine(self.value(text_token), bool(heading), self.loc(line)))
+        pen, illustration, at, param_nodes, good = self.corner_items(
+            items, "credits", location, _CREDITS_ILLUSTRATION_KEYS,
+            {
+                "height": "the credits' illustration is as tall as their lines; limit both with max_height= on "
+                "credits",
+                "side": "put it left or right of the lines with at=left or at=right",
+            },
+            Horizontal.RIGHT,
+        )
+        p = self.params(param_nodes, _CREDITS_KEYS, "credits")
+        align = self.horizontal(p, "align", Horizontal.RIGHT)
+        inherited_font, inherited_size = context
+        font = self.font(*p["font"]) if "font" in p else inherited_font
+        size = self.corner_length(p, "font_size", inherited_size)
+        heading_font = self.font(*p["heading_font"]) if "heading_font" in p else font
+        heading_size = self.corner_length(p, "heading_font_size", size * HEADING_SCALE if size else None)
+        max_height = self.corner_length(p, "max_height", None)
+        margin = self.corner_length(p, "margin", DEFAULT_CORNER_MARGIN_MM, positive=False)
+        gap = self.corner_length(p, "gap", DEFAULT_CORNER_GAP_MM, positive=False)
+        if "max_height" in p and max_height is None:
+            ok = False
+        if not (ok and good) or None in (font, size, heading_font, heading_size, align, margin, gap):
+            return None
+        return Credits(tuple(lines), pen, font, size, heading_font, heading_size, max_height, illustration, at,
+                       align, margin, gap, location)
+
+    def check_corner_glyphs(self, title: Title | None, credits: Credits | None) -> None:
+        if title is not None:
+            self.warn_missing_glyphs(self.fonts[title.font], title.font, title.text, "the title", title.location)
+            self.warn_missing_glyphs(self.fonts[title.subtitle_font], title.subtitle_font, title.subtitle,
+                                     "the subtitle", title.location)
+        if credits is not None:
+            for line in credits.lines:
+                key = credits.heading_font if line.heading else credits.font
+                what = "a heading of the credits" if line.heading else "a line of the credits"
+                self.warn_missing_glyphs(self.fonts[key], key, line.text, what, line.location)
 
     # -- graphs (§15) ---------------------------------------------------------------------------------------
 

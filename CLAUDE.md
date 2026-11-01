@@ -44,6 +44,8 @@ began as are superseded. Change the specs here, in the same commit as the code t
 - `uv run axitime check|list-pens|render <file.axitl> [--now DATE]`; `render -o DIR` writes a preview and one SVG
   per pen (window with `--start-offset`/`--length` or `--from`/`--to`).
 - `uv run axitime plot <file-pen.svg> [--simulate|--dry-run]` plots one per-pen SVG; the job log goes beside it.
+- `uv run axitime convert-font <font.ttf|.otf|.ttc|.pfa|.pfb> [-o x.svg]` turns an outline font into an SVG font a
+  timeline can name (language spec §3.8). It needs fontTools, a dependency of axitime only, never libaxitl.
   Plotter settings: `~/.config/axitime/plotter.toml` (see `axitime/config.py`). pyaxidraw is optional and only
   imported for a real plot; tests use a simulated plotter and a fake pyaxidraw.
 - On the machine that drives the AxiDraw, install with `uv sync --extra axidraw` (a plain `uv sync` removes it).
@@ -54,6 +56,8 @@ began as are superseded. Change the specs here, in the same commit as the code t
 - Spacing constants live in `LayoutStyle` (`libaxitl/layout.py`) and `DrawStyle` (`libaxitl/draw.py`).
 - Background graphs (language spec §15) are laid out after everything else in `libaxitl/graphs.py`, and never
   move the foreground; their points (CSV or inline) are read in `libaxitl/graphdata.py`.
+- The title and credits (language spec §16) are laid out first, in `_Layout.corners` (`libaxitl/layout.py`),
+  reserving the lanes they cross so the rest of the layout keeps clear of them.
 - `hardware/transport/` holds the paper transport's printed parts in OpenSCAD (the design is `docs/transport.md`).
   `./build.sh` there exports every part to its `stl/` (ignored by git) and checks each fits the Prusa Core One's bed.
 - Built-in fonts live in `libaxitl/src/libaxitl/fonts/data/` (copied from Inkscape's Hershey Text

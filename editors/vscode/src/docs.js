@@ -26,6 +26,13 @@ const keywords = {
     'A background graph: a line of values against the timeline, its origin on the baseline, drawn under ' +
     'everything else (in `HB-pencil` unless given a pen) and moving nothing. Points come from `data=` (a CSV ' +
     'file) or a `{ }` body with a date and a value on each line (§15).',
+  title:
+    'The title, in the top-left corner: its text, then `subtitle=` for a smaller line under it and ' +
+    '`illustration(file.svg at=left)` for a drawing beside it. Nothing else is placed on it (§16.1).',
+  credits:
+    'The credits, in the bottom-right corner: a `{ }` body of quoted lines, `heading "…"` for a heading, with ' +
+    '`illustration(logo.svg)` to their right at their height. `max_height=` shrinks them to fit (§16.2).',
+  heading: 'A heading line in the credits, larger than the rest and with space above it: `heading "Sources"` (§16.2).',
 };
 
 const parameters = {
@@ -73,6 +80,37 @@ const parameters = {
   priority: "On `include`: a whole number added to every included entity's priority, e.g. `-5` (§5).",
   side: 'On `include`: forces every included entity `above` or `below` the baseline (§5).',
   height: 'The illustration\'s height, rounded up to whole lanes. Default 2 lanes (§3.5).',
+  at: 'Which side of the text a title\'s or the credits\' illustration goes: `left` or `right`. Default: the ' +
+    'corner\'s side, left for the title and right for the credits (§16).',
+};
+
+// Inside an illustration's parentheses (§§3.5, 16).
+const illustrationParameters = {
+  height: 'The illustration\'s height. On an entity it is rounded up to whole lanes, default 2 lanes (§3.5); beside ' +
+    'a title it defaults to the text\'s height (§16.1).',
+  at: parameters.at,
+  fill: 'Hatch the drawing\'s filled shapes with a fill pattern, clipped to each shape and clear of its holes: ' +
+    '`solid` is a dense hatch. Default `none`: filled shapes are drawn as their outlines only (§3.5).',
+  pens: 'Draw the drawing\'s colours in pens of their own: `auto` gives each colour the nearest base pen, or list ' +
+    'them, `"#ff6600:orange #000000:black"`. Each pen is plotted in its own pass. Default: all in its owner\'s pen ' +
+    '(§3.5).',
+};
+
+// The title's and credits' parameters (§16), where a name means something of its own there.
+const cornerParameters = {
+  font: 'The font of the title (or the credits\' lines): built-in, or an SVG font such as one made with ' +
+    '`axitime convert-font`. Default: the timeline\'s (§§3.8, 16).',
+  subtitle: 'A second, smaller line under the title, quoted: `subtitle="Lives and wars, 1900-1999"` (§16.1).',
+  subtitle_font: 'The subtitle\'s font. Default: the title\'s (§16.1).',
+  subtitle_font_size: 'The subtitle\'s size. Default: half the title\'s (§16.1).',
+  heading_font: 'The font of the credits\' headings. Default: the credits\' own font (§16.2).',
+  heading_font_size: 'The size of the credits\' headings. Default: 1.25 times their `font_size` (§16.2).',
+  max_height: 'The most the credits may measure from the top of their first line\'s capitals to their last ' +
+    'baseline; taller, and the lines (and the logo with them) are scaled down to fit (§16.2).',
+  align: 'Which way the lines are aligned: `left` or `right`. Default: the corner\'s side, left for the title ' +
+    'and right for the credits (§16.3).',
+  margin: 'How far the ink keeps from the finished edges in its corner. Default `5mm`, clear of the crop mark (§16).',
+  gap: 'The space between the illustration and the text. Default `4mm` (§16).',
 };
 
 // A graph's parameters (§15). Where a name is shared with other declarations, this is its meaning on a graph.
@@ -110,9 +148,18 @@ const graphParameters = {
   font_size: 'The size of the title; value labels are three-quarters of it. Default: the timeline\'s (§15.9).',
 };
 
-/** Help for a parameter of a declaration (graph, illustration, timeline, include or an entity keyword). */
+/** Help for a parameter of a declaration (graph, title, credits, illustration, timeline, include or an entity). */
 function parameter(key, decl) {
   if (decl === 'graph') return graphParameters[key];
+  if (decl === 'illustration') return illustrationParameters[key];
+  if (decl === 'title' || decl === 'credits') {
+    if (key === 'font_size') {
+      return decl === 'title'
+        ? "The title's size, its em. Default `12mm` (§16.1)."
+        : "The size of the credits' lines. Default: the timeline's `font_size` (§16.2).";
+    }
+    return cornerParameters[key];
+  }
   return parameters[key];
 }
 
@@ -178,6 +225,18 @@ const values = {
   },
   value_marks: { auto: '3 to 5 round values within those the graph draws (the default).' },
   time_format: { decimal_year: 'A fractional year, such as `1958.2027` (§15.2).' },
+  at: {
+    left: 'The illustration to the left of the text (the default for the title).',
+    right: 'The illustration to the right of the text (the default for the credits).',
+  },
+  pens: {
+    auto: 'Each colour in the drawing goes to the base pen with the nearest reference colour: #ff6600 to orange, ' +
+      'say. White is the paper and isn\'t drawn (§3.5).',
+  },
+  align: {
+    left: 'The lines aligned to the left (the default for the title).',
+    right: 'The lines aligned to the right (the default for the credits).',
+  },
   end: {
     now:
       'The moment the timeline is built, truncated to the precision of `start`. Pin it with ' +
@@ -223,4 +282,7 @@ function head(target) {
   return `${keywords[target.name]}\n\n${side} ${priority}`;
 }
 
-module.exports = { keywords, parameters, graphParameters, parameter, values, pen, penDetail, font, head };
+module.exports = {
+  keywords, parameters, graphParameters, illustrationParameters, cornerParameters, parameter, values, pen, penDetail, font,
+  head,
+};

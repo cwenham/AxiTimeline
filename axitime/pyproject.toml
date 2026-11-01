@@ -3,7 +3,10 @@ name = "axitime"
 version = "0.1.0"
 description = "Command-line host for libaxitl: check, list-pens, render and plot .axitl timelines"
 requires-python = ">=3.12"
-dependencies = ["libaxitl"]
+dependencies = [
+    "fonttools>=4.50",
+    "libaxitl",
+]
 
 [project.optional-dependencies]
 # The AxiDraw Python API (pyaxidraw), from Evil Mad Scientist; only needed to drive a real plotter.

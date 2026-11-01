@@ -89,6 +89,7 @@ uv sync --extra axidraw
 | `axitime list-pens FILE` | The pens the job needs, the baseline's pen first, with how much each one draws. |
 | `axitime render FILE -o DIR` | Writes the preview and one SVG per pen. A slice of the roll with `--start-offset`/`--length` (e.g. `137cm`) or `--from`/`--to` (dates); `--bleed` (default 2mm) runs ink past a cut edge. |
 | `axitime plot FILE-PEN.svg` | Plots one pen's SVG. `--simulate` shows the strips without moving anything; `--dry-run` goes through every motion with the pen up; `--start-offset` resumes partway along the roll. |
+| `axitime convert-font FONT` | Turns a TrueType, OpenType or Type 1 font (`.ttf`, `.otf`, `.ttc`, `.pfa`, `.pfb`) into an SVG font a timeline can name with `font="…svg"`. Letters are drawn as their outlines, so they come out hollow: best for large text such as a title. `--characters` keeps just the ones you need; `--index` picks a font from a `.ttc` collection. |
 
 A timeline that ends at `now` takes the clock's date; `--now DATE` pins it, so a job can be re-rendered later
 exactly as it was.
@@ -135,6 +136,10 @@ The plotter's travel, strip length and pen settings can be adjusted in `~/.confi
     pen of its own: a soft pencil under a black outline, say.
   - `font=` takes a built-in Hershey font, or your own SVG stroke font, and `font_size=` sets the size.
   - `time_label=` writes an event's date under its name.
+- **Title and credits:** `title "Text" subtitle="…"` goes in the top-left corner, and `credits { heading "…" "…" }`
+  in the bottom-right, each with an optional `illustration(file.svg)` beside it, on the corner's side. A logo
+  beside the credits is scaled to their height, and `max_height=` limits both. The credits' lines are aligned to the
+  right, against the logo; `at=` and `align=` change either. Nothing else is placed on them.
 - **Graphs:** `graph "Title" data="file.csv"` draws a line of values under everything else, in pencil by default,
   with its origin on the baseline. It never moves anything; it's broken where it would run through text.
   - Points come from a CSV file read as it comes (pick the rows, columns and date format), or are written inline.
@@ -142,7 +147,8 @@ The plotter's travel, strip length and pen settings can be adjusted in `~/.confi
     in its own `fill_pen=` if you like. Value scales along the roll carry the `unit=`.
 - **Files:**
   - `include "file.axitl"` pulls in shared entries, optionally shifting their priority or side.
-  - `illustration(file.svg)` attaches a drawing to an entry.
+  - `illustration(file.svg)` attaches a drawing to an entry. Inside the parentheses, `fill=solid` hatches its
+    filled shapes and `pens=auto` draws each of its colours in the nearest pen, each plotted in its own pass.
   - `//` starts a comment.
 - **Lengths** are millimetres unless they say `cm` or `m`.
 

@@ -15,7 +15,8 @@ const vocabulary = require('./vocabulary.json');
 const SUGGEST = { title: 'Suggest', command: 'editor.action.triggerSuggest' };
 const REQUIRED = ['start', 'end', 'width'];
 const ONE_OF = { length: 'scale', scale: 'length' };
-const SUGGESTS_VALUES = new Set(Object.keys(vocabulary.values).concat(['font', 'scale', 'fill_pen']));
+const SUGGESTS_VALUES = new Set(Object.keys(vocabulary.values).concat(['font', 'subtitle_font', 'heading_font', 'scale', 'fill_pen']));
+const FONT_KEYS = new Set(['font', 'subtitle_font', 'heading_font']);
 
 const TEMPLATES = {
   timeline: ['timeline\n\tstart=${1:1900}\n\tend=${2:now}\n\tlength=${3:2m}\n\twidth=${4:210}\n$0', 'start, end, length, width'],
@@ -25,6 +26,12 @@ const TEMPLATES = {
   span: ['span "${1:Name}" ${2:1900}-${3:1950}$0', 'span "Name" 1900-1950'],
   group: ['group "${1:Name}" ${2:1900}-${3:1950} {\n\t$0\n}', 'group "Name" 1900-1950 { … }'],
   graph: ['graph "${1:Title}"\n\tdata="${2}"$0', 'graph "Title" data="file.csv"'],
+  title: ['title "${1:Title}"\n\tsubtitle="${2:Subtitle}"$0', 'title "Title" subtitle="…"'],
+  credits: [
+    'credits max_height=${1:25mm} illustration(${2:logo.svg}) {\n\theading "${3:Design and research}"\n\t"${4:Name, year}"\n}$0',
+    'credits illustration(logo.svg) { … }',
+  ],
+  heading: ['heading "${1:Sources}"$0', 'heading "Sources"'],
 };
 
 function activate(context) {
@@ -119,10 +126,11 @@ function statementItems(at, range, after) {
   // On a line that already has more after the cursor, a keyword goes in alone rather than as a template.
   const bare = splitComment(after).code.trim() !== '';
   const continuingSettings = at.continues && (at.continues.decl === 'timeline' || at.continues.decl === 'include');
-  const backgrounds = at.inBody ? [] : vocabulary.backgrounds; // a graph can't be inside a group
-  const words = at.marks
-    ? vocabulary.entities
-    : (at.timeline ? ['timeline'] : []).concat('include', vocabulary.entities, backgrounds);
+  const backgrounds = at.inBody ? [] : vocabulary.backgrounds.concat(vocabulary.corners); // not inside a group
+  let words;
+  if (at.body === 'credits') words = ['heading']; // a credits line is a quoted string, perhaps a heading
+  else if (at.marks) words = vocabulary.entities;
+  else words = (at.timeline ? ['timeline'] : []).concat('include', vocabulary.entities, backgrounds);
   const items = words.map((word, i) => {
     const item = new vscode.CompletionItem(word, vscode.CompletionItemKind.Keyword);
     item.range = range;
@@ -131,7 +139,7 @@ function statementItems(at, range, after) {
     if (!bare) {
       item.insertText = new vscode.SnippetString(TEMPLATES[word][0]);
       item.detail = TEMPLATES[word][1];
-      if (word === 'include' || word === 'graph') item.command = SUGGEST;
+      if (word === 'include' || word === 'graph' || word === 'credits') item.command = SUGGEST;
     }
     return item;
   });
@@ -141,12 +149,16 @@ function statementItems(at, range, after) {
   return items;
 }
 
-function parameterItems(decl, used, range, group) {
+function parameterItems(decl, used, range, group, owner) {
   let keys;
   if (decl === 'timeline') keys = vocabulary.timelineParameters;
   else if (decl === 'include') keys = vocabulary.includeParameters;
-  else if (decl === 'illustration') keys = vocabulary.illustrationParameters;
-  else if (decl === 'graph') keys = vocabulary.graphParameters;
+  else if (decl === 'illustration') {
+    keys = { title: vocabulary.titleIllustrationParameters, credits: vocabulary.creditsIllustrationParameters }[owner] ||
+      vocabulary.illustrationParameters;
+  } else if (decl === 'graph') keys = vocabulary.graphParameters;
+  else if (decl === 'title') keys = vocabulary.titleParameters;
+  else if (decl === 'credits') keys = vocabulary.creditsParameters;
   else {
     keys = vocabulary.entityParameters.filter(
       (key) =>
@@ -174,11 +186,12 @@ function parameterItems(decl, used, range, group) {
 function itemItems(at, range) {
   const items = [];
   const entity = vocabulary.entities.includes(at.decl);
-  if ((entity || at.decl === 'graph') && !at.pen) {
+  const corner = vocabulary.corners.includes(at.decl);
+  if ((entity || corner || at.decl === 'graph') && !at.pen) {
     items.push(...penItems(range, '0', at.decl === 'graph' ? vocabulary.defaultGraphPen : null));
   }
-  items.push(...parameterItems(at.decl, at.used, range, '1'));
-  if (entity && !at.illustration) {
+  items.push(...parameterItems(at.decl, at.used, range, '1', at.owner));
+  if ((entity || corner) && !at.illustration) {
     const item = new vscode.CompletionItem('illustration(…)', vscode.CompletionItemKind.Function);
     item.range = range;
     item.filterText = 'illustration';
@@ -206,7 +219,7 @@ function penItems(range, group, marked) {
 
 async function valueItems(at, position, after, document) {
   const range = rangeFor(position, at.start, after, at.quoted ? /^[^"]*/ : WORD_REST);
-  if (at.key === 'font') return fontItems(at, position, after, document, range);
+  if (FONT_KEYS.has(at.key)) return fontItems(at, position, after, document, range);
   if (at.key === 'fill_pen') return penItems(range, '');
   if (at.key === 'data' && at.decl === 'graph') {
     const files = await pathItems(at, position, after, document, 'data');

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24mm" height="24mm" viewBox="0 0 24 24">
+  <!-- A two-colour badge for examples/title-and-credits.axitl: a red ring (its hole wound the other way, so it
+       stays empty when hatched) round a black diamond. -->
+  <path fill="#c00000" d="M 12 1 A 11 11 0 1 1 11.99 1 Z M 12 4 A 8 8 0 1 0 12.01 4 Z"/>
+  <path fill="#000000" d="M 12 6 L 18 12 L 12 18 L 6 12 Z"/>
+</svg>

@@ -5,8 +5,8 @@ it from the finished top edge), so the same stroke has the same coordinates howe
 windows. Curves are flattened here, once, so nothing downstream has to understand them.
 
 Strokes come out in the draw order of language spec §11: baseline and ticks, then background graphs (§15), then
-bars (outlines, labels and fills), then event poles and flags, then illustrations; crop marks (interpreter spec)
-are last.
+bars (outlines, labels and fills), then event poles and flags, then illustrations, then the title and credits
+(§16); crop marks (interpreter spec) are last.
 """
 
 from __future__ import annotations
@@ -15,12 +15,14 @@ import math
 from dataclasses import dataclass
 from enum import Enum
 
-from .diagnostics import Diagnostic, Diagnostics
+from .colours import WHITE
+from .diagnostics import Diagnostic, Diagnostics, SourceLocation
 from .geometry import Box, Point, cut_out, keep_inside
 from .graphs import PlacedGraph, shading, shading_box
-from .illustrate import illustration_strokes
-from .layout import LabelPlacement, PlacedBar, PlacedText, ResolvedLayout
-from .model import Fill, OpenEndStyle
+from .hatch import Outline
+from .illustrate import illustration_shapes
+from .layout import LabelPlacement, PlacedBar, PlacedBlock, PlacedText, ResolvedLayout
+from .model import Fill, Illustration, OpenEndStyle
 from .svgpath import flatten
 
 
@@ -30,6 +32,7 @@ class Stage(Enum):
     BARS = "bars"
     EVENTS = "events"
     ILLUSTRATIONS = "illustrations"
+    TITLES = "titles"  # the title and credits (§16)
     CROP_MARKS = "crop-marks"
 
 
@@ -116,14 +119,10 @@ class _Drawer:
             if ev.time_label is not None:
                 self.add(pen, Stage.EVENTS, self.text(ev.time_label))
         for ill in L.illustrations:
-            lines, notes = illustration_strokes(
-                ill.illustration.svg, ill.illustration.name, ill.box, self.style.curve_piece
-            )
-            self.add(ill.owner.pen, Stage.ILLUSTRATIONS, lines)
-            for note in notes:
-                self.sink.warning(
-                    "illustration-content", f"illustration '{ill.illustration.name}': {note}", ill.owner.location
-                )
+            self.illustration(ill.illustration, ill.box, ill.owner.pen, Stage.ILLUSTRATIONS, ill.owner.location)
+        for block in (L.title, L.credits):
+            if block is not None:
+                self.block(block)
         self.crop_marks()
         pens = L.pens + ((self.style.crop_pen,) if self.style.crop_pen not in L.pens else ())
         return Drawing(L.width_mm, L.length_mm, self.style.crop_arm, pens, tuple(self.strokes), tuple(self.sink.items))
@@ -138,6 +137,63 @@ class _Drawer:
             self.add(pen, Stage.AXIS, [[(tick.x, y), (tick.x, y + tick.length)]])
             if tick.label is not None:
                 self.add(pen, Stage.AXIS, self.text(tick.label))
+
+    # -- the title and credits (§16) ----------------------------------------------------------------------
+
+    def block(self, block: PlacedBlock) -> None:
+        for text in block.texts:
+            self.add(block.pen, Stage.TITLES, self.text(text))
+        if block.illustration is not None and block.illustration_box is not None:
+            self.illustration(block.illustration, block.illustration_box, block.pen, Stage.TITLES, block.location)
+
+    # -- illustrations (§3.5) ------------------------------------------------------------------------------
+
+    def illustration(self, ill: Illustration, box: Box, owner_pen: str, stage: Stage, location: SourceLocation) -> None:
+        """An illustration's shapes: each outline in its pen, and with fill= each filled shape hatched inside.
+
+        Without pens= everything is in its owner's pen, as an illustration always was. With pens=, an outline is in
+        its stroke's pen, or its fill's if it has no stroke; a hatch is in its fill's pen; and nothing white (the
+        paper) is drawn. Paint that isn't a plain colour, and a colour pens= doesn't name, are in the owner's pen."""
+        shapes, notes = illustration_shapes(ill.svg, ill.name, box, self.style.curve_piece)
+        mapping = dict(ill.pens) if ill.pens is not None else None
+
+        def pen_for(paint: str | None) -> str | None:
+            if mapping is None:
+                return owner_pen
+            if paint is None or paint == WHITE:
+                return None
+            return mapping.get(paint, owner_pen)
+
+        outlines_only = False
+        for shape in shapes:
+            if mapping is None:
+                edge = owner_pen
+            else:
+                edge = pen_for(shape.stroke) if shape.stroke is not None else pen_for(shape.fill)
+            if edge is not None:
+                self.add(edge, stage, shape.lines)
+            if shape.fill is None:
+                continue
+            if ill.fill is Fill.NONE:
+                outlines_only = True
+                continue
+            hatch_pen = pen_for(shape.fill)
+            if hatch_pen is None or shape.fill == WHITE:
+                continue  # white is the paper: never hatched
+            points = [p for line in shape.lines for p in line]
+            if len(points) < 3:
+                continue
+            region = Box(min(x for x, _ in points), min(y for _, y in points),
+                          max(x for x, _ in points), max(y for _, y in points))
+            if region.width <= 0 or region.height <= 0:
+                continue
+            shortest = 0.0 if ill.fill is Fill.DOTS else self.style.shade_shortest
+            hatch = Outline(shape.lines, shape.evenodd).clip(self.fill(ill.fill, region))
+            self.add(hatch_pen, stage, (h for h in hatch if _length(h) >= shortest))
+        if outlines_only:
+            notes.append("filled shapes are drawn as their outlines only (fill= hatches them)")
+        for note in notes:
+            self.sink.warning("illustration-content", f"illustration '{ill.name}': {note}", location)
 
     # -- background graphs (§15) -------------------------------------------------------------------------
 
@@ -239,3 +295,7 @@ class _Drawer:
             for y in (0.0, L.width_mm):
                 along = [(across[0][0], y), (across[1][0], y)]
                 self.add(st.crop_pen, Stage.CROP_MARKS, [along, [(x, y - arm), (x, y + arm)]])
+
+
+def _length(points) -> float:
+    return sum(math.dist(p, q) for p, q in zip(points, points[1:], strict=False))

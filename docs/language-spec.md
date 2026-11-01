@@ -6,7 +6,7 @@ Status: working draft, reflecting all decisions taken in design discussion so fa
 
 This file (`docs/language-spec.md` in the AxiTimeline repo) is the **canonical copy** of this spec, and changes are made here alongside the code. The claude.ai artifact it began as is superseded.
 
-History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7).
+History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7). Added 2026-11-01: the title and credits (§16), outline fonts converted to SVG fonts (§3.8), `illustration(…)` on an indented continuation line (§3.10), and an illustration's filled shapes hatched and its colours drawn in pens of their own (§3.5).
 
 ## 1. System overview
 
@@ -16,7 +16,7 @@ The software architecture — `libaxitl` (parse → layout → render) and the `
 
 ## 2. Entity types
 
-`person`, `event`, `span`, `group`, `include`, plus the top-level `timeline` directive. Keywords are lowercase. Illustrations are attachments to entities, not entities in their own right (§3.5). A `graph` (§15) isn't an entity either: it is a background, drawn under the entities and taking no part in their layout.
+`person`, `event`, `span`, `group`, `include`, plus the top-level `timeline` directive. Keywords are lowercase. Illustrations are attachments to entities, not entities in their own right (§3.5). A `graph` (§15) isn't an entity either: it is a background, drawn under the entities and taking no part in their layout. Nor are the `title` and `credits` (§16), which sit in two corners of the paper and are kept clear of by everything else.
 
 ## 3. Compact line syntax
 
@@ -110,6 +110,18 @@ event "First explosion" 1986-04-26T01:23:44
 - Never crossed by an event pole (genuine ink collision): an illustration in a pole's path is nudged **horizontally** (§8.1), the minimum distance needed, and only to a position where its whole lane band is still free. If no such position exists, it stays put, the pole is broken where it passes the illustration (§8), and a named build warning is emitted (not fatal)
 - Kept inside the finished length (§4.1): an illustration that would overhang either end of the paper is shifted inward, under the same free-lane constraint
 
+**Fills and colours** (added 2026-11-01). A plotter draws lines in one pen at a time, so by default an illustration is drawn as the outlines of its shapes, all in its owner's pen, and its filled shapes come out hollow, with a warning. Two settings inside the parentheses change that, for any illustration, a title's or the credits' included (§16):
+
+``` text
+credits illustration(Logo-Colour.svg fill=solid pens=auto) { … }
+event "Apollo 11 lands" 1969-07-20 illustration(eagle.svg pens="#ff6600:orange #1a1a1a:fountain-black")
+```
+
+- **`fill=`** hatches each filled shape with one of §3.7's patterns, cut to the shape by the SVG's own fill rule (`nonzero`, its default, or `evenodd`), so a letter's counter stays empty. `solid`, the dense hatch, makes a shape look filled; the others shade it. Patterns are anchored to the page, as a bar's are, and pieces of hatching shorter than 0.5mm are left out (none for `dots`). The shape's outline is still drawn, over the hatching's ends. Default `none`. Nothing white is ever hatched: white is the paper.
+- **`pens=`** draws the illustration's colours in pens of their own, each plotted in its own pass, instead of all in its owner's pen. `pens=auto` gives each colour the base pen (`red` to `grey`, §3.4; not pencils or fountain pens) whose reference colour is nearest, in CIELAB. Each pen's references are its preview colour and the plain colours its name usually means: `red` #ff0000 and #b22222; `orange` #ff8000 and #ffa500; `yellow` #ffff00 and #ffd700; `green` #00ff00 and #008000; `blue` #0000ff and #000080; `indigo` #4b0082; `violet` #8000ff, #800080 and #ee82ee; `black` #000000; `grey` #808080 and #c0c0c0. So #ff6600 is `orange`. Otherwise `pens=` lists colours and pens, `"#ff6600:orange #000000:black"` (colours as `#rgb`, `#rrggbb` or a common CSS name, separated by spaces or commas), and any colour it leaves out stays in the owner's pen. With `pens=`, a shape's outline is in its stroke's pen, or its fill's if it has no stroke; its hatching is in its fill's pen; and nothing white is drawn.
+- Paint that isn't a plain colour (a gradient or pattern) is drawn in the owner's pen, with a warning; so is a colour listed in `pens=` that the drawing doesn't use, since it's probably a typo.
+- A shape painted over another doesn't hide it: both are drawn in full, since a plotter can't erase. A drawing that relies on covering one shape with another, typically white over black, needs redrawing as shapes that don't overlap.
+
 ### 3.6 Open-ended entities and `now`
 
 - `timeline`'s `end` may be the keyword `now` instead of a literal date. Resolved **once, at build time**, to the current moment truncated to the precision of the timeline's `start` (so a year-precision timeline resolves `now` to the current year), then frozen like any other `end` value
@@ -158,6 +170,8 @@ timeline ... font="HersheySans1" font_size=5mm
 
 Each replacement is a build warning naming the entity and the character. A replaced character never fails the build.
 
+**Outline fonts** (added 2026-11-01). A TrueType, OpenType or Adobe Type 1 font can't be named directly, but `axitime convert-font` turns one into an SVG font in the format above (interpreter spec, "`axitime convert-font`"), which is then named like any custom font: `font="avenir-demi.svg"`. Its glyphs are the font's outlines, so the plotter draws each letter as its outline and the letters come out hollow. That suits large text, such as a title (§16); small text reads better in a single-stroke font such as the built-in ones.
+
 ### 3.9 Comments
 
 Line comments use `//`, running from the marker to the end of the line. Valid on their own line or trailing after content, and valid in any `.axitl` file including included ones:
@@ -193,10 +207,10 @@ timeline
 !!person "Isaac Newton" 1642-1727 red
 ```
 
-- A **continuation line** is an indented line (leading spaces and/or tabs — either is fine, and they may be mixed, since indentation here carries no depth meaning) whose first token is a `key=value` parameter
+- A **continuation line** is an indented line (leading spaces and/or tabs — either is fine, and they may be mixed, since indentation here carries no depth meaning) whose first token is a `key=value` parameter or an `illustration(…)` (the latter added 2026-11-01, since a title or the credits, §16, often ends with one)
 - The declaration **ends** at the first line that is not a continuation: a blank line, or a line beginning at column 0. A blank line before the next keyword is the recommended style — it's what makes the block visually obvious — but the indentation is what actually does the work, so a missing blank line degrades to a style inconsistency rather than a parse failure. (Requiring a blank line would make "blank" load-bearing, which is fragile given editors that strip or add trailing whitespace; a whitespace-only line counts as blank regardless)
 - Comment lines (§3.9) inside a block are skipped and do **not** terminate it, so parameters can be annotated or temporarily commented out in place
-- The discriminator that keeps this unambiguous against a `group`'s indented body is the `key=value` shape: a group's children always begin with a keyword or a `!`/`-`/`^`/`v` symbol, never with `key=`, so an indented line starting `key=` can only ever be a continuation. Inside `{ }` braces, indentation stays purely cosmetic
+- The discriminator that keeps this unambiguous against a `group`'s indented body is the `key=value` shape: a group's children always begin with a keyword or a `!`/`-`/`^`/`v` symbol, never with `key=` or `illustration(`, so an indented line starting with either can only ever be a continuation. Inside `{ }` braces, indentation stays purely cosmetic
 - The same rule applies to any declaration taking `key=value` parameters, so a long `include` line can be broken up the same way
 
 ### 3.11 Time labels (events)
@@ -282,7 +296,7 @@ Layout runs in three phases, each consuming the results of the one before:
 2.  **Phase B** — events get a side (§6.1) and a base pole length (§8.1); illustrations attached to events are placed; illustrations in a pole's path are nudged
 3.  **Phase C** — label collisions involving event flags are resolved (§8.2)
 
-Backgrounds (§15) are placed after all three phases, and nothing in them looks at backgrounds.
+Backgrounds (§15) are placed after all three phases, and nothing in them looks at backgrounds. The title and credits (§16) are placed before Phase A, and every phase keeps clear of them.
 
 For each banded entity without a forced `^`/`v`, side is resolved during layout (not parsing), jointly with lane assignment:
 
@@ -430,7 +444,8 @@ timeline ... tick_label_every=10   // override the derived n
 2.  Backgrounds: graphs, with their shading, titles and value scales (§15)
 3.  Span / group fills
 4.  Event poles + flags (on top of fills)
-5.  Illustrations (last — fine detail, and by this point nothing should be crossing into their footprint)
+5.  Illustrations (fine detail, and by this point nothing should be crossing into their footprint)
+6.  The title and credits, with their illustrations (§16)
 
 Crop marks (every 50cm, in pencil) are added by the interpreter's renderer and aren't under the author's control — see the interpreter spec.
 
@@ -450,7 +465,7 @@ Every numeric physical-length value anywhere in this language — `width=`, `len
 
 This doesn't touch `scale`, which is always an explicit rate (`mm/year`, `mm/day`, etc.) rather than a bare length, and isn't affected by this rule. It also doesn't touch dates, priorities, or any other numeric field — only physical-length parameters.
 
-The same rule covers a graph's `height=`, `fill_depth=`, `shadow=`, and `value_scale=` when it is a length (§15).
+The same rule covers a graph's `height=`, `fill_depth=`, `shadow=`, and `value_scale=` when it is a length (§15), and the title's and credits' `font_size=`, `subtitle_font_size=`, `heading_font_size=`, `max_height=`, `margin=`, `gap=` and illustration `height=` (§16).
 
 ## 15. Backgrounds and graphs (added 2026-10-24)
 
@@ -593,3 +608,75 @@ graph "Reactor thermal power, MW" origin=3200 y_scale=log {
 
 - Graphs are placed in a fourth layout phase, after §6's phases A to C, in document order; nothing in phases A to C looks at them. Their searches step along the roll in fixed increments from fixed starting points, so placement is deterministic like the rest of layout (§12).
 - They are drawn after the baseline and ticks and before everything else (§11). Their pens, and their fill pens, come straight after the axis pen in pass order, before any other pen except bars' fill pens, which join them (§3.7). So ink always goes over graphite rather than graphite over ink, and the ticks remain the first pass's measuring reference (§10.4). A graph in `2H-pencil` shares its pass with the crop marks; one in a pen the foreground also uses is drawn first in that pen's pass.
+
+## 16. Title and credits (added 2026-11-01)
+
+Two declarations put fixed pieces in two corners of the paper: a **title** in the top-left corner and the **credits** in the bottom-right. Neither is an entity: they have no date, they're placed before anything else, and everything else keeps clear of them (§16.3).
+
+### 16.1 The title
+
+``` text
+title "A Colossal Waste of Time" blue
+    subtitle="Five centuries of things people did instead"
+    font="avenir-demi.svg" font_size=14mm
+    subtitle_font=HersheySerifMed
+    illustration(crest.svg at=left)
+```
+
+- The quoted string is the title's text, which can't be empty. A trailing pen keyword (§3.4) sets the pen for all of it, subtitle and illustration included. Default: `black`.
+- `subtitle=` adds a second, smaller line under the title.
+- `illustration(file.svg)` puts a drawing beside the text: `at=left` (the default, in the corner) or `at=right`, `gap=` from the text. By default it is as tall as the text, from the top of the title's capitals to the baseline of the last line (the subtitle's, if there is one). `height=` sets its height instead, and the text is centred against it. Its width follows its aspect ratio. Unlike an entity's illustration (§3.5), it isn't rounded to whole lanes.
+
+| Parameter | Default | |
+|---|---|---|
+| `font=` | the timeline's | §3.8; an outline font converted with `axitime convert-font` suits a title |
+| `font_size=` | `12mm` | the em, as for any text |
+| `subtitle=` | none | quoted text |
+| `subtitle_font=` | the title's `font` | needs `subtitle=` |
+| `subtitle_font_size=` | half the title's `font_size` | needs `subtitle=` |
+| `align=` | `left` | which way the lines are aligned: `left` or `right` |
+| `margin=` | `5mm` | §16.3 |
+| `gap=` | `4mm` | between the illustration and the text |
+
+### 16.2 The credits
+
+``` text
+credits max_height=25mm illustration(Logo-Colour.svg fill=solid pens=auto) {    // the logo to the right
+    heading "Design, Contraption, and Research"
+    "Christopher Wenham, 2026"
+    "Creative Commons Attribution-ShareAlike 4.0 License"
+    "https://github.com/cwenham/AxiTimeline"
+    heading "Sources"
+    "Dates checked against Wikipedia"
+}
+```
+
+- The credits have no label. Their `{ }` body, which they must have, holds their lines from top to bottom, each a quoted string, or `heading` and a quoted string. As with a group (§9), the `{` ends the declaration's last line. A `//` inside the quotes is text, not a comment (§3.9), so web addresses are safe.
+- The lines are aligned to the right by default, so they end against the logo, or against the corner when there's no logo; `align=left` aligns them to the left. A heading is drawn in `heading_font` at `heading_font_size`, with extra space above it unless it is the first line.
+- `illustration(file.svg)` puts a drawing, typically a logo, beside the lines: `at=right` (the default, in the corner) or `at=left`, `gap=` from them. It is always exactly as tall as the lines, from the top of the first line's capitals to the last line's baseline, so `height=` is an error. Descenders on the last line hang below it, as text beside a picture normally does.
+- **`max_height=`** limits that same height, the lines' and so the illustration's. Where the lines would be taller, every line's size and the spacing between them are scaled down by one factor until they fit. They are never scaled up. `check` reports the text size that results, since it may be too small to read.
+- A pen keyword sets the pen for all of it, as for the title.
+
+| Parameter | Default | |
+|---|---|---|
+| `font=`, `font_size=` | the timeline's | the ordinary lines |
+| `heading_font=` | the credits' `font` | |
+| `heading_font_size=` | 1.25 × the credits' `font_size` | |
+| `max_height=` | none | a length |
+| `align=` | `right` | which way the lines are aligned: `left` or `right` |
+| `margin=` | `5mm` | §16.3 |
+| `gap=` | `4mm` | between the illustration and the lines |
+
+### 16.3 Placement
+
+- **Corners.** The title's ink starts `margin` from the start of the paper and from the finished top edge; the credits' ink ends `margin` from the end of the paper and the finished bottom edge. Margins and the `gap` beside an illustration are measured to the ink, not to the fonts' line boxes, so they come out as written. The default `5mm` clears the crop mark in each corner, whose arms reach 2.5mm onto the paper (interpreter spec, "Crop marks").
+- **Lines.** By default, each block's illustration goes on its corner's side and its lines are aligned that way: the title's to the left, the credits' to the right. `at=` and `align=` override either. Lines are aligned on their ink, so a large title and its smaller subtitle line up although their fonts' side bearings differ. From one line's descenders (the depth its font allows, not the letters it happens to have) to the next line's capitals is 0.4 of the next line's size, and a heading gets 0.6 of its own size more. These spacings are provisional (`docs/known-gaps.md`).
+- **Sides.** The title is above the baseline and the credits below it. Each must keep 1.5mm clear of the inner edge of its side's first lane (below the baseline, that is beyond the ticks and their labels). One that doesn't fit, or that is longer than the paper inside its margins, is a fatal error, like a bar with no room (§4.1).
+- **Keeping clear.** The title and credits are placed before Phase A (§6). Every lane that one of them crosses, counting its lines' whole boxes and its illustration, plus 1.5mm across the roll, is reserved along its length, so no bar, bar label or illustration is placed there (§§3.5, 7). Where that leaves a bar no lane, the usual no-room error follows. The reservation doesn't count towards how much of a side is in use when §6 breaks a tie. Event flags treat the title and credits, plus 1.5mm, as fixed obstacles (§8.2); poles and leaders are broken around them (§8); and graphs are broken around their text and illustrations, which graphs' own text also keeps clear of (§15.8).
+- **One of each.** A document has at most one title and one credits. Either may come from the main file or an included one, so credits shared by several timelines can live in a common file. A second is an error naming the first. Neither can be inside a group. An include's `priority=` and `side=` (§5) don't apply to them.
+
+### 16.4 Drawing
+
+- The text is drawn as strokes in the pen given, by the same text shaping as everything else (§3.8), so missing characters are replaced with a warning.
+- The illustration is drawn as every illustration is (§3.5): by default the outlines of its shapes, all in the block's pen; with `fill=` its filled shapes hatched; and with `pens=` its colours in pens of their own, so a logo in two colours is plotted in two passes.
+- They are drawn last, after illustrations (§11).

@@ -25,19 +25,12 @@ from ._version import __version__
 from .draw import Drawing, Stage, draw
 from .geometry import Box, keep_inside
 from .layout import ResolvedLayout
-from .pens import PENCIL_GRADES
+from .pens import pen_colour  # noqa: F401 (part of render's interface: the preview colour of each pen)
 from .units import format_number
 
 METADATA_NAMESPACE = "urn:axitimeline:job:1"
 _INKSCAPE = "http://www.inkscape.org/namespaces/inkscape"
 _FIELD = re.compile(r"^[a-z][a-z0-9-]*$")
-
-# Screen colours for previews; on paper the pen decides.
-_COLOURS = {
-    "red": "#c62828", "orange": "#ef6c00", "yellow": "#f9a825", "green": "#2e7d32", "blue": "#1565c0",
-    "indigo": "#3949ab", "violet": "#6a1b9a", "black": "#212121", "grey": "#757575",
-}
-
 
 class RenderError(ValueError):
     """Render options that don't fit the job. The message is written for the operator."""
@@ -65,18 +58,6 @@ class Page:
     x1: float
     y0: float  # the page's top edge, above the finished width by the crop-mark margin
     y1: float
-
-
-def pen_colour(pen: str) -> str:
-    if pen in _COLOURS:
-        return _COLOURS[pen]
-    if pen.startswith("fountain-"):
-        return _COLOURS.get(pen.removeprefix("fountain-"), "#212121")
-    grade = pen.removesuffix("-pencil")
-    if grade in PENCIL_GRADES:  # soft grades darker, hard grades lighter
-        shade = 0x55 + PENCIL_GRADES.index(grade) * 6
-        return f"#{shade:02x}{shade:02x}{shade + 8:02x}"
-    return "#212121"
 
 
 def page_for(drawing: Drawing, window: tuple[float, float] | None, bleed: float) -> Page:

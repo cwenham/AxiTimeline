@@ -73,6 +73,10 @@ class Illustration:
     width: float  # intrinsic size, in the SVG's own units (only the ratio matters)
     height: float
     height_mm: float | None  # explicit height=, or None for the default of 2 lanes
+    fill: Fill = Fill.NONE  # how its filled shapes are drawn: as outlines only, or hatched with a pattern (§3.5)
+    # The pen for each of its colours (#rrggbb), by pens=; None: everything in its owner's pen. A colour left out
+    # of the mapping is drawn in its owner's pen, and with pens= anything white isn't drawn at all.
+    pens: tuple[tuple[str, str], ...] | None = None
 
     @property
     def aspect_ratio(self) -> float:
@@ -186,12 +190,68 @@ class Graph:
     location: SourceLocation
 
 
+class Horizontal(Enum):
+    """Left or right: which side of a title's or the credits' text its illustration goes, and which way the lines
+    are aligned (§16)."""
+
+    LEFT = "left"
+    RIGHT = "right"
+
+
+@dataclass(frozen=True)
+class Title:
+    """The title in the top-left corner (§16.1), with an optional subtitle under it and an illustration beside."""
+
+    text: str
+    subtitle: str  # "" for none
+    pen: str
+    font: str  # keys into TimelineDocument.fonts
+    font_size_mm: float
+    subtitle_font: str
+    subtitle_font_size_mm: float
+    illustration: Illustration | None  # height_mm None: as tall as the text
+    illustration_at: Horizontal
+    align: Horizontal  # which way its lines are aligned
+    margin_mm: float  # from the finished top edge and the start of the paper
+    gap_mm: float  # between the illustration and the text
+    location: SourceLocation
+
+
+@dataclass(frozen=True)
+class CreditLine:
+    text: str
+    heading: bool
+    location: SourceLocation
+
+
+@dataclass(frozen=True)
+class Credits:
+    """The credits in the bottom-right corner (§16.2): a stack of lines, with an illustration (a logo) beside it
+    scaled to the stack's height."""
+
+    lines: tuple[CreditLine, ...]
+    pen: str
+    font: str  # keys into TimelineDocument.fonts
+    font_size_mm: float
+    heading_font: str
+    heading_font_size_mm: float
+    max_height_mm: float | None  # the stack is scaled down to fit, if it would be taller
+    illustration: Illustration | None  # always as tall as the stack
+    illustration_at: Horizontal
+    align: Horizontal  # which way its lines are aligned
+    margin_mm: float  # from the finished bottom edge and the end of the paper
+    gap_mm: float
+    location: SourceLocation
+
+
 @dataclass(frozen=True)
 class TimelineDocument:
     timeline: TimelineSettings
     entities: tuple[Entity, ...]  # top level, in document order
     fonts: Mapping[str, Font] = field(repr=False)
     graphs: tuple[Graph, ...] = ()  # backgrounds (§15), in document order
+    title: Title | None = None  # §16.1
+    credits: Credits | None = None  # §16.2
 
     def walk(self) -> Iterator[Entity]:
         """Every entity, groups before their members, in document order."""

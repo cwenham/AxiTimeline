@@ -19,7 +19,9 @@ from .diagnostics import Diagnostics, SourceLocation
 from .fetch import Fetcher, relative_name
 from .model import Side
 
-_KEY_START = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+# A continuation line (§3.10) starts with a key=value parameter or an illustration(...): never how a declaration
+# (or a group member) starts.
+_KEY_START = re.compile(r"^(?:[A-Za-z_][A-Za-z0-9_]*=|illustration\s*\()")
 _ENTITY_HEAD = re.compile(r"^([\^v]?)([!\-]*)(person|event|span|group)(?![\w])")
 _INCLUDE = re.compile(r"^include(?![\w])(.*)$")
 _TIMELINE = re.compile(r"^timeline(?![\w])")
@@ -136,18 +138,20 @@ class Flattener:
                 if not had_comment:
                     flush()  # a blank line ends a declaration; a comment-only line doesn't (§3.10)
                 continue
-            if _KEY_START.match(stripped):
+            if m := _KEY_START.match(stripped):
+                what = "an illustration(...)" if m.group().startswith("illustration") else "a key=value"
                 if raw[:1] not in (" ", "\t"):
                     flush()
                     self._sink.error(
                         "unindented-parameter",
-                        "a key=value line continuing a declaration must be indented",
+                        f"{what} line continuing a declaration must be indented",
                         location,
                     )
                 elif not decl:
                     self._sink.error(
                         "orphan-parameter",
-                        "this indented key=value line has no declaration to continue (a blank line ends one)",
+                        f"this indented {what.removeprefix('a ').removeprefix('an ')} line has no declaration to "
+                        "continue (a blank line ends one)",
                         location,
                     )
                 else:

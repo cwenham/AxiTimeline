@@ -217,3 +217,40 @@ test('hovering a graph: its keyword, and parameters known to belong to it', () =
   assert.strictEqual(hover('event "E" 1900 illustration(a.svg hei|ght=40mm)').decl, 'illustration');
   assert.deepStrictEqual(hover('graph "Dow" y_scale=l|og'), { type: 'value', key: 'y_scale', name: 'log', start: 20, end: 23 });
 });
+
+// -- the title and credits (§16) -------------------------------------------------------------------------------
+
+test('a title is like a graph: its items follow its quoted text', () => {
+  expect('title "A Century" |', { kind: 'item', decl: 'title', used: [] });
+  expect('title "A Cen|', { kind: 'none' });
+  expect('title "A Century" subtitle="x" |', { kind: 'item', decl: 'title', used: ['subtitle'] });
+});
+
+test('the credits have no label: their items start straight after the keyword', () => {
+  expect('credits |', { kind: 'item', decl: 'credits', used: [] });
+  expect('credits max_height=20mm |', { kind: 'item', decl: 'credits', used: ['max_height'] });
+  expect('credits max_height=20mm {|', { kind: 'none' });
+});
+
+test("the credits' body holds lines of text: only heading can start one, and nothing continues them", () => {
+  expect('credits {\n  "x"\n  |\n}', { kind: 'statement', body: 'credits', inBody: true, continues: null, timeline: false });
+  expect('credits {\n  hea|', { kind: 'statement', body: 'credits', prefix: 'hea' });
+  expect('credits {\n  ^|', { kind: 'none' });
+  expect('group "G" 1900-1950 {\n  |\n}', { kind: 'statement', body: 'group' });
+});
+
+test('an indented illustration( line continues the declaration above, and knows whose it is', () => {
+  const c = expect('title "T"\n    illustration(a.svg |)', { kind: 'item', decl: 'illustration', owner: 'title' });
+  assert.deepStrictEqual([...c.used], []);
+  expect('credits\n    max_height=20mm illustration(logo.svg |) {', { decl: 'illustration', owner: 'credits' });
+  expect('event "E" 1900 illustration(a.svg |)', { decl: 'illustration', owner: 'event' });
+});
+
+test('hover: title and credits are keywords, and heading is one inside the credits', () => {
+  assert.deepStrictEqual(hover('tit|le "T"'), { type: 'keyword', name: 'title', start: 0, end: 5 });
+  assert.strictEqual(hover('credits {\n  head|ing "Sources"\n}').name, 'heading');
+  assert.strictEqual(hover('head|ing "Sources"'), null);
+  assert.deepStrictEqual(hover('title "T" subtitle_font=Hershey|Sans1'), { type: 'font', name: 'HersheySans1', start: 24, end: 36 });
+  assert.strictEqual(hover('title "T"\n    illustration(a.svg a|t=left)').decl, 'illustration');
+  assert.strictEqual(hover('title "T"\n    ga|p=3').decl, 'title');
+});

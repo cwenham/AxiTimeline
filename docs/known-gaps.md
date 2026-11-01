@@ -46,8 +46,11 @@ All of them need checking on paper.
 ### 2. Illustration content constraints (implemented, to confirm)
 Illustrations are inlined author SVGs that a pen will physically draw. As implemented: every shape is drawn as its
 outline; text, embedded images, `<use>` references and foreign objects are left out; filled shapes are drawn as
-outlines; and `check` reports each of these as a warning (interpreter spec, "How the renderer draws"). Confirm
-this, or say that illustrations should be the author's responsibility with no warnings.
+outlines unless `fill=` hatches them, and their colours in the owner's pen unless `pens=` gives them pens of their
+own (language spec §3.5, added 2026-11-01); and `check` reports what's left out as a warning (interpreter spec,
+"How the renderer draws"). Still to confirm: the warnings, and whether `fill=` and `pens=` should become the
+default for a drawing that has filled or coloured shapes. Not handled: one shape painted over another (a plotter
+can't erase, so both are drawn in full), and gradients, which are drawn in the owner's pen.
 
 ## Operational / hardware-adjacent
 
@@ -100,6 +103,27 @@ Still open:
   the outline's inside edge. Check on paper whether that matters.
 - **Left out for now:** decimal commas (`decimal=comma`), more than one `missing=` marker, timezones in
   `time_format=`, and other kinds of background (shaded time ranges).
+
+## Title and credits (language spec §16, added 2026-11-01)
+
+Implemented 2026-11-01 and tried on renders (`renders/title-credits/`, with the "Colossal Waste of Time" logo).
+Still open:
+
+- **A logo in several colours, and its solid letters,** are handled by `fill=solid pens=auto` on its
+  illustration (added the same day, language spec §3.5). Still to check on paper: whether `solid`'s 0.4mm hatch
+  looks solid with the pens on hand, and how long a hatched logo takes to plot.
+- **Letters of a converted font come out hollow**, since `axitime convert-font` gives outlines. The title could take
+  a `fill=` of its own, hatching inside its letters as illustrations now do; it would suit only outline fonts, not
+  single-stroke ones.
+- **Single-line fonts sold as TrueType** (engraving fonts) draw each stroke as a thin closed outline, so a converted
+  one would draw every stroke twice, there and back. A conversion option that drops the return trip could suit
+  them; none is planned until one is needed.
+- **Only two corners.** The title is always top-left and the credits bottom-right. Other corners, or a title along
+  the bottom, would need a `corner=` setting.
+- **Spacing values** are provisional (in `LayoutStyle` and the parser): a 5mm margin, a 4mm gap beside the
+  illustration, a 12mm title, a subtitle at half the title's size, headings at 1.25 times the credits' size, 0.4
+  of a line's size between one line's descenders and its capitals, 0.6 more above a heading, and 1.5mm kept clear
+  around both.
 
 ## Smaller points
 

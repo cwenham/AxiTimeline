@@ -14,7 +14,9 @@ Layout runs in three phases (§6):
   illustrations in a pole's path are nudged sideways;
 - **C** — colliding event flags are staggered, then flipped, then reported.
 
-Background graphs (§15) are placed after all three, around a foreground that is then fixed (``graphs.py``).
+Before them, the title and credits (§16) are put in their corners, and the lanes they cross are reserved there
+so nothing else is placed on them. Background graphs (§15) are placed after all three phases, around a
+foreground that is then fixed (``graphs.py``).
 
 Every ordering uses the spec's explicit tie-breaks (priority, then start, then document order), so the same
 document and ``now`` always give the same layout.
@@ -27,10 +29,10 @@ from dataclasses import dataclass, field, replace
 from enum import Enum
 
 from .dates import DateRange, DateValue, time_label_text
-from .diagnostics import Diagnostic, Diagnostics
+from .diagnostics import Diagnostic, Diagnostics, SourceLocation
 from .geometry import Box, cut_out, keep_inside, segment_box, segment_crosses
 from .graphs import GraphLayout, PlacedGraph
-from .model import Baseline, Entity, Fill, Illustration, Kind, Side, TimeLabel, TimelineDocument
+from .model import Baseline, Entity, Fill, Horizontal, Illustration, Kind, Side, TimeLabel, TimelineDocument
 from .pens import PENS
 from .text import ShapedText, shape
 from .ticks import plan_ticks
@@ -79,6 +81,10 @@ class LayoutStyle:
     value_label_gap: float = 0.6  # between a mark and its label
     graph_search_step: float = 1.0  # a graph's text looks for free space in steps of this
     graph_start_reach: float = 300.0  # how far value_scale=start may look along the roll
+    # The title and credits (§16).
+    corner_line_gap: float = 0.4  # from one line's descenders to the next line's capitals, in ems of the next line
+    corner_section_gap: float = 0.6  # extra space above a heading in the credits (not the first line), in its ems
+    corner_clearance: float = 1.5  # bars, labels, illustrations and flags keep this far from the title and credits
 
 
 DEFAULT_STYLE = LayoutStyle()
@@ -166,6 +172,20 @@ class PlacedEvent:
 
 
 @dataclass(frozen=True)
+class PlacedBlock:
+    """The title or the credits (§16), placed in their corner."""
+
+    kind: str  # "title" or "credits"
+    pen: str
+    side: Side  # the side of the baseline it is on: above for the title, below for the credits
+    texts: tuple[PlacedText, ...]  # top to bottom: the title then any subtitle, or the credits' lines
+    illustration: Illustration | None
+    illustration_box: Box | None
+    box: Box  # all of it together
+    location: SourceLocation
+
+
+@dataclass(frozen=True)
 class Tick:
     seconds: int
     x: float
@@ -207,6 +227,8 @@ class ResolvedLayout:
     omitted: tuple[Entity, ...]  # wholly outside the timeline window (§4.2)
     graphs: tuple[PlacedGraph, ...]  # backgrounds (§15), in document order; graphs left out aren't here
     diagnostics: tuple[Diagnostic, ...]  # warnings; a layout with errors raises AxitlError instead
+    title: PlacedBlock | None = None  # in the top-left corner (§16.1)
+    credits: PlacedBlock | None = None  # in the bottom-right corner (§16.2)
 
     def seconds_to_position(self, seconds: int) -> float:
         return self.length_mm * (seconds - self.start_seconds) / (self.end_seconds - self.start_seconds)
@@ -261,8 +283,12 @@ class _Lanes:
             items[:] = [item for item in items if item[2] != owner]
 
     def used(self) -> int:
-        """How many lanes from the baseline outward are in use (the highest occupied lane + 1)."""
-        return max((i + 1 for i, items in enumerate(self.items) if items), default=0)
+        """How many lanes from the baseline outward are in use (the highest occupied lane + 1). The title and
+        credits, reserved at the paper's edge (§16), don't count: they would make their side look full."""
+        return max(
+            (i + 1 for i, items in enumerate(self.items) if any(not o.startswith("corner:") for _, _, o in items)),
+            default=0,
+        )
 
 
 @dataclass
@@ -389,6 +415,7 @@ class _Layout:
         self.failed: set[int] = set()
         self.omitted: list[Entity] = []
         self.obstacle_cache: dict[Side, list[tuple[Box, str]]] = {}
+        self.blocks: dict[str, PlacedBlock] = {}
 
     # -- setup -----------------------------------------------------------------------------------------------
 
@@ -396,6 +423,7 @@ class _Layout:
         self.window()
         self.sink.raise_if_errors()
         self.sides()
+        self.corners()
         self.collect()
         self.phase_a()
         self.phase_b()
@@ -545,6 +573,136 @@ class _Layout:
 
         # Less of its width used wins; then the side with more space; then above.
         return min(tied, key=lambda s: (used_fraction(s), -self.geom[s].space, s is not Side.ABOVE))
+
+    # -- the title and credits (§16) --------------------------------------------------------------------------
+
+    def corners(self) -> None:
+        """Put the title in the top-left corner and the credits in the bottom-right, and reserve the lanes they
+        cross there, so no bar, label or illustration is placed on them."""
+        title, credits = self.doc.title, self.doc.credits
+        if title is not None:
+            lines = [(title.text, title.font, title.font_size_mm, 0.0)]
+            if title.subtitle:
+                lines.append((title.subtitle, title.subtitle_font, title.subtitle_font_size_mm, 0.0))
+            ill = title.illustration
+            self.place_block(
+                "title", title.pen, Side.ABOVE, lines, ill, ill.height_mm if ill else None, title.illustration_at,
+                title.align, title.gap_mm, title.margin_mm, title.location,
+            )
+        if credits is not None:
+            st = self.style
+
+            def lines(k: float) -> list[tuple[str, str, float, float]]:
+                return [
+                    (line.text, credits.heading_font if line.heading else credits.font,
+                     k * (credits.heading_font_size_mm if line.heading else credits.font_size_mm),
+                     st.corner_section_gap if line.heading and i > 0 else 0.0)
+                    for i, line in enumerate(credits.lines)
+                ]
+
+            k = 1.0
+            height = self.stack_height(self.text_stack(lines(1.0)))
+            if credits.max_height_mm is not None and height > credits.max_height_mm:
+                k = credits.max_height_mm / height  # every size and gap is in ems, so the stack scales exactly
+            self.place_block(
+                "credits", credits.pen, Side.BELOW, lines(k), credits.illustration, None, credits.illustration_at,
+                credits.align, credits.gap_mm, credits.margin_mm, credits.location,
+            )
+
+    def text_stack(self, lines: list[tuple[str, str, float, float]]) -> list[tuple[str, _Text, float]]:
+        """Lines of text (label, font, size, extra space above it in ems), one under the next. Each comes back
+        shaped with its baseline's y, the first line's at 0. From one line's descenders to the next line's
+        capitals is ``corner_line_gap`` of the next line's size, so the rhythm follows the fonts, not the words."""
+        out: list[tuple[str, _Text, float]] = []
+        y = 0.0
+        for label, font, size, extra in lines:
+            text = self.text(font, size, label)
+            if out:
+                above = out[-1][1].shaped
+                y += above.descender + text.shaped.cap_height + (self.style.corner_line_gap + extra) * size
+            out.append((label, text, y))
+        return out
+
+    @staticmethod
+    def stack_height(stack: list[tuple[str, _Text, float]]) -> float:
+        """From the top of the first line's capitals to the last line's baseline: what an illustration matches."""
+        return stack[-1][2] + stack[0][1].shaped.cap_height
+
+    def place_block(self, kind: str, pen: str, side: Side, lines, ill: Illustration | None, ill_height: float | None,
+                    at: Horizontal, align: Horizontal, gap: float, margin: float, location: SourceLocation) -> None:
+        """Lay out a title or the credits and put it in its corner. Its margins, the gap beside its illustration and
+        the lines' alignment are all measured to the ink, so they come out as written whatever each font's side
+        bearings."""
+        st = self.style
+        stack = self.text_stack(lines)
+        top = -stack[0][1].shaped.cap_height
+        bottom = stack[-1][2]
+        inks = [t.shaped.ink_box() or (0.0, -t.shaped.cap_height, t.shaped.width, 0.0) for _, t, _ in stack]
+        text_width = max(ink[2] - ink[0] for ink in inks)
+        left = 0.0  # where the text's ink starts, relative to the block's left
+        ill_box = None
+        if ill is not None:
+            height = ill_height if ill_height is not None else bottom - top
+            width = height * ill.aspect_ratio
+            mid = (top + bottom) / 2  # centred on the text, from the capitals' tops to the last baseline
+            if at is Horizontal.LEFT:
+                ill_box = Box(0.0, mid - height / 2, width, mid + height / 2)
+                left = width + gap
+            else:
+                ill_box = Box(text_width + gap, mid - height / 2, text_width + gap + width, mid + height / 2)
+        if align is Horizontal.LEFT:  # each line's ink starts at the text's left
+            origins = [left - ink[0] for ink in inks]
+        else:  # each line's ink ends at the text's right
+            origins = [left + text_width - ink[2] for ink in inks]
+        ink_boxes = [Box(ox + i[0], y + i[1], ox + i[2], y + i[3]) for ox, i, (_, _, y) in zip(origins, inks, stack, strict=True)]
+        placing = _union(ink_boxes + ([ill_box] if ill_box else []))
+        if side is Side.ABOVE:  # the top-left corner
+            dx, dy = margin - placing.x0, margin - placing.y0
+            edge = "top edge"
+        else:  # the bottom-right corner
+            dx, dy = self.length - margin - placing.x1, self.t.width_mm - margin - placing.y1
+            edge = "bottom edge"
+        texts = tuple(t.placed(label, ox + dx, y + dy) for ox, (label, t, y) in zip(origins, stack, strict=True))
+        if ill_box is not None:
+            ill_box = Box(ill_box.x0 + dx, ill_box.y0 + dy, ill_box.x1 + dx, ill_box.y1 + dy)
+        # What everything else keeps clear of: the lines' whole boxes (ascenders and descenders included).
+        box = _union([t.box for t in texts] + ([ill_box] if ill_box else []))
+
+        name = "the title" if kind == "title" else "the credits"
+        verb = "is" if kind == "title" else "are"
+        g = self.geom[side]
+        d_in, d_out = self.distance_range(side, box)
+        ok = True
+        if placing.width > self.length - 2 * margin + 1e-9:
+            self.sink.error(
+                f"no-room-for-{kind}",
+                f"{name} {verb} {format_number(placing.width, 1)}mm wide, but the paper is only "
+                f"{format_number(self.length - 2 * margin, 1)}mm long inside its {format_number(margin)}mm margins",
+                location,
+            )
+            ok = False
+        if d_in < g.inner + st.corner_clearance:
+            room = g.space - margin - g.inner - st.corner_clearance
+            self.sink.error(
+                f"no-room-for-{kind}",
+                f"{name} {verb} {format_number(box.height, 1)}mm tall, but there {'is' if room >= 0 else 'are'} only "
+                f"{format_number(max(room, 0.0), 1)}mm between the {edge} (less its {format_number(margin)}mm margin) "
+                "and the timeline's first lane",
+                location,
+            )
+            ok = False
+        if not ok:
+            return
+        for lane in range(g.capacity):
+            a, b = self.band(side, lane)
+            if b > d_in - st.corner_clearance and a < d_out + st.corner_clearance:
+                self.lanes[side].add(lane, 1, box.x0, box.x1, f"corner:{kind}")
+        self.blocks[kind] = PlacedBlock(kind, pen, side, texts, ill, ill_box, box, location)
+
+    def block_obstacles(self, side: Side) -> list[tuple[Box, str]]:
+        """The title or credits on one side, kept clear of like an illustration (§16)."""
+        pad = self.style.corner_clearance
+        return [(b.box.padded(pad), f"the {b.kind}") for b in self.blocks.values() if b.side is side]
 
     # -- phase A: bars -------------------------------------------------------------------------------------------
 
@@ -777,7 +935,7 @@ class _Layout:
         return FlagDirection.RIGHT if room_right >= room_left else FlagDirection.LEFT
 
     def place_event_illustration(self, ev: _Event) -> _Illustration | None:
-        """Beside the pole, on whichever side its band can sit lower; a tie goes left, clear of the flag."""
+        """Horizontal the pole, on whichever side its band can sit lower; a tie goes left, clear of the flag."""
         e = ev.entity
         width, height, lanes = self.illustration_size(e.illustration, ev.side)
         gap = self.style.illustration_gap
@@ -874,6 +1032,7 @@ class _Layout:
         for ill in self.ills:
             if ill.side is side:
                 out.append((self.illustration_box(ill), f'the illustration of {ill.owner.kind.value} "{ill.owner.label}"'))
+        out += self.block_obstacles(side)
         return out
 
     def leaders(self, side: Side) -> list[tuple[tuple[float, float], tuple[float, float], str]]:
@@ -1133,6 +1292,8 @@ class _Layout:
         for ill in self.ills:
             if ill.side is ev.side:
                 block(self.illustration_box(ill))
+        for box, _ in self.block_obstacles(ev.side):
+            block(box)
         if ev.side is Side.BELOW:
             for tick in ticks:
                 if tick.label:
@@ -1168,6 +1329,7 @@ class _Layout:
         boxes = [b2 for b in bars if b.side is bar.side and b.entity is not bar.entity
                  for b2 in (Box(b.x0, b.y0, b.x1, b.y1), b.label.box)]
         boxes += [self.illustration_box(ill) for ill in self.ills if ill.side is bar.side]
+        boxes += [box for box, _ in self.block_obstacles(bar.side)]
         boxes += flag_boxes
         for box in boxes:
             pieces = [part for piece in pieces for part in cut_out(piece, box.padded(st.pole_gap))]
@@ -1181,7 +1343,8 @@ class _Layout:
             return ()
         illustrations = [b.illustration for b in bars if b.illustration] + [e.illustration for e in events if e.illustration]
         ink, text, tick_bottom = _graph_foreground(
-            self.baseline, self.length, bars, events, ticks, illustrations, self.style.pen_half_width
+            self.baseline, self.length, bars, events, ticks, illustrations, self.blocks.values(),
+            self.style.pen_half_width,
         )
         return GraphLayout(
             baseline_y=self.baseline, width=self.t.width_mm, length=self.length, x=self.x, window=(self.t0, self.t1),
@@ -1226,6 +1389,15 @@ class _Layout:
             )
         graphs = self.graphs(bars, events, ticks)
         used = {e.entity.pen for e in bars} | {e.entity.pen for e in events} | {AXIS_PEN}
+        used |= {b.pen for b in self.blocks.values()}
+        # An illustration whose colours are drawn in pens of their own (§3.5) needs those pens too.
+        drawings = [b.illustration for b in bars] + [e.illustration for e in events]
+        used |= {
+            pen
+            for ill in [p.illustration for p in drawings if p] + [b.illustration for b in self.blocks.values()]
+            if ill is not None and ill.pens
+            for _, pen in ill.pens
+        }
         # Shading goes down before the lines and lettering drawn over it: graphs' pens and fill pens come straight
         # after the axis pen, graphs first, each in document order (§§3.7, 15.10).
         shading = [g.graph.pen for g in graphs] + [g.graph.fill_pen for g in graphs if g.graph.fill is not Fill.NONE]
@@ -1259,12 +1431,14 @@ class _Layout:
             omitted=tuple(self.omitted),
             graphs=graphs,
             diagnostics=tuple(self.sink.items),
+            title=self.blocks.get("title"),
+            credits=self.blocks.get("credits"),
         )
 
 
-def _graph_foreground(baseline: float, length: float, bars, events, ticks, illustrations, half: float):
+def _graph_foreground(baseline: float, length: float, bars, events, ticks, illustrations, blocks, half: float):
     """Every piece of foreground ink as boxes, and the part of it a graph is broken around (text and
-    illustrations): the inputs to placing graphs (§15)."""
+    illustrations, the title and credits included): the inputs to placing graphs (§§15, 16)."""
     tick_bottom = max([baseline + t.length for t in ticks] + [t.label.box.y1 for t in ticks if t.label] + [baseline])
     # The baseline and the whole tick band under it: a graph's label there would read as a tick label.
     ink = [Box(0.0, baseline - half, length, tick_bottom + half)]
@@ -1277,7 +1451,16 @@ def _graph_foreground(baseline: float, length: float, bars, events, ticks, illus
         ink += [Box(e.x - half, min(a, b), e.x + half, max(a, b)) for a, b in e.pole_segments]
         text.append(e.flag_box)
     text += [ill.box for ill in illustrations]
+    for block in blocks:
+        text += [t.box for t in block.texts] + ([block.illustration_box] if block.illustration_box else [])
     return ink + text, text, tick_bottom
+
+
+def _union(boxes: list[Box]) -> Box:
+    out = boxes[0]
+    for box in boxes[1:]:
+        out = out.union(box)
+    return out
 
 
 def _readable_scale(mm_per_second: float, span_seconds: int) -> Scale:

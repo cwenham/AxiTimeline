@@ -20,6 +20,7 @@ from .layout import (
     LabelPlacement,
     LayoutStyle,
     PlacedBar,
+    PlacedBlock,
     PlacedEvent,
     PlacedIllustration,
     PlacedText,
@@ -29,10 +30,13 @@ from .layout import (
 )
 from .model import (
     Baseline,
+    CreditLine,
+    Credits,
     Entity,
     Fill,
     Graph,
     GraphPoint,
+    Horizontal,
     Illustration,
     Kind,
     LineMode,
@@ -40,6 +44,7 @@ from .model import (
     Side,
     TimelineDocument,
     TimelineSettings,
+    Title,
     ValueScaleMode,
     YScale,
 )
@@ -52,9 +57,9 @@ from .units import parse_length
 
 __all__ = [
     "draw", "layout", "page_for", "parse", "render", "stroke_lengths", "parse_date", "parse_length", "parse_when", "shape", "AxitlError", "BUILTIN_FONTS",
-    "Baseline", "Box", "DrawStyle", "Drawing", "Page", "RenderError", "RenderOptions", "Stage", "Stroke", "DateRange", "DateValue", "Diagnostic", "Entity", "Fill", "FlagDirection", "LabelPlacement", "Font",
+    "Baseline", "Box", "CreditLine", "Credits", "Horizontal", "DrawStyle", "Drawing", "Page", "RenderError", "RenderOptions", "Stage", "Stroke", "DateRange", "DateValue", "Diagnostic", "Entity", "Fill", "FlagDirection", "LabelPlacement", "Font",
     "Graph", "GraphPoint", "Illustration", "Kind", "LayoutStyle", "LineMode", "OpenEndStyle", "PENS", "ParseResult",
-    "PlacedBar", "PlacedEvent", "PlacedGraph", "ValueScaleMode", "YScale",
+    "PlacedBar", "PlacedBlock", "PlacedEvent", "PlacedGraph", "ValueScaleMode", "YScale",
     "PlacedIllustration", "PlacedText", "Precision", "ResolvedLayout", "Resource", "Severity", "ShapedText", "Side",
-    "SourceLocation", "Tick", "TimelineDocument", "TimelineSettings", "__version__",
+    "SourceLocation", "Tick", "TimelineDocument", "TimelineSettings", "Title", "__version__",
 ]

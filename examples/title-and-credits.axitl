@@ -1,0 +1,36 @@
+// A title in the top-left corner and credits in the bottom-right (language spec §16). Everything else keeps
+// clear of them. A font converted with axitime convert-font suits a title well; this one keeps to built-in fonts.
+// The badge beside the credits is hatched solid, its red and black each in a pen of their own (§3.5).
+timeline start=1900 end=1999 length=60cm width=160
+
+title "A Century of Clever People" indigo
+    subtitle="Lives, wars and the race to the Moon"
+    font=HersheySerifBold font_size=10mm
+    subtitle_font=HersheySerifMedItalic
+    illustration(illustrations/apple.svg at=left)
+
+credits max_height=20mm illustration(illustrations/badge.svg fill=solid pens=auto) {
+    heading "Design and research"
+    "A. N. Author, 2026"
+    "Creative Commons Attribution-ShareAlike 4.0"
+    heading "Sources"
+    "Dates checked against Wikipedia"
+}
+
+^!!person "Marie Curie" 1867-1934 blue
+^!person "Albert Einstein" 1879-1955 blue
+^person "Grace Hopper" 1906-1992 violet
+^person "Alan Turing" 1912-1954 green
+^person "Tim Berners-Lee" 1955- green
+
+v!span "First World War" 1914-1918 red fill=crosshatch
+v!span "Second World War" 1939-1945 red fill=crosshatch
+v-span "Late century" 1960-1999 grey
+
+!group "Space Race" 1957-1975 orange fill=diagonal time_label=day {
+  event "Sputnik 1" 1957-10-04
+  event "Apollo 11 lands" 1969-07-20
+}
+
+event "First powered flight" 1903-12-17 time_label=year
+v-event "Berlin Wall falls" 1989-11-09
