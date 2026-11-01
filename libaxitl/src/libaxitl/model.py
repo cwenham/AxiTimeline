@@ -215,6 +215,8 @@ class Title:
     margin_mm: float  # from the finished top edge and the start of the paper
     gap_mm: float  # between the illustration and the text
     location: SourceLocation
+    font_fill: Fill = Fill.NONE  # how the insides of an outline font's letters are hatched
+    subtitle_font_fill: Fill = Fill.NONE
 
 
 @dataclass(frozen=True)

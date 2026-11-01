@@ -226,8 +226,8 @@ fonts (`.pfa`, `.pfb`), using fontTools, which is therefore a dependency of axit
 - A Type 1 font's glyphs are matched to characters by their glyph names (the Adobe Glyph List). Variants such as
   `a.sc` are left out, so they can't take the place of the plain letter.
 - The font's copyright and licence notices are copied into comments at the top of the file, so they travel with it.
-- The glyphs are outlines, so the plotter draws each letter hollow. It suits a title; small text reads better in
-  a single-stroke font. Kerning is not carried over, since libaxitl doesn't apply it (language spec §3.8).
+- The glyphs are outlines, so the plotter draws each letter hollow, unless a title fills them with `font_fill=`
+  (language spec §16.1). It suits a title; small text reads better in a single-stroke font. Kerning is not carried over, since libaxitl doesn't apply it (language spec §3.8).
 - Converting is a step the author runs once, outside the pipeline: the result is an ordinary custom font, fetched
   through `resolve` and covered by the job hash like any other.
 

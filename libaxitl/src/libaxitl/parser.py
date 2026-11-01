@@ -72,7 +72,10 @@ _GRAPH_KEYS = (
     "value_marks", "unit", "font", "font_size",
 )
 _CSV_KEYS = ("first_row", "last_row", "header", "separator", "time_column", "value_column", "time_format")
-_TITLE_KEYS = ("font", "font_size", "subtitle", "subtitle_font", "subtitle_font_size", "align", "margin", "gap")
+_TITLE_KEYS = (
+    "font", "font_size", "font_fill", "subtitle", "subtitle_font", "subtitle_font_size", "subtitle_font_fill", "align",
+    "margin", "gap",
+)
 _CREDITS_KEYS = ("font", "font_size", "heading_font", "heading_font_size", "max_height", "align", "margin", "gap")
 _NOTE_KEYS = (
     "anchor", "edge", "width", "align", "font", "font_size", "heading_font", "heading_font_size", "margin",
@@ -782,18 +785,47 @@ class _Builder:
         font = self.font(*p["font"]) if "font" in p else inherited_font
         size = self.corner_length(p, "font_size", DEFAULT_TITLE_SIZE_MM)
         subtitle = p["subtitle"][0] if "subtitle" in p else ""
-        for key in ("subtitle_font", "subtitle_font_size"):
+        for key in ("subtitle_font", "subtitle_font_size", "subtitle_font_fill"):
             if key in p and not subtitle:
                 self.sink.error("bad-value", f"{key}= needs a subtitle= to apply to", p[key][1])
                 ok = False
         subtitle_font = self.font(*p["subtitle_font"]) if "subtitle_font" in p else font
         subtitle_size = self.corner_length(p, "subtitle_font_size", size * SUBTITLE_SCALE if size else None)
+        font_fill = self.letter_fill(p, "font_fill", font, Fill.NONE)
+        # A subtitle in an outline font is filled like the title unless it says otherwise; one in a single-line
+        # font has nothing to fill.
+        outline = bool(subtitle) and subtitle_font is not None and self.fonts[subtitle_font].outline
+        subtitle_fill = self.letter_fill(p, "subtitle_font_fill", subtitle_font,
+                                         font_fill if outline and font_fill else Fill.NONE)
         margin = self.corner_length(p, "margin", DEFAULT_CORNER_MARGIN_MM, positive=False)
         gap = self.corner_length(p, "gap", DEFAULT_CORNER_GAP_MM, positive=False)
-        if not (ok and good) or None in (font, size, subtitle_font, subtitle_size, align, margin, gap):
+        if not (ok and good) or None in (font, size, subtitle_font, subtitle_size, font_fill, subtitle_fill, align,
+                                         margin, gap):
             return None
         return Title(text, subtitle, pen, font, size, subtitle_font, subtitle_size, illustration, at, align, margin,
-                     gap, location)
+                     gap, location, font_fill, subtitle_fill)
+
+    def letter_fill(self, p: dict, key: str, font: str | None, default: Fill) -> Fill | None:
+        """How the insides of a font's letters are hatched (font_fill=, §16.1), or ``default``; None after an
+        error. Only an outline font's letters have insides."""
+        if key not in p:
+            return default
+        text, where = p[key]
+        try:
+            fill = Fill(text)
+        except ValueError:
+            options = ", ".join(f.value for f in Fill)
+            self.sink.error("bad-value", f"{key}= takes one of {options}, not '{text}'", where)
+            return None
+        if fill is not Fill.NONE and font is not None and not self.fonts[font].outline:
+            self.sink.error(
+                "not-an-outline-font",
+                f"{key}=: '{font}' draws its letters as single lines, so they have no insides to fill; it needs an "
+                "outline font, such as one made with axitime convert-font",
+                where,
+            )
+            return None
+        return fill
 
     def credits(self, node: Tree, context: tuple[str, float]) -> Credits | None:
         location = self.loc(node)

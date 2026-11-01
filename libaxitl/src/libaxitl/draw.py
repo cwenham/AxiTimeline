@@ -138,11 +138,15 @@ class _Drawer:
             if tick.label is not None:
                 self.add(pen, Stage.AXIS, self.text(tick.label))
 
-    # -- the title and credits (§16) ----------------------------------------------------------------------
+    # -- the title and credits (§16), and notes (§17) ------------------------------------------------------
 
     def block(self, block: PlacedBlock) -> None:
-        for text in block.texts:
-            self.add(block.pen, Stage.TITLES, self.text(text))
+        for i, text in enumerate(block.texts):
+            lines = self.text(text)
+            self.add(block.pen, Stage.TITLES, lines)
+            fill = block.fills[i] if i < len(block.fills) else Fill.NONE
+            if fill is not Fill.NONE:  # an outline font's letters, hatched inside (§16.1)
+                self.add(block.pen, Stage.TITLES, self.inside(lines, False, fill))
         if block.illustration is not None and block.illustration_box is not None:
             self.illustration(block.illustration, block.illustration_box, block.pen, Stage.TITLES, block.location)
 
@@ -180,20 +184,24 @@ class _Drawer:
             hatch_pen = pen_for(shape.fill)
             if hatch_pen is None or shape.fill == WHITE:
                 continue  # white is the paper: never hatched
-            points = [p for line in shape.lines for p in line]
-            if len(points) < 3:
-                continue
-            region = Box(min(x for x, _ in points), min(y for _, y in points),
-                          max(x for x, _ in points), max(y for _, y in points))
-            if region.width <= 0 or region.height <= 0:
-                continue
-            shortest = 0.0 if ill.fill is Fill.DOTS else self.style.shade_shortest
-            hatch = Outline(shape.lines, shape.evenodd).clip(self.fill(ill.fill, region))
-            self.add(hatch_pen, stage, (h for h in hatch if _length(h) >= shortest))
+            self.add(hatch_pen, stage, self.inside(shape.lines, shape.evenodd, ill.fill))
         if outlines_only:
             notes.append("filled shapes are drawn as their outlines only (fill= hatches them)")
         for note in notes:
             self.sink.warning("illustration-content", f"illustration '{ill.name}': {note}", location)
+
+    def inside(self, lines: list[list[Point]], evenodd: bool, fill: Fill) -> list[list[Point]]:
+        """A fill pattern cut to the inside of closed outlines (a filled shape, or an outline font's letters), with
+        any piece too short to draw without leaving a stub left out."""
+        points = [p for line in lines for p in line]
+        if len(points) < 3:
+            return []
+        region = Box(min(x for x, _ in points), min(y for _, y in points),
+                     max(x for x, _ in points), max(y for _, y in points))
+        if region.width <= 0 or region.height <= 0:
+            return []
+        shortest = 0.0 if fill is Fill.DOTS else self.style.shade_shortest
+        return [h for h in Outline(lines, evenodd).clip(self.fill(fill, region)) if _length(h) >= shortest]
 
     # -- background graphs (§15) -------------------------------------------------------------------------
 

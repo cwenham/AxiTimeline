@@ -42,7 +42,10 @@
     "origin", "y_scale", "height", "range", "line", "fill", "fill_pen", "fill_depth", "shadow", "value_scale",
     "value_marks", "unit", "font", "font_size"
   ],
-  "titleParameters": ["font", "font_size", "subtitle", "subtitle_font", "subtitle_font_size", "align", "margin", "gap"],
+  "titleParameters": [
+    "font", "font_size", "font_fill", "subtitle", "subtitle_font", "subtitle_font_size", "subtitle_font_fill", "align",
+    "margin", "gap"
+  ],
   "creditsParameters": ["font", "font_size", "heading_font", "heading_font_size", "max_height", "align", "margin", "gap"],
   "noteParameters": [
     "anchor", "edge", "width", "align", "font", "font_size", "heading_font", "heading_font_size", "margin",
@@ -50,6 +53,8 @@
   ],
   "values": {
     "fill": ["none", "solid", "diagonal", "crosshatch", "wave", "dots"],
+    "font_fill": ["none", "solid", "diagonal", "crosshatch", "wave", "dots"],
+    "subtitle_font_fill": ["none", "solid", "diagonal", "crosshatch", "wave", "dots"],
     "time_label": ["none", "date", "year", "month", "day", "hour", "min", "sec"],
     "baseline": ["high", "middle", "low"],
     "open_end_style": ["sawtooth", "sine"],

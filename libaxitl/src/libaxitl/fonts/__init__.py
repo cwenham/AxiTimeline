@@ -68,6 +68,9 @@ class Font:
     x_height: float
     ascender: float
     descender: float  # negative: below the baseline
+    # Every glyph is drawn as closed outlines (a font made with axitime convert-font), not single strokes, so its
+    # letters have insides that font_fill= can hatch (§16.1).
+    outline: bool = False
 
     def has(self, char: str) -> bool:
         return char in self.glyphs
@@ -84,6 +87,21 @@ def _number(value: str | None, default: float) -> float:
         return float(value)
     except ValueError:
         raise FontError(f"'{value}' is not a number") from None
+
+
+def _closed(segments: tuple[Segment, ...]) -> bool:
+    """Whether every subpath of a glyph is closed: ended with Z, or back where it started."""
+    start = end = None
+    for seg in segments:
+        if seg[0] == "M":
+            if start is not None and end != start:
+                return False
+            start = end = (seg[1], seg[2])
+        elif seg[0] == "Z":
+            end = start
+        else:
+            end = (seg[-2], seg[-1])
+    return start is None or end == start
 
 
 def parse_svg_font(content: str | bytes, name: str) -> Font:
@@ -138,6 +156,7 @@ def parse_svg_font(content: str | bytes, name: str) -> Font:
         x_height=top("x", 0.5) if "x" in glyphs else top("acemnorsuvwxz", 0.5),
         ascender=top(letters_digits, 0.8),
         descender=min(bottom("gjpqy", -0.2), 0.0),
+        outline=all(_closed(g.segments) for g in glyphs.values()),
     )
 
 

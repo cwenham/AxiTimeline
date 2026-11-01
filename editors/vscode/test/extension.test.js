@@ -213,6 +213,16 @@ test("inside a title's or the credits' illustration: at= as well as (or instead 
   assert.ok(labels(await complete('credits illustration(logo.svg fill=|)')).includes('solid'));
 });
 
+test("a title's letters offer the fill patterns, with help", async () => {
+  const fill = ['none', 'solid', 'diagonal', 'crosshatch', 'wave', 'dots'];
+  const items = await complete('title "T" font_fill=|');
+  assert.deepStrictEqual(labels(items), fill);
+  assert.ok(find(items, 'none').documentation.value.includes('Hollow'));
+  assert.deepStrictEqual(labels(await complete('title "T" subtitle="S" subtitle_font_fill=|')), fill);
+  assert.ok(hover('title "T" font_fi|ll=solid').contents.value.includes('outline font'));
+  assert.ok(hover('title "T" subtitle="S" subtitle_font_fi|ll=none').contents.value.includes("title's `font_fill`"));
+});
+
 test('subtitle and heading fonts offer the built-in fonts', async () => {
   assert.ok(labels(await complete('title "T" subtitle="S" subtitle_font=|')).includes('HersheySerifMed'));
   assert.ok(labels(await complete('credits heading_font=|')).includes('HersheySansMed'));

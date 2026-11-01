@@ -109,8 +109,13 @@ const cornerParameters = {
   font: 'The font of the title (or the credits\' lines): built-in, or an SVG font such as one made with ' +
     '`axitime convert-font`. Default: the timeline\'s (§§3.8, 16).',
   subtitle: 'A second, smaller line under the title, quoted: `subtitle="Lives and wars, 1900-1999"` (§16.1).',
+  font_fill: 'Hatch the insides of the title\'s letters with a fill pattern, clear of their holes: `solid` makes ' +
+    'them look solid. Only an outline font\'s letters have insides, such as one made with `axitime convert-font`; ' +
+    'a built-in font\'s are single lines. Default `none`: hollow (§16.1).',
   subtitle_font: 'The subtitle\'s font. Default: the title\'s (§16.1).',
   subtitle_font_size: 'The subtitle\'s size. Default: half the title\'s (§16.1).',
+  subtitle_font_fill: 'Hatch the insides of the subtitle\'s letters, as `font_fill` does the title\'s. Default: the ' +
+    'title\'s `font_fill` when the subtitle is in an outline font too, else `none` (§16.1).',
   heading_font: 'The font of the credits\' headings. Default: the credits\' own font (§16.2).',
   heading_font_size: 'The size of the credits\' headings. Default: 1.25 times their `font_size` (§16.2).',
   max_height: 'The most the credits may measure from the top of their first line\'s capitals to their last ' +
@@ -280,6 +285,10 @@ const values = {
       '`axitime render --now` to re-render the same layout later (§3.6).',
   },
 };
+
+// The same patterns, cut to the inside of a title's letters (§16.1).
+values.font_fill = Object.assign({}, values.fill, { none: 'Hollow: the letters drawn as their outlines only.' });
+values.subtitle_font_fill = values.font_fill;
 
 const PEN_NOTE = 'Each pen is plotted in its own pass; the default is `black` (§3.4).';
 

@@ -6,7 +6,7 @@ Status: working draft, reflecting all decisions taken in design discussion so fa
 
 This file (`docs/language-spec.md` in the AxiTimeline repo) is the **canonical copy** of this spec, and changes are made here alongside the code. The claude.ai artifact it began as is superseded.
 
-History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7). Added 2026-11-01: the title and credits (§16), outline fonts converted to SVG fonts (§3.8), `illustration(…)` on an indented continuation line (§3.10), and an illustration's filled shapes hatched and its colours drawn in pens of their own (§3.5). Added the same day: notes, paragraphs of free text on the top or bottom edge (§17).
+History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7). Added 2026-11-01: the title and credits (§16), outline fonts converted to SVG fonts (§3.8), `illustration(…)` on an indented continuation line (§3.10), and an illustration's filled shapes hatched and its colours drawn in pens of their own (§3.5). Added the same day: notes, paragraphs of free text on the top or bottom edge (§17), and a title's letters filled with `font_fill=` (§16.1).
 
 ## 1. System overview
 
@@ -170,7 +170,7 @@ timeline ... font="HersheySans1" font_size=5mm
 
 Each replacement is a build warning naming the entity and the character. A replaced character never fails the build.
 
-**Outline fonts** (added 2026-11-01). A TrueType, OpenType or Adobe Type 1 font can't be named directly, but `axitime convert-font` turns one into an SVG font in the format above (interpreter spec, "`axitime convert-font`"), which is then named like any custom font: `font="avenir-demi.svg"`. Its glyphs are the font's outlines, so the plotter draws each letter as its outline and the letters come out hollow. That suits large text, such as a title (§16); small text reads better in a single-stroke font such as the built-in ones.
+**Outline fonts** (added 2026-11-01). A TrueType, OpenType or Adobe Type 1 font can't be named directly, but `axitime convert-font` turns one into an SVG font in the format above (interpreter spec, "`axitime convert-font`"), which is then named like any custom font: `font="avenir-demi.svg"`. Its glyphs are the font's outlines, so the plotter draws each letter as its outline and the letters come out hollow. A title can fill them with `font_fill=` (§16.1). Outline fonts suit large text, such as a title (§16); small text reads better in a single-stroke font such as the built-in ones.
 
 ### 3.9 Comments
 
@@ -618,22 +618,25 @@ Two declarations put fixed pieces in two corners of the paper: a **title** in th
 ``` text
 title "A Colossal Waste of Time" blue
     subtitle="Five centuries of things people did instead"
-    font="avenir-demi.svg" font_size=14mm
+    font="avenir-demi.svg" font_size=14mm font_fill=solid
     subtitle_font=HersheySerifMed
     illustration(crest.svg at=left)
 ```
 
 - The quoted string is the title's text, which can't be empty. A trailing pen keyword (§3.4) sets the pen for all of it, subtitle and illustration included. Default: `black`.
 - `subtitle=` adds a second, smaller line under the title.
+- **`font_fill=`** hatches the insides of the title's letters with one of the fill patterns of §3.7, in the title's pen, clear of their counters (the holes in letters such as A, e and o). It is for an outline font, such as one converted with `axitime convert-font` (§3.8), whose letters are otherwise drawn hollow; `font_fill=solid` makes them look solid. A font whose glyphs aren't all closed outlines, such as every built-in one, draws its letters as single lines, so they have no insides, and `font_fill=` other than `none` on it is an error. `subtitle_font_fill=` does the same for the subtitle, and follows `font_fill` unless it is set: a subtitle in an outline font (the title's own, unless `subtitle_font=` says otherwise) is filled like the title, and one in a single-line font isn't filled.
 - `illustration(file.svg)` puts a drawing beside the text: `at=left` (the default, in the corner) or `at=right`, `gap=` from the text. By default it is as tall as the text, from the top of the title's capitals to the baseline of the last line (the subtitle's, if there is one). `height=` sets its height instead, and the text is centred against it. Its width follows its aspect ratio. Unlike an entity's illustration (§3.5), it isn't rounded to whole lanes.
 
 | Parameter | Default | |
 |---|---|---|
 | `font=` | the timeline's | §3.8; an outline font converted with `axitime convert-font` suits a title |
 | `font_size=` | `12mm` | the em, as for any text |
+| `font_fill=` | `none` | a fill pattern (§3.7) inside an outline font's letters |
 | `subtitle=` | none | quoted text |
 | `subtitle_font=` | the title's `font` | needs `subtitle=` |
 | `subtitle_font_size=` | half the title's `font_size` | needs `subtitle=` |
+| `subtitle_font_fill=` | `font_fill`, if the subtitle's font is an outline font; else `none` | needs `subtitle=` |
 | `align=` | `left` | which way the lines are aligned: `left` or `right` |
 | `margin=` | `5mm` | §16.3 |
 | `gap=` | `4mm` | between the illustration and the text |
@@ -677,7 +680,7 @@ credits max_height=25mm illustration(Logo-Colour.svg fill=solid pens=auto) {    
 
 ### 16.4 Drawing
 
-- The text is drawn as strokes in the pen given, by the same text shaping as everything else (§3.8), so missing characters are replaced with a warning.
+- The text is drawn as strokes in the pen given, by the same text shaping as everything else (§3.8), so missing characters are replaced with a warning. With `font_fill=`, each line's letters are hatched as an illustration's filled shapes are (§3.5): cut to their outlines by the nonzero rule, so a counter stays empty and overlapping letters fill as one shape, with the pattern anchored to the page and pieces shorter than 0.5mm left out. The outlines are still drawn.
 - The illustration is drawn as every illustration is (§3.5): by default the outlines of its shapes, all in the block's pen; with `fill=` its filled shapes hatched; and with `pens=` its colours in pens of their own, so a logo in two colours is plotted in two passes.
 - They are drawn last, after illustrations (§11).
 

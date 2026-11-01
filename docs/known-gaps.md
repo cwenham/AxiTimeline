@@ -112,9 +112,10 @@ Still open:
 - **A logo in several colours, and its solid letters,** are handled by `fill=solid pens=auto` on its
   illustration (added the same day, language spec §3.5). Still to check on paper: whether `solid`'s 0.4mm hatch
   looks solid with the pens on hand, and how long a hatched logo takes to plot.
-- **Letters of a converted font come out hollow**, since `axitime convert-font` gives outlines. The title could take
-  a `fill=` of its own, hatching inside its letters as illustrations now do; it would suit only outline fonts, not
-  single-stroke ones.
+- **Letters of a converted font come out hollow**, since `axitime convert-font` gives outlines. A title fills them
+  with `font_fill=` (added 2026-11-01, language spec §16.1). The credits and notes can't yet: their text is small,
+  where a single-stroke font reads better, but the same option would carry over if one is wanted. As with a logo,
+  still to check on paper: how solid `solid` looks in letters and how much plot time it adds.
 - **Single-line fonts sold as TrueType** (engraving fonts) draw each stroke as a thin closed outline, so a converted
   one would draw every stroke twice, there and back. A conversion option that drops the return trip could suit
   them; none is planned until one is needed.

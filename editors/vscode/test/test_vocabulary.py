@@ -80,8 +80,8 @@ def test_parameters():
 
 def test_values():
     values = VOCABULARY["values"]
-    for key, enum in (("fill", Fill), ("time_label", TimeLabel), ("baseline", Baseline),
-                      ("open_end_style", OpenEndStyle), ("side", Side)):
+    for key, enum in (("fill", Fill), ("font_fill", Fill), ("subtitle_font_fill", Fill), ("time_label", TimeLabel),
+                      ("baseline", Baseline), ("open_end_style", OpenEndStyle), ("side", Side)):
         assert values[key] == [m.value for m in enum], key
     assert VOCABULARY["scaleUnits"] == list(SCALE_UNITS)
     for key, enum in (("y_scale", YScale), ("line", LineMode)):

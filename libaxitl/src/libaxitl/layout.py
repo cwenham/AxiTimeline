@@ -187,6 +187,7 @@ class PlacedBlock:
     illustration_box: Box | None
     box: Box  # all of it together
     location: SourceLocation
+    fills: tuple[Fill, ...] = ()  # how each text's letters are filled (a title's font_fill=); none past the end
 
     @property
     def name(self) -> str:
@@ -599,6 +600,7 @@ class _Layout:
             self.place_block(
                 "title", title.pen, Side.ABOVE, lines, ill, ill.height_mm if ill else None, title.illustration_at,
                 title.align, title.gap_mm, title.margin_mm, title.location,
+                fills=(title.font_fill, title.subtitle_font_fill)[: len(lines)],
             )
         if credits is not None:
             st = self.style
@@ -669,7 +671,8 @@ class _Layout:
         return stack, origins, ill_box, placing
 
     def place_block(self, kind: str, pen: str, side: Side, lines, ill: Illustration | None, ill_height: float | None,
-                    at: Horizontal, align: Horizontal, gap: float, margin: float, location: SourceLocation) -> None:
+                    at: Horizontal, align: Horizontal, gap: float, margin: float, location: SourceLocation,
+                    fills: tuple[Fill, ...] = ()) -> None:
         """Lay out a title or the credits and put it in its corner. Its margins and the gap beside its illustration
         are measured to the ink, so they come out as written."""
         stack, origins, ill_box, placing = self.arrange(lines, ill, ill_height, at, align, gap)
@@ -682,7 +685,7 @@ class _Layout:
             ill_box = Box(ill_box.x0 + dx, ill_box.y0 + dy, ill_box.x1 + dx, ill_box.y1 + dy)
         # What everything else keeps clear of: the lines' whole boxes (ascenders and descenders included).
         box = _union([t.box for t in texts] + ([ill_box] if ill_box else []))
-        block = PlacedBlock(kind, pen, side, texts, ill, ill_box, box, location)
+        block = PlacedBlock(kind, pen, side, texts, ill, ill_box, box, location, fills)
         ok = True
         if placing.width > self.length - 2 * margin + 1e-9:
             self.sink.error(

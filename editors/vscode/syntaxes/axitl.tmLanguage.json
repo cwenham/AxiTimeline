@@ -131,7 +131,7 @@
           }
         },
         {
-          "match": "(?<![^\\s])(fill)(=)(?:(none|solid|diagonal|crosshatch|wave|dots)(?=[\\s{}()]|$|//))?",
+          "match": "(?<![^\\s])(fill|font_fill|subtitle_font_fill)(=)(?:(none|solid|diagonal|crosshatch|wave|dots)(?=[\\s{}()]|$|//))?",
           "captures": {
             "1": { "name": "entity.other.attribute-name.axitl" },
             "2": { "name": "punctuation.separator.key-value.axitl" },
