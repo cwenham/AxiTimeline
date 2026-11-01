@@ -36,7 +36,8 @@ const keywords = {
     'Free text on the top or bottom edge: narration, or notes about the timeline. Its text in quotes, or a `{ }` ' +
     'body where quoted lines together make a paragraph and a blank line starts the next. `anchor=` puts it at the ' +
     '`start`, `middle` or `end`, or centred on a date; it keeps `clearance=` (25mm) from the title, the credits ' +
-    'and other notes, and nothing else is placed on it (§17).',
+    'and other notes, and nothing else is placed on it. `illustration(file.svg)` puts a drawing to its right, as ' +
+    'tall as its text (§17).',
   heading:
     'A heading line in the credits or a note, larger than the rest and with space above it: `heading "Sources"` ' +
     '(§§16.2, 17).',
@@ -87,8 +88,8 @@ const parameters = {
   priority: "On `include`: a whole number added to every included entity's priority, e.g. `-5` (§5).",
   side: 'On `include`: forces every included entity `above` or `below` the baseline (§5).',
   height: 'The illustration\'s height, rounded up to whole lanes. Default 2 lanes (§3.5).',
-  at: 'Which side of the text a title\'s or the credits\' illustration goes: `left` or `right`. Default: the ' +
-    'corner\'s side, left for the title and right for the credits (§16).',
+  at: 'Which side of the text a title\'s, the credits\' or a note\'s illustration goes: `left` or `right`. ' +
+    'Default: the corner\'s side, left for the title and right for the credits; right for a note (§§16, 17).',
 };
 
 // Inside an illustration's parentheses (§§3.5, 16).
@@ -136,6 +137,7 @@ const noteParameters = {
     'crop marks (§17.2).',
   clearance: 'How far along the roll it keeps from the title, the credits and other notes beside it. Default ' +
     '`25mm`; `0` lets it touch (§17.3).',
+  gap: 'The space between the illustration and the text. Default `4mm` (§17.1).',
 };
 
 // A graph's parameters (§15). Where a name is shared with other declarations, this is its meaning on a graph.
@@ -253,7 +255,7 @@ const values = {
   time_format: { decimal_year: 'A fractional year, such as `1958.2027` (§15.2).' },
   at: {
     left: 'The illustration to the left of the text (the default for the title).',
-    right: 'The illustration to the right of the text (the default for the credits).',
+    right: 'The illustration to the right of the text (the default for the credits and notes).',
   },
   pens: {
     auto: 'Each colour in the drawing goes to the base pen with the nearest reference colour: #ff6600 to orange, ' +

@@ -1,7 +1,7 @@
 // Notes: paragraphs of free text fixed to the top or bottom edge (language spec §17), alongside a title and
 // credits. A note anchored at the start or end keeps 25mm clear of the title or credits beside it; one anchored
 // near a date is centred on that date. Lines of quoted text one after another make one paragraph, and a blank
-// line starts the next.
+// line starts the next. A note's illustration is as tall as its text, on the right unless at=left.
 timeline start=1900 end=1999 length=80cm width=180
 
 title "A Century of Clever People" indigo
@@ -23,7 +23,7 @@ note anchor=start {
     "Dates are Gregorian throughout, and every event sits at the start of its day."
 }
 
-note anchor=1945 edge=bottom width=90mm fountain-black {
+note anchor=1945 edge=bottom width=90mm fountain-black illustration(illustrations/badge.svg at=left fill=solid) {
     heading "The war years"
     "Two world wars took up a tenth of the century between them, and changed the"
     "lives of nearly everyone on this roll."

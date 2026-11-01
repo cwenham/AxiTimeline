@@ -158,8 +158,11 @@ function parameterItems(decl, used, range, group, owner) {
   if (decl === 'timeline') keys = vocabulary.timelineParameters;
   else if (decl === 'include') keys = vocabulary.includeParameters;
   else if (decl === 'illustration') {
-    keys = { title: vocabulary.titleIllustrationParameters, credits: vocabulary.creditsIllustrationParameters }[owner] ||
-      vocabulary.illustrationParameters;
+    keys = {
+      title: vocabulary.titleIllustrationParameters,
+      credits: vocabulary.creditsIllustrationParameters,
+      note: vocabulary.noteIllustrationParameters,
+    }[owner] || vocabulary.illustrationParameters;
   } else if (decl === 'graph') keys = vocabulary.graphParameters;
   else if (decl === 'title') keys = vocabulary.titleParameters;
   else if (decl === 'credits') keys = vocabulary.creditsParameters;
@@ -196,7 +199,7 @@ function itemItems(at, range) {
     items.push(...penItems(range, '0', at.decl === 'graph' ? vocabulary.defaultGraphPen : null));
   }
   items.push(...parameterItems(at.decl, at.used, range, '1', at.owner));
-  if ((entity || corner) && !at.illustration) {
+  if ((entity || corner || at.decl === 'note') && !at.illustration) {
     const item = new vscode.CompletionItem('illustration(…)', vscode.CompletionItemKind.Function);
     item.range = range;
     item.filterText = 'illustration';

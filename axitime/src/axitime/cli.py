@@ -191,6 +191,7 @@ def _layout_summary(resolved: ResolvedLayout) -> dict:
                 "to_mm": round(block.box.x1, 2),
                 "height_mm": round(block.box.height, 2),
                 "lines": len(block.texts),
+                "illustration": block.illustration.name if block.illustration else None,
             }
             for block in resolved.notes
         ],
@@ -319,7 +320,8 @@ def cmd_check(args: argparse.Namespace) -> int:
                 print(line)
         for block in resolved.notes:
             edge = "top" if block.side.value == "above" else "bottom"
-            print(f"  note:     {_plural(len(block.texts), 'line')}, {_length(block.box.height)} tall on the {edge} edge, "
+            lines = _plural(len(block.texts), "line") + (" and an illustration" if block.illustration else "")
+            print(f"  note:     {lines}, {_length(block.box.height)} tall on the {edge} edge, "
                   f"from {_length(block.box.x0)} to {_length(block.box.x1)}")
     if job.drawing:
         print("  pens:     " + ", ".join(job.drawing.pens) + f"  ({resolved.axis_pen} draws the baseline and ticks first)")

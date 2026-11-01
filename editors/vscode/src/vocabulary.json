@@ -36,6 +36,7 @@
   "illustrationParameters": ["height", "fill", "pens"],
   "titleIllustrationParameters": ["height", "at", "fill", "pens"],
   "creditsIllustrationParameters": ["at", "fill", "pens"],
+  "noteIllustrationParameters": ["at", "fill", "pens"],
   "graphParameters": [
     "data", "first_row", "last_row", "header", "separator", "time_column", "value_column", "time_format", "missing",
     "origin", "y_scale", "height", "range", "line", "fill", "fill_pen", "fill_depth", "shadow", "value_scale",
@@ -45,7 +46,7 @@
   "creditsParameters": ["font", "font_size", "heading_font", "heading_font_size", "max_height", "align", "margin", "gap"],
   "noteParameters": [
     "anchor", "edge", "width", "align", "font", "font_size", "heading_font", "heading_font_size", "margin",
-    "clearance"
+    "clearance", "gap"
   ],
   "values": {
     "fill": ["none", "solid", "diagonal", "crosshatch", "wave", "dots"],

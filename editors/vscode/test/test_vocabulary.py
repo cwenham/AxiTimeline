@@ -75,6 +75,7 @@ def test_parameters():
     assert VOCABULARY["illustrationParameters"] == list(parser._ILLUSTRATION_KEYS)
     assert VOCABULARY["titleIllustrationParameters"] == list(parser._TITLE_ILLUSTRATION_KEYS)
     assert VOCABULARY["creditsIllustrationParameters"] == list(parser._CREDITS_ILLUSTRATION_KEYS)
+    assert VOCABULARY["noteIllustrationParameters"] == list(parser._NOTE_ILLUSTRATION_KEYS)
 
 
 def test_values():

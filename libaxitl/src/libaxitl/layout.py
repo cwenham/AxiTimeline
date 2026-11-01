@@ -789,11 +789,23 @@ class _Layout:
                 extra = st.corner_section_gap if para.heading else 0.0 if previous.heading else st.note_paragraph_gap
             lines += [(line, font, size, extra if i == 0 else 0.0) for i, line in enumerate(wrapped)]
             previous = para
-        stack, origins, _, placing = self.arrange(lines, None, None, Horizontal.LEFT, note.align, 0.0)
+        ill = note.illustration
+        stack, origins, ill_box, placing = self.arrange(lines, ill, None, note.illustration_at, note.align, note.gap_mm)
+        if ill is not None and placing.width > room + 1e-9:
+            self.sink.error(
+                "no-room-for-note",
+                f"the note and its illustration are {format_number(placing.width, 1)}mm long, but the paper is only "
+                f"{format_number(room, 1)}mm long inside its {format_number(margin)}mm margins; make it narrower "
+                "with width=",
+                note.location,
+            )
+            return
         side = Side.ABOVE if note.edge is Edge.TOP else Side.BELOW
         dy = margin - placing.y0 if side is Side.ABOVE else self.t.width_mm - margin - placing.y1
         texts = [t.placed(label, ox, y + dy) for ox, (label, t, y) in zip(origins, stack, strict=True)]
-        box = _union([t.box for t in texts])
+        if ill_box is not None:
+            ill_box = Box(ill_box.x0, ill_box.y0 + dy, ill_box.x1, ill_box.y1 + dy)
+        box = _union([t.box for t in texts] + ([ill_box] if ill_box else []))
 
         # Along the roll: as near its anchor as it can be, inside the margins, and `clearance` from the title, the
         # credits and earlier notes wherever they stand beside it across the roll.
@@ -821,7 +833,10 @@ class _Layout:
             return
         dx = min(options, key=lambda x: (abs(x - target), -x))
         texts = tuple(replace(t, x=t.x + dx, box=Box(t.box.x0 + dx, t.box.y0, t.box.x1 + dx, t.box.y1)) for t in texts)
-        block = PlacedBlock("note", note.pen, side, texts, None, None, _union([t.box for t in texts]), note.location)
+        if ill_box is not None:
+            ill_box = Box(ill_box.x0 + dx, ill_box.y0, ill_box.x1 + dx, ill_box.y1)
+        block = PlacedBlock("note", note.pen, side, texts, ill, ill_box,
+                            _union([t.box for t in texts] + ([ill_box] if ill_box else [])), note.location)
         if anchor_x is not None and not placing.x0 + dx - 1e-9 <= anchor_x <= placing.x1 + dx + 1e-9:
             pushed = sorted({name for a, b, name in blocked if a < target < b})
             self.sink.warning(

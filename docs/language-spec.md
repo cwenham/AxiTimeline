@@ -681,7 +681,7 @@ credits max_height=25mm illustration(Logo-Colour.svg fill=solid pens=auto) {    
 - The illustration is drawn as every illustration is (§3.5): by default the outlines of its shapes, all in the block's pen; with `fill=` its filled shapes hatched; and with `pens=` its colours in pens of their own, so a logo in two colours is plotted in two passes.
 - They are drawn last, after illustrations (§11).
 
-## 17. Notes (added 2026-11-01)
+## 17. Notes (added 2026-11-01; illustrations added 2026-11-01)
 
 A **note** is free text, typically a paragraph or two, fixed to the top or bottom edge of the paper: narration that goes with the timeline, such as a summary of a period, or notes about the timeline itself. Like the title and credits (§16) it isn't an entity: it has no lane, it's placed before anything else, and everything else keeps clear of it.
 
@@ -703,7 +703,15 @@ note "The century ends with the web, a few years old." anchor=end edge=bottom al
 - In the body, each line is a quoted string, or `heading` and a quoted string, as in the credits (§16.2). Quoted lines that follow one another make **one paragraph**, joined with a space, so a long paragraph can be written over several short lines; a blank line ends it, and the next quoted line starts another. A comment line (§3.9) doesn't end a paragraph. A heading is a paragraph of its own. Spaces inside the text are collapsed when it is wrapped.
 - A `//` inside the quotes is text, not a comment (§3.9).
 - A trailing pen keyword (§3.4) sets its pen. Default: `black`.
-- A document may have any number of notes, from the main file or included ones. A note can't be inside a group. An include's `priority=` and `side=` (§5) don't apply to notes, and a note can't have an illustration.
+- A document may have any number of notes, from the main file or included ones. A note can't be inside a group. An include's `priority=` and `side=` (§5) don't apply to notes.
+- `illustration(file.svg)` puts a drawing beside the text: `at=right` (the default) or `at=left`, `gap=` from it. As with the credits' logo (§16.2), it is always exactly as tall as the text, from the top of the first line's capitals to the last line's baseline, so `height=` is an error; its width follows its aspect ratio. To change its size, change the note's `width=` or `font_size=`. It takes `fill=` and `pens=` as an entity's illustration does (§3.5), and is drawn in the note's pen.
+
+``` text
+note anchor=start illustration("Art/Antikythera_mechanism.svg") {
+    heading "About this timeline"
+    "..."
+}
+```
 
 | Parameter | Default | |
 |---|---|---|
@@ -716,25 +724,26 @@ note "The century ends with the web, a few years old." anchor=end edge=bottom al
 | `heading_font_size=` | 1.25 × the note's `font_size` | |
 | `margin=` | `5mm` | from its edge, and from either end of the paper |
 | `clearance=` | `25mm` | along the roll, from the title, the credits and other notes: §17.3 |
+| `gap=` | `4mm` | between the illustration and the text |
 
 ### 17.2 Placement
 
 - **Across the roll.** A note on the `top` edge has its ink start `margin` below the finished top edge; one on the `bottom` edge has its ink end `margin` above the finished bottom edge. The default `5mm` clears the crop marks (interpreter spec, "Crop marks"). A top note is above the baseline and a bottom note below it, and each must keep 1.5mm clear of the inner edge of its side's first lane, as the title and credits do (§16.3); one that doesn't fit is a fatal error.
-- **Wrapping.** Each paragraph is broken into lines no longer than `width=`, measured by the fonts' advance widths, filling each line in turn. Lines aren't hyphenated, and there is deliberately no justified or centred alignment (settled 2026-11-01): ragged lines read better on the roll. A word too long for a line on its own gets a line anyway and runs past the width, with a warning. A `width=` longer than the paper inside its margins is a fatal error. At the default 30 ems a line holds about 60 characters of the built-in fonts.
+- **Wrapping.** Each paragraph is broken into lines no longer than `width=` (the text's alone; an illustration goes beside it), measured by the fonts' advance widths, filling each line in turn. Lines aren't hyphenated, and there is deliberately no justified or centred alignment (settled 2026-11-01): ragged lines read better on the roll. A word too long for a line on its own gets a line anyway and runs past the width, with a warning. A `width=` longer than the paper inside its margins is a fatal error, and so is a note whose text, gap and illustration together are. At the default 30 ems a line holds about 60 characters of the built-in fonts.
 - **Lines** are spaced as in the title and credits (§16.3): from one line's descenders to the next line's capitals is 0.4 of the next line's size. A paragraph after another gets 0.5 of its size more, and a heading, unless it is the first line, 0.6 of its own size more. A paragraph straight after its heading gets nothing extra. These spacings are provisional (`docs/known-gaps.md`).
 - **Along the roll**, `anchor=` says where it would like to be, and margins and alignment are measured to the ink, as for the title and credits:
-  - `start`: its ink starts `margin` from the start of the paper;
+  - `start`: its ink (the illustration's, if that is on the left) starts `margin` from the start of the paper;
   - `end`: its ink ends `margin` from the end of the paper;
   - `middle`: centred on the middle of the paper;
-  - a date: centred on where the date falls along the roll (the start of its period, as for an event, §3.3). A note anchored outside the timeline is left out with a warning, like an entity (§4.2). Near either end, it is moved inward just far enough to keep inside its margins.
+  - a date: its text and illustration together centred on where the date falls along the roll (the start of its period, as for an event, §3.3). A note anchored outside the timeline is left out with a warning, like an entity (§4.2). Near either end, it is moved inward just far enough to keep inside its margins.
 
 ### 17.3 Keeping clear
 
-- **Of the title, the credits and other notes.** Notes are placed after the title and credits, in document order. Each keeps `clearance` (default `25mm`) along the roll from the title, the credits and every note placed before it, wherever the two would stand side by side across the roll (their line boxes, plus 1.5mm, overlapping across it). So a note at the `start` of the top edge begins 25mm past the end of the title, and one at the `end` of the bottom edge ends 25mm before the credits, while the title never pushes a note on the bottom edge. `clearance=` on the note changes the distance, `0` included.
+- **Of the title, the credits and other notes.** Notes are placed after the title and credits, in document order. Each keeps `clearance` (default `25mm`) along the roll from the title, the credits and every note placed before it, wherever the two would stand side by side across the roll (their line boxes and illustrations, plus 1.5mm, overlapping across it). So a note at the `start` of the top edge begins 25mm past the end of the title, and one at the `end` of the bottom edge ends 25mm before the credits, while the title never pushes a note on the bottom edge. `clearance=` on the note changes the distance, `0` included.
 - A note that has to move away from its anchor for this moves the least distance it can, in either direction (later, if both are equal), staying inside its margins. One anchored to a date that no longer reaches its date is a warning naming what it moved for. If there is nowhere along its edge for it, that's a fatal error.
-- **By everything else**, exactly as for the title and credits (§16.3): every lane the note crosses, counting its lines' whole boxes plus 1.5mm across the roll, is reserved along its length, so no bar, bar label or illustration is placed there, and the reservation doesn't count towards how much of a side is in use when §6 breaks a tie. Event flags treat a note, plus 1.5mm, as a fixed obstacle (§8.2); poles and leaders are broken around it (§8); and graphs are broken around its text (§15.8).
+- **By everything else**, exactly as for the title and credits (§16.3): every lane the note crosses, counting its lines' whole boxes and its illustration plus 1.5mm across the roll, is reserved along its length, so no bar, bar label or illustration is placed there, and the reservation doesn't count towards how much of a side is in use when §6 breaks a tie. Event flags treat a note, plus 1.5mm, as a fixed obstacle (§8.2); poles and leaders are broken around it (§8); and graphs are broken around its text and illustration (§15.8).
 
 ### 17.4 Drawing
 
-- The text is drawn as strokes in the note's pen, by the same text shaping as everything else (§3.8), so missing characters are replaced with a warning.
+- The text is drawn as strokes in the note's pen, by the same text shaping as everything else (§3.8), so missing characters are replaced with a warning. Its illustration is drawn as the title's and credits' are (§16.4).
 - Notes are drawn last, with the title and credits (§11).

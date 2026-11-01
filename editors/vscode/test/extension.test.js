@@ -245,17 +245,25 @@ test('hover help for the title and credits and their parameters', () => {
 
 // -- notes (language spec §17) --------------------------------------------------------------------------------
 
-test('a note offers pens and its own parameters, but no illustration', async () => {
+test('a note offers pens, its own parameters and an illustration', async () => {
   const vocabulary = require('../src/vocabulary.json');
   for (const source of ['note |', 'note "Dates are Gregorian." |', 'note anchor=end\n    |']) {
     const items = await complete(source);
     const props = labels(items.filter((i) => i.kind === 'Property'));
     assert.ok(props.includes('clearance='), source);
-    assert.ok(!find(items, 'illustration(…)'), source);
   }
+  for (const source of ['note |', 'note "Dates are Gregorian." |']) assert.ok(find(await complete(source), 'illustration(…)'), source);
   const items = await complete('note |');
   assert.ok(find(items, 'blue'));
   assert.deepStrictEqual(labels(items.filter((i) => i.kind === 'Property')), vocabulary.noteParameters.map((k) => `${k}=`));
+  assert.ok(!find(await complete('note illustration(x.svg) |'), 'illustration(…)'));
+});
+
+test("a note's illustration offers at=, fill= and pens=, but not height=", async () => {
+  const items = await complete('note illustration(x.svg |) {');
+  assert.deepStrictEqual(labels(items.filter((i) => i.kind === 'Property')), ['at=', 'fill=', 'pens=']);
+  assert.ok(hover('note illustration(x.svg a|t=left) {').contents.value.includes('right for a note'));
+  assert.ok(hover('note ga|p=2mm {').contents.value.includes('4mm'));
 });
 
 test("a note's anchor and edge offer their values", async () => {

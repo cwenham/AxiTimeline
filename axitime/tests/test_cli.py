@@ -35,10 +35,14 @@ def test_check_reports_notes(capsys):
     out = capsys.readouterr().out
     assert "  note:     6 lines, " in out and " tall on the top edge, from 17.4cm to " in out
     assert out.count("  note:     ") == 3
+    assert "  note:     4 lines and an illustration, " in out
     assert main(["check", "--json", str(EXAMPLES / "notes.axitl")]) == EXIT_OK
     report = json.loads(capsys.readouterr().out)
     assert [(n["edge"], n["pen"], n["lines"]) for n in report["layout"]["notes"]] == [
         ("top", "black", 6), ("bottom", "fountain-black", 4), ("bottom", "black", 2),
+    ]
+    assert [Path(n["illustration"]).name if n["illustration"] else None for n in report["layout"]["notes"]] == [
+        None, "badge.svg", None,
     ]
     assert report["summary"]["pens"]["fountain-black"] == 1
 

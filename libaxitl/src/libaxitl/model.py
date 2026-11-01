@@ -272,7 +272,8 @@ class NoteParagraph:
 @dataclass(frozen=True)
 class Note:
     """A block of free text fixed to the top or bottom edge (§17): paragraphs, perhaps with headings, wrapped to
-    a width and anchored to the start, middle or end of the paper, or near a date."""
+    a width and anchored to the start, middle or end of the paper, or near a date, with an optional illustration
+    beside it scaled to its height."""
 
     paragraphs: tuple[NoteParagraph, ...]
     pen: str
@@ -288,6 +289,9 @@ class Note:
     clearance_mm: float  # along the roll, from the title, the credits and other notes beside it
     order: int  # among notes, in document order
     location: SourceLocation
+    illustration: Illustration | None = None  # always as tall as the text
+    illustration_at: Horizontal = Horizontal.RIGHT
+    gap_mm: float = 4.0  # between the illustration and the text
 
 
 @dataclass(frozen=True)

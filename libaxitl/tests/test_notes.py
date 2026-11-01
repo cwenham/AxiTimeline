@@ -13,8 +13,13 @@ LONG = (
 )
 
 
+# A drawing three times as wide as it is tall.
+PICTURE = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 10"><rect x="1" y="1" width="28" height="8"/></svg>'
+FILES = {"x.svg": PICTURE}
+
+
 def doc(source):
-    return parse(source).document
+    return parse(source, FILES.__getitem__).document
 
 
 def lay(source):
@@ -136,7 +141,11 @@ def test_a_note_can_come_from_an_include_and_there_can_be_several(make_files):
         ('note "a" side=above\n', "unknown-parameter"),
         ('note "a" purple\n', "unknown-pen"),
         ('note "a" red blue\n', "duplicate-pen"),
-        ('note "a" illustration(x.svg)\n', "bad-value"),
+        ('note "a" illustration(x.svg) illustration(x.svg)\n', "duplicate-illustration"),
+        ('note "a" illustration(missing.svg)\n', "missing-illustration"),
+        ('note "a" illustration(x.svg height=20)\n', "unknown-parameter"),
+        ('note "a" illustration(x.svg at=top)\n', "bad-value"),
+        ('note "a" gap=-1\n', "bad-value"),
         ('note "a" font=Nope\n', "unknown-font"),
         ('group "G" 1900-1950 {\n  note "a"\n}\n', "nested-note"),
         ('note {\n  "a"\n', "syntax"),
@@ -144,7 +153,9 @@ def test_a_note_can_come_from_an_include_and_there_can_be_several(make_files):
     ],
 )
 def test_errors(source, code):
-    assert code in error_codes(T + source)
+    with pytest.raises(AxitlError) as info:
+        parse(T + source, FILES.__getitem__)
+    assert code in [d.code for d in info.value.errors]
 
 
 def test_error_messages_point_the_author_somewhere_useful():
@@ -338,3 +349,60 @@ def test_a_note_is_drawn_last_in_its_pen():
     assert {s.pen for s in notes} == {"blue", "violet"}
     for s in notes:
         assert any(n.box.padded(0.01).x0 <= s.points[0][0] <= n.box.x1 + 0.01 for n in L.notes)
+
+
+# -- an illustration --------------------------------------------------------------------------------------------
+
+
+def test_an_illustration_goes_on_the_right_by_default():
+    n = doc(T + 'note "a" illustration(x.svg)\n').notes[0]
+    assert (n.illustration.name, n.illustration_at, n.gap_mm) == ("x.svg", Horizontal.RIGHT, 4.0)
+    n = doc(T + 'note "a" illustration(x.svg at=left fill=solid) gap=2\n').notes[0]
+    assert (n.illustration_at, n.gap_mm) == (Horizontal.LEFT, 2.0)
+
+
+def test_the_illustration_is_as_tall_as_the_text_and_a_gap_to_its_right():
+    L = lay(T + f'note illustration(x.svg) {{\n  heading "About"\n  "{LONG}"\n}}\n')
+    n = L.notes[0]
+    left, top, right, bottom = ink(n)
+    last = n.texts[-1]
+    box = n.illustration_box
+    assert box.y0 == pytest.approx(n.texts[0].y - n.texts[0].shaped.cap_height)  # the heading's capitals
+    assert box.y1 == pytest.approx(last.y)  # the last baseline
+    assert box.width == pytest.approx(box.height * 3)  # its own aspect ratio
+    assert box.x0 - right == pytest.approx(4.0)
+    assert left == pytest.approx(5.0)  # the text still starts at the margin, in the corner
+    assert n.box.x1 == pytest.approx(box.x1)
+
+
+def test_an_illustration_on_the_left_and_at_the_end():
+    n = lay(T + f'note anchor=end edge=bottom illustration(x.svg at=left) gap=2 {{\n  "{LONG}"\n}}\n').notes[0]
+    left, _, right, _ = ink(n)
+    assert left - n.illustration_box.x1 == pytest.approx(2.0)
+    assert right == pytest.approx(1000 - 5.0)
+    assert n.illustration_box.x0 == pytest.approx(n.box.x0)
+
+
+def test_others_keep_clear_of_the_illustration_too():
+    # A note at the start, with its illustration on the left, keeps 25mm clear of the title with it.
+    L = lay(T + 'title "A"\nnote "Some words" illustration(x.svg at=left)\n')
+    assert L.notes[0].illustration_box.x0 - L.title.box.x1 == pytest.approx(25.0)
+    # And a note with one on the right holds a later note 25mm clear of it.
+    L = lay(T + 'note "Some words" illustration(x.svg)\nnote "More" anchor=1902\n')
+    assert L.notes[1].box.x0 - L.notes[0].illustration_box.x1 == pytest.approx(25.0)
+
+
+def test_a_note_and_illustration_too_long_for_the_paper_is_fatal():
+    source = "timeline start=1900 end=1999 length=200 width=210 ticks=off\n"
+    source += f'note width=180 illustration(x.svg) {{\n  "{LONG}"\n}}\n'
+    with pytest.raises(AxitlError) as info:
+        lay(source)
+    assert info.value.errors[0].code == "no-room-for-note"
+    assert "width=" in info.value.errors[0].message
+
+
+def test_the_illustration_is_drawn_in_the_notes_pen():
+    L = lay(T + 'note "a" blue illustration(x.svg)\n')
+    box = L.notes[0].illustration_box.padded(0.01)
+    strokes = [s for s in draw(L).strokes if s.stage is Stage.TITLES and s.points[0][0] >= box.x0]
+    assert strokes and {s.pen for s in strokes} == {"blue"}

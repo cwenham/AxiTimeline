@@ -22,8 +22,9 @@ Editor support for `.axitl` files: syntax highlighting, completion, hover help, 
     inside its `{ }` body of points.
   - after a title's text, or after `credits` (§16): pens, their parameters (`align=` among them) and
     `illustration(…)`, which takes `at=left` or `at=right` there.
-  - after `note` or a note's quoted text (§17): pens and a note's parameters, with the values of `anchor=`
-    (`start`, `middle`, `end`; a date works too) and `edge=` (`top`, `bottom`).
+  - after `note` or a note's quoted text (§17): pens, a note's parameters, with the values of `anchor=`
+    (`start`, `middle`, `end`; a date works too) and `edge=` (`top`, `bottom`), and `illustration(…)`, which
+    takes `at=left` or `at=right` there but no `height=`.
   - on a `timeline` or `include` line, or an indented continuation line under one (§3.10): their parameters.
     The timeline's required ones are marked, and `length=` and `scale=` exclude each other.
   - after `key=`: the values it takes (fills, time labels, `baseline=`, `end=now`, `ticks=off`, units for

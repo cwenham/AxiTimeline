@@ -76,11 +76,12 @@ _TITLE_KEYS = ("font", "font_size", "subtitle", "subtitle_font", "subtitle_font_
 _CREDITS_KEYS = ("font", "font_size", "heading_font", "heading_font_size", "max_height", "align", "margin", "gap")
 _NOTE_KEYS = (
     "anchor", "edge", "width", "align", "font", "font_size", "heading_font", "heading_font_size", "margin",
-    "clearance",
+    "clearance", "gap",
 )
 _ILLUSTRATION_KEYS = ("height", "fill", "pens")  # inside an entity's illustration( ... )
 _TITLE_ILLUSTRATION_KEYS = ("height", "at", "fill", "pens")
 _CREDITS_ILLUSTRATION_KEYS = ("at", "fill", "pens")  # as tall as the credits' lines, always
+_NOTE_ILLUSTRATION_KEYS = ("at", "fill", "pens")  # as tall as the note's text, always
 _UNCLOSED_GROUP = "this group's { body is never closed with }"
 _UNCLOSED_GRAPH = "this graph's { body of points is never closed with }"
 _UNCLOSED_CREDITS = "the credits' { body of lines is never closed with }"
@@ -882,26 +883,16 @@ class _Builder:
             )
             ok = False
         paragraphs = [p for p in paragraphs if p.text]
-        pen = None
-        param_nodes = []
-        for item in items:
-            if item.data == "param":
-                param_nodes.append(item)
-            elif item.data == "illustration":
-                self.sink.error("bad-value", "a note can't have an illustration", location)
-                ok = False
-            else:
-                word = str(item.children[0])
-                if pen is None and is_pen(word):
-                    pen = word
-                    continue
-                ok = False
-                if is_pen(word):
-                    self.sink.error("duplicate-pen", "the note has more than one pen", location)
-                else:
-                    hint = suggest_pen(word)
-                    extra = f"; did you mean {hint}?" if hint else ""
-                    self.sink.error("unknown-pen", f"'{word}' is not a pen{extra}", location)
+        pen, illustration, at, param_nodes, good = self.corner_items(
+            items, "note", location, _NOTE_ILLUSTRATION_KEYS,
+            {
+                "height": "a note's illustration is as tall as its text; change that with the note's width= or "
+                "font_size=",
+                "side": "put it left or right of the text with at=left or at=right",
+            },
+            Horizontal.RIGHT,
+        )
+        ok = ok and good
         p = self.params(
             param_nodes, _NOTE_KEYS, "a note",
             {"at": "anchor it with anchor=start, middle, end or a date", "side": "fix it to edge=top or edge=bottom",
@@ -937,16 +928,17 @@ class _Builder:
         width = self.corner_length(p, "width", None)
         margin = self.corner_length(p, "margin", DEFAULT_NOTE_MARGIN_MM, positive=False)
         clearance = self.corner_length(p, "clearance", DEFAULT_NOTE_CLEARANCE_MM, positive=False)
+        gap = self.corner_length(p, "gap", DEFAULT_CORNER_GAP_MM, positive=False)
         if "width" in p and width is None:
             ok = False
-        if not ok or None in (anchor, edge, font, size, heading_font, heading_size, align, margin, clearance):
+        if not ok or None in (anchor, edge, font, size, heading_font, heading_size, align, margin, clearance, gap):
             return None
         for para in paragraphs:
             key = heading_font if para.heading else font
             what = "a heading of a note" if para.heading else "a note"
             self.warn_missing_glyphs(self.fonts[key], key, para.text, what, para.location)
-        return Note(tuple(paragraphs), pen or DEFAULT_PEN, font, size, heading_font, heading_size, anchor, edge, width,
-                    align, margin, clearance, order, location)
+        return Note(tuple(paragraphs), pen, font, size, heading_font, heading_size, anchor, edge, width,
+                    align, margin, clearance, order, location, illustration, at, gap)
 
     # -- graphs (§15) ---------------------------------------------------------------------------------------
 
