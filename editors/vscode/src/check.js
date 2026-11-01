@@ -13,17 +13,35 @@ const TIMEOUT_MS = 60000;
 const VENV_AXITIME = process.platform === 'win32' ? ['Scripts', 'axitime.exe'] : ['bin', 'axitime'];
 
 /**
- * The command that runs axitime for a file in `dir`: the setting if given, else the axitime in the nearest
- * `.venv` at or above `dir`, else `axitime` on the PATH. Not `uv run`, which checks the environment is up to date
- * before every run: slower, on every save.
+ * The AxiTimeline checkout this extension is part of (it's installed as a link to editors/vscode), or null if it
+ * has been copied somewhere else.
  */
-function axitimeCommand(dir, configured) {
+function homeRepo() {
+  try {
+    const repo = path.join(fs.realpathSync(__dirname), '..', '..', '..');
+    return fs.existsSync(path.join(repo, 'axitime')) ? repo : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+const HOME_REPO = homeRepo();
+
+/**
+ * The command that runs axitime for a file in `dir`: the setting if given, else the axitime in the nearest
+ * `.venv` at or above `dir`, else the one in the AxiTimeline checkout this extension lives in (`home`), so
+ * timelines kept in a folder of their own work too, else `axitime` on the PATH. Not `uv run`, which checks the
+ * environment is up to date before every run: slower, on every save.
+ */
+function axitimeCommand(dir, configured, home = HOME_REPO) {
   if (configured && configured.length) return configured;
   for (let d = dir; ; d = path.dirname(d)) {
     const candidate = path.join(d, '.venv', ...VENV_AXITIME);
     if (fs.existsSync(candidate)) return [candidate];
-    if (path.dirname(d) === d) return ['axitime'];
+    if (path.dirname(d) === d) break;
   }
+  const own = home && path.join(home, '.venv', ...VENV_AXITIME);
+  return own && fs.existsSync(own) ? [own] : ['axitime'];
 }
 
 /** Whether a document declares a timeline. One that doesn't is an include (language spec §5). */

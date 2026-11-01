@@ -50,11 +50,19 @@ const W = vscode.DiagnosticSeverity.Warning;
 
 // -- finding axitime and reading its report ----------------------------------------------------------------
 
-test('axitime is the setting, else the nearest .venv above the file, else on the PATH', () => {
-  const { dir } = folder({ 'a/.venv/bin/axitime': '', 'a/b/c/x.axitl': '' });
-  assert.deepStrictEqual(axitimeCommand(path.join(dir, 'a/b/c'), ['my', 'axitime']), ['my', 'axitime']);
-  assert.deepStrictEqual(axitimeCommand(path.join(dir, 'a/b/c'), []), [path.join(dir, 'a/.venv/bin/axitime')]);
-  assert.deepStrictEqual(axitimeCommand(dir, undefined), ['axitime']);
+test("axitime is the setting, else the nearest .venv above the file, else the extension's repo's, else on the PATH", () => {
+  const { dir } = folder({ 'a/.venv/bin/axitime': '', 'a/b/c/x.axitl': '', 'home/.venv/bin/axitime': '' });
+  const home = path.join(dir, 'home');
+  assert.deepStrictEqual(axitimeCommand(path.join(dir, 'a/b/c'), ['my', 'axitime'], home), ['my', 'axitime']);
+  assert.deepStrictEqual(axitimeCommand(path.join(dir, 'a/b/c'), [], home), [path.join(dir, 'a/.venv/bin/axitime')]);
+  assert.deepStrictEqual(axitimeCommand(dir, undefined, home), [path.join(home, '.venv/bin/axitime')]);
+  assert.deepStrictEqual(axitimeCommand(dir, undefined, null), ['axitime']);
+  assert.deepStrictEqual(axitimeCommand(dir, undefined, path.join(dir, 'a/b')), ['axitime']); // no .venv there
+});
+
+test("by default the extension's repo is the AxiTimeline checkout it's in", () => {
+  if (!fs.existsSync(AXITIME)) return console.log(`     (skipped: no ${AXITIME}; run uv sync)`);
+  assert.deepStrictEqual(axitimeCommand(os.tmpdir()), [fs.realpathSync(AXITIME)]);
 });
 
 test('a document without a timeline declaration is an include', () => {

@@ -54,10 +54,10 @@ Editor support for `.axitl` files: syntax highlighting, completion, hover help, 
 - `axitl.check.enabled` (default on): run `axitime check` on open and save.
 - `axitl.check.command`: how to run axitime, for checks and previews, one word per item, e.g.
   `["/Users/me/AxiTimeline/.venv/bin/axitime"]`. Left empty, the extension uses the `axitime` in the nearest
-  `.venv` folder at or above the file (so anything inside this repo works after `uv sync`), else `axitime` on
-  the PATH. For timelines kept elsewhere, point it at the repo's `.venv/bin/axitime`. That's quicker than
-  `uv run`, which checks the environment is up to date before every run, and outside the repo needs `--project`
-  to find it.
+  `.venv` folder at or above the file, else the one in the AxiTimeline checkout the extension is linked from
+  (see *Installing*), so timelines kept in a folder of their own work after `uv sync` too, else `axitime` on the
+  PATH. Set it only for a different axitime. A `.venv/bin/axitime` is quicker than `uv run`, which checks the
+  environment is up to date before every run, and outside the repo needs `--project` to find it.
 
 Checking and previewing run a program found in the workspace, so they only happen in a trusted workspace (VS
 Code's *Workspace Trust*). If axitime can't be run, the extension says so once and logs the details to the
