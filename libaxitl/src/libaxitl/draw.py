@@ -145,8 +145,9 @@ class _Drawer:
             lines = self.text(text)
             self.add(block.pen, Stage.TITLES, lines)
             fill = block.fills[i] if i < len(block.fills) else Fill.NONE
-            if fill is not Fill.NONE:  # an outline font's letters, hatched inside (§16.1)
-                self.add(block.pen, Stage.TITLES, self.inside(lines, False, fill))
+            if fill is not Fill.NONE:  # an outline font's letters, hatched inside (§16.1), but not a strikethrough
+                letters = flatten(text.shaped.segments(text.x, text.y, strikes=False), self.style.curve_piece)
+                self.add(block.pen, Stage.TITLES, self.inside(letters, False, fill))
         if block.illustration is not None and block.illustration_box is not None:
             self.illustration(block.illustration, block.illustration_box, block.pen, Stage.TITLES, block.location)
 

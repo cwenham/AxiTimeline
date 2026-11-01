@@ -171,3 +171,35 @@ def load_builtin_font(name: str) -> Font:
         raise FontError(f"'{name}' is not a built-in font")
     content = resources.files(__package__).joinpath("data", f"{name}.svg").read_bytes()
     return parse_svg_font(content, name)
+
+
+# The bundled fonts that are bold or italic cuts of one family (§3.11), by (bold, italic). A family has only the
+# cuts listed: inline formatting never fakes a bold or slants a font that has no italic.
+FAMILIES: tuple[dict[tuple[bool, bool], str], ...] = (
+    {
+        (False, False): "HersheySerifMed",
+        (True, False): "HersheySerifBold",
+        (False, True): "HersheySerifMedItalic",
+        (True, True): "HersheySerifBoldItalic",
+    },
+    {(False, False): "HersheySans1", (True, False): "HersheySansMed"},
+    {(False, False): "HersheyScript1", (True, False): "HersheyScriptMed"},
+    {(False, False): "EMSNixish", (False, True): "EMSNixishItalic"},
+    {(False, False): "EMSReadability", (False, True): "EMSReadabilityItalic"},
+)
+
+
+def font_variant(font: Font, bold: bool, italic: bool) -> tuple[Font, bool, bool]:
+    """The cut of ``font``'s family to draw text marked bold and/or italic in, and whether it is bold and
+    whether it is italic. Text marked bold in a font that is already bold stays in it. Where the family lacks
+    the cut asked for, the nearest it has (giving up italic first, then bold); a font with no family, such as a
+    custom one, is its only cut."""
+    family = next((f for f in FAMILIES if font.name in f.values() and is_builtin_font(font.name)), None)
+    if family is None:
+        return font, False, False
+    own = next(style for style, name in family.items() if name == font.name)
+    want_bold, want_italic = own[0] or bold, own[1] or italic
+    for style in ((want_bold, want_italic), (want_bold, own[1]), (own[0], want_italic), own):
+        if style in family:
+            return load_builtin_font(family[style]), *style
+    return font, *own  # unreachable: a font is always its own cut

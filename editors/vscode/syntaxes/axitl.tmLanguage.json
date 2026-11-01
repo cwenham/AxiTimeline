@@ -31,7 +31,22 @@
       "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.axitl" } },
       "end": "(\")|$",
       "endCaptures": { "1": { "name": "punctuation.definition.string.end.axitl" } },
-      "patterns": [{ "match": "\\\\[\"\\\\]", "name": "constant.character.escape.axitl" }]
+      "patterns": [
+        { "match": "\\\\[\"\\\\]", "name": "constant.character.escape.axitl" },
+        { "include": "#formatting" }
+      ]
+    },
+    "formatting": {
+      "comment": "Inline formatting (language spec §3.12): an approximation of CommonMark's emphasis rules, for colour only.",
+      "patterns": [
+        { "match": "\\\\[!#-/:-@\\[\\]^_`{-~]", "name": "constant.character.escape.markdown.axitl" },
+        { "match": "(\\*\\*\\*)(?=[^\\s*\"])[^\"]*?(?<=[^\\s*\\\\])(\\*\\*\\*)", "name": "markup.bold.markup.italic.axitl" },
+        { "match": "(?<![\\\\*])(\\*\\*)(?=[^\\s*\"])[^\"]*?(?<=[^\\s*\\\\])(\\*\\*)(?!\\*)", "name": "markup.bold.axitl" },
+        { "match": "(?<![\\w\\\\])(__)(?=[^\\s_\"])[^\"]*?(?<=[^\\s_\\\\])(__)(?!\\w)", "name": "markup.bold.axitl" },
+        { "match": "(?<![\\\\*])(\\*)(?=[^\\s*\"])[^\"*]*?(?<=[^\\s*\\\\])(\\*)(?!\\*)", "name": "markup.italic.axitl" },
+        { "match": "(?<![\\w\\\\])(_)(?=[^\\s_\"])[^\"_]*?(?<=[^\\s_\\\\])(_)(?!\\w)", "name": "markup.italic.axitl" },
+        { "match": "(?<![~\\\\])(~~)(?=[^\\s~\"])[^\"]*?(?<=[^\\s~\\\\])(~~)(?!~)", "name": "markup.strikethrough.axitl" }
+      ]
     },
     "timeline": {
       "match": "^\\s*(timeline)(?![\\w])",

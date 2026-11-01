@@ -37,6 +37,7 @@ from .model import (
     TimelineDocument,
 )
 from .pens import PENS
+from .markup import Spans, characters, from_characters, parse_inline
 from .text import ShapedText, shape
 from .ticks import plan_ticks
 from .units import Scale, format_number
@@ -320,7 +321,9 @@ class _Text:
     def height(self) -> float:
         return self.y1 - self.y0
 
-    def placed(self, source: str, x: float, y: float) -> PlacedText:
+    def placed(self, source: str | Spans, x: float, y: float) -> PlacedText:
+        if not isinstance(source, str):  # a note's line: spans of formatted text
+            source = "".join(span.text for span in source)
         return PlacedText(source, self.shaped, x, y, Box(x + self.x0, y + self.y0, x + self.x1, y + self.y1))
 
 
@@ -510,10 +513,10 @@ class _Layout:
         g = self.geom[side]
         return g.inner + lane * g.lane_height, g.inner + (lane + height) * g.lane_height
 
-    def text(self, entity_font: str, size: float, label: str) -> _Text:
-        shaped = shape(self.doc.fonts[entity_font], label, size)
-        f, s = shaped.font, shaped.scale
-        x0, y0, x1, y1 = 0.0, -f.ascender * s, shaped.width, -f.descender * s
+    def text(self, entity_font: str, size: float, label: str | Spans, markup: bool = False) -> _Text:
+        """A label shaped, with its line box. With ``markup``, its inline formatting is read (§3.11)."""
+        shaped = shape(self.doc.fonts[entity_font], label, size, markup)
+        x0, y0, x1, y1 = 0.0, -shaped.ascender, shaped.width, shaped.descender
         ink = shaped.ink_box()
         if ink:
             x0, y0, x1, y1 = min(x0, ink[0]), min(y0, ink[1]), max(x1, ink[2]), max(y1, ink[3])
@@ -629,7 +632,7 @@ class _Layout:
         out: list[tuple[str, _Text, float]] = []
         y = 0.0
         for label, font, size, extra in lines:
-            text = self.text(font, size, label)
+            text = self.text(font, size, label, markup=True)
             if out:
                 above = out[-1][1].shaped
                 y += above.descender + text.shaped.cap_height + (self.style.corner_line_gap + extra) * size
@@ -734,22 +737,32 @@ class _Layout:
         for note in self.doc.notes:
             self.place_note(note)
 
-    def wrap(self, font: str, size: float, text: str, width: float) -> tuple[list[str], list[str]]:
+    def wrap(self, font: str, size: float, text: str, width: float) -> tuple[list[Spans], list[str]]:
         """A paragraph broken into lines no longer than ``width``, filling each line in turn, and any words too
-        long for a line on their own (each gets a line anyway)."""
-        lines: list[str] = []
+        long for a line on their own (each gets a line anyway). Its inline formatting (§3.11) is read first, so
+        a bold word is measured in bold, and a space keeps its style, so a strikethrough carries across it."""
+        f = self.doc.fonts[font]
+        words: list[list] = [[]]
+        spaces: list = []
+        for char, style in characters(parse_inline(text)):
+            if char == " ":
+                spaces.append((char, style))
+                words.append([])
+            else:
+                words[-1].append((char, style))
+        lines: list[Spans] = []
         too_long: list[str] = []
-        line = ""
-        for word in text.split(" "):
-            if shape(self.doc.fonts[font], word, size).width > width + 1e-9:
-                too_long.append(word)
-            trial = f"{line} {word}" if line else word
-            if not line or shape(self.doc.fonts[font], trial, size).width <= width + 1e-9:
+        line: list = []
+        for i, word in enumerate(words):
+            if shape(f, from_characters(word), size).width > width + 1e-9:
+                too_long.append("".join(c for c, _ in word))
+            trial = line + [spaces[i - 1]] + word if i else word
+            if not line or shape(f, from_characters(trial), size).width <= width + 1e-9:
                 line = trial
             else:
-                lines.append(line)
+                lines.append(from_characters(line))
                 line = word
-        lines.append(line)
+        lines.append(from_characters(line))
         return lines, too_long
 
     def place_note(self, note: Note) -> None:
@@ -872,7 +885,7 @@ class _Layout:
         side = self.inherited_side(e)
         x0, x1, clipped_start, clipped_end = self.extent[e.order]
         st = self.style
-        text = self.text(e.font, e.font_size_mm, e.label)
+        text = self.text(e.font, e.font_size_mm, e.label, markup=True)
         cap_start, cap_end = clipped_start, e.when.is_open or clipped_end
         room = (x1 - x0) - 2 * st.label_inset - (st.cap_depth if cap_start else 0) - (st.cap_depth if cap_end else 0)
         fits = text.width <= room
@@ -967,8 +980,7 @@ class _Layout:
 
     def check_label_fits(self, bar: _Bar) -> None:
         g = self.geom[bar.side]
-        f = bar.text.shaped.font
-        needed = (f.ascender - f.descender) * bar.text.shaped.scale
+        needed = bar.text.shaped.ascender + bar.text.shaped.descender
         room = g.lane_height - 2 * self.style.bar_inset - 2 * self.style.label_margin
         if needed > room:
             e = bar.entity
@@ -1030,7 +1042,7 @@ class _Layout:
         self.events.sort(key=lambda ev: ev.entity.order)
 
     def flag(self, e: Entity) -> _Flag:
-        name = self.text(e.font, e.font_size_mm, e.label)
+        name = self.text(e.font, e.font_size_mm, e.label, markup=True)
         if e.time_label is TimeLabel.NONE:
             return _Flag(name, None, "", self.style.time_label_gap)
         words = time_label_text(e.when, e.time_label.value)

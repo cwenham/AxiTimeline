@@ -20,7 +20,7 @@ from .colours import WHITE, ColourError, nearest_pen, parse_colour
 from .dates import DateError, DateRange, DateValue, parse_date, parse_when, time_label_text
 from .diagnostics import AxitlError, Diagnostic, Diagnostics, SourceLocation
 from .fetch import Fetcher, Resolver, Resource, no_resolver, relative_name
-from .fonts import BUILTIN_FONTS, DEFAULT_FONT, Font, FontError, load_builtin_font, parse_svg_font
+from .fonts import BUILTIN_FONTS, DEFAULT_FONT, Font, FontError, font_variant, load_builtin_font, parse_svg_font
 from .illustrate import illustration_colours
 from .illustration import IllustrationError, intrinsic_size
 from .model import (
@@ -49,6 +49,7 @@ from .model import (
 )
 from .pens import DEFAULT_PEN, is_pen, suggest_pen
 from .preprocess import Flattener, LogicalLine, unescape
+from .markup import parse_inline, plain_text
 from .text import drawable_text
 from .units import UnitError, parse_length, parse_scale
 
@@ -873,14 +874,15 @@ class _Builder:
 
     def check_corner_glyphs(self, title: Title | None, credits: Credits | None) -> None:
         if title is not None:
-            self.warn_missing_glyphs(self.fonts[title.font], title.font, title.text, "the title", title.location)
+            self.warn_missing_glyphs(self.fonts[title.font], title.font, title.text, "the title", title.location,
+                                     markup=True)
             self.warn_missing_glyphs(self.fonts[title.subtitle_font], title.subtitle_font, title.subtitle,
-                                     "the subtitle", title.location)
+                                     "the subtitle", title.location, markup=True)
         if credits is not None:
             for line in credits.lines:
                 key = credits.heading_font if line.heading else credits.font
                 what = "a heading of the credits" if line.heading else "a line of the credits"
-                self.warn_missing_glyphs(self.fonts[key], key, line.text, what, line.location)
+                self.warn_missing_glyphs(self.fonts[key], key, line.text, what, line.location, markup=True)
 
     # -- notes (§17) ----------------------------------------------------------------------------------------
 
@@ -968,7 +970,7 @@ class _Builder:
         for para in paragraphs:
             key = heading_font if para.heading else font
             what = "a heading of a note" if para.heading else "a note"
-            self.warn_missing_glyphs(self.fonts[key], key, para.text, what, para.location)
+            self.warn_missing_glyphs(self.fonts[key], key, para.text, what, para.location, markup=True)
         return Note(tuple(paragraphs), pen, font, size, heading_font, heading_size, anchor, edge, width,
                     align, margin, clearance, order, location, illustration, at, gap)
 
@@ -1294,23 +1296,50 @@ class _Builder:
                 font = self.fonts.get(e.font)
                 if font is None:
                     continue
-                texts = [("", e.label)]
+                what = f'{e.kind.value} "{e.label}"'
+                self.warn_missing_glyphs(font, e.font, e.label, what, e.location, markup=True)
                 if e.kind is Kind.EVENT and e.time_label is not TimeLabel.NONE:
-                    texts.append(("the time label of ", time_label_text(e.when, e.time_label.value)))
-                for what, text in texts:
-                    self.warn_missing_glyphs(font, e.font, text, f'{what}{e.kind.value} "{e.label}"', e.location)
+                    self.warn_missing_glyphs(font, e.font, time_label_text(e.when, e.time_label.value),
+                                             f"the time label of {what}", e.location)
 
-    def warn_missing_glyphs(self, font: Font, font_key: str, text: str, what: str, location: SourceLocation) -> None:
-        for r in drawable_text(font, text)[1]:
-            code = f"U+{ord(r.original):04X}"
-            char = code if r.original.isspace() or not r.original.isprintable() else f"{r.original} ({code})"
-            if r.replacement == "":
-                drawn = "leaving it out"
-            elif r.replacement.isspace():
-                drawn = "drawing a space instead"
-            else:
-                drawn = f"drawing {r.replacement} instead"
-            self.sink.warning("missing-glyph", f"font {font_key} has no {char} for {what}; {drawn}", location)
+    def warn_missing_glyphs(self, font: Font, font_key: str, text: str, what: str, location: SourceLocation,
+                            markup: bool = False) -> None:
+        """Warn of each character the font can't draw. With ``markup``, the text's inline formatting (§3.11) is
+        read first: each stretch is checked in the cut it is drawn in, and bold or italic that the font's family
+        has no cut for is a warning too."""
+        runs = [(font, font_key, text)]
+        if markup:
+            runs = []
+            missing: list[str] = []
+            for span in parse_inline(text):
+                cut, bold, italic = font_variant(font, span.bold, span.italic)
+                for wanted, got, name in ((span.bold, bold, "bold"), (span.italic, italic, "italic")):
+                    if wanted and not got and name not in missing:
+                        missing.append(name)
+                key = font_key if cut is font else cut.name
+                runs.append((cut, key, span.text))
+            for name in missing:
+                self.sink.warning(
+                    "missing-style",
+                    f"font {font_key} has no {name} cut for {what}, so that text is drawn "
+                    f"{'in its normal weight' if name == 'bold' else 'upright'}",
+                    location,
+                )
+        seen: set[tuple[str, str]] = set()
+        for cut, key, run in runs:
+            for r in drawable_text(cut, run)[1]:
+                if (key, r.original) in seen:
+                    continue
+                seen.add((key, r.original))
+                code = f"U+{ord(r.original):04X}"
+                char = code if r.original.isspace() or not r.original.isprintable() else f"{r.original} ({code})"
+                if r.replacement == "":
+                    drawn = "leaving it out"
+                elif r.replacement.isspace():
+                    drawn = "drawing a space instead"
+                else:
+                    drawn = f"drawing {r.replacement} instead"
+                self.sink.warning("missing-glyph", f"font {key} has no {char} for {what}; {drawn}", location)
 
 
 def _identity(e: Entity) -> tuple:
@@ -1318,9 +1347,10 @@ def _identity(e: Entity) -> tuple:
 
     An event's date matches only at the same moment and the same precision: 1939-09 and 1939-09-01 differ.
     """
+    label = plain_text(e.label)  # formatting doesn't make it another entity (§3.11)
     if e.kind is Kind.EVENT:
-        return (e.kind, e.label, e.when.first_second(), e.when.precision)
-    return (e.kind, e.label)
+        return (e.kind, label, e.when.first_second(), e.when.precision)
+    return (e.kind, label)
 
 
 def _a(word: str) -> str:

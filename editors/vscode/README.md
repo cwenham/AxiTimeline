@@ -6,7 +6,8 @@ Editor support for `.axitl` files: syntax highlighting, completion, hover help, 
 ## What it does
 
 - **Highlighting** of keywords, side and priority marks, labels, dates, pens, parameters and their values,
-  illustrations and comments. Only words the language knows are coloured, so a typo shows up as plain text:
+  illustrations and comments, and of `**bold**`, `*italic*` and `~~struck~~` text inside quotes (§3.12; an
+  approximation of CommonMark's rules, so the render is the final word). Only words the language knows are coloured, so a typo shows up as plain text:
   `purple`, `7B-pencil`, `fill=stripes` or `colour=red` stay uncoloured. Date ranges show their separator
   in its own colour, which makes two traps from the spec visible: `1910-12` has no separator because it is
   December 1910, not 1910 to 1912, and in `1963//1964` the end date turns into a comment (§§3.3, 3.9).

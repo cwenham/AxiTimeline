@@ -60,6 +60,10 @@ began as are superseded. Change the specs here, in the same commit as the code t
   reserving the lanes they cross so the rest of the layout keeps clear of them.
 - Notes (language spec §17, free text on the top or bottom edge) are placed straight after them, in
   `_Layout.notes`; inside a note's `{ }` body the preprocessor joins adjacent quoted lines into one paragraph.
+- Inline formatting (language spec §3.12, CommonMark emphasis and `~~strikethrough~~`) is read in
+  `libaxitl/markup.py`; `shape(..., markup=True)` draws it in the font family's real bold and italic cuts
+  (`FAMILIES` in `libaxitl/fonts`), never faked. Labels, the title, credits and notes are formatted; ticks, time
+  labels and graph text are not.
 - `hardware/transport/` holds the paper transport's printed parts in OpenSCAD (the design is `docs/transport.md`).
   `./build.sh` there exports every part to its `stl/` (ignored by git) and checks each fits the Prusa Core One's bed.
 - Built-in fonts live in `libaxitl/src/libaxitl/fonts/data/` (copied from Inkscape's Hershey Text

@@ -1,0 +1,19 @@
+// Inline formatting (language spec §3.12): **bold**, *italic*, ***both*** and ~~struck through~~, in labels, the
+// title, the credits and notes. Each is drawn in the cut of the font's family that really has it: the Hershey
+// Serif family has all four, Hershey Sans has a bold but no italic. A backslash keeps a character as written.
+timeline start=1930 end=1970 length=50cm width=180 font=HersheySerifMed
+
+title "A **Short** History of *Computing*" subtitle="With ~~one~~ two mistakes corrected"
+
+note anchor=end edge=bottom width=110mm {
+    heading "About the *formatting*"
+    "Names in **bold** are people; machines are in *italic*. A ~~machine that was never finished~~ is struck"
+    "through. Write \*asterisks\* with a backslash, and snake_case names need nothing."
+}
+
+person "**Alan Turing**" 1912-1954 blue
+person "**Grace Hopper**" 1906-1992 violet
+span "*ENIAC*" 1945-1955 green
+span "~~Analytical Engine~~ *EDSAC*" 1949-1958 green
+event "**First stored program**" 1948-06-21 time_label=day
+event "*Colossus* breaks Lorenz" 1944-02-05 font=HersheySans1

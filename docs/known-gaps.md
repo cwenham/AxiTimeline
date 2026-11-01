@@ -213,3 +213,14 @@ reading, not a settled decision: confirm it (and move it into the spec) or corre
 
 **Render (`libaxitl/draw.py`, `libaxitl/render.py`)**
 - Preview colours approximate each pen on screen (pencils in greys, softer grades darker); on paper the pen decides.
+
+## Inline formatting (language spec §3.12)
+
+Implemented 2026-11-01 and tried on a render (`examples/formatting.axitl`). Still open:
+
+- **Custom fonts have no bold or italic.** A family is only known for the built-in fonts. A font made with
+  `axitime convert-font` from, say, Avenir Demi can't be told that Avenir Bold is its bold. One way: a top-level
+  `font "avenir.svg" bold="avenir-bold.svg" italic="avenir-italic.svg" bold_italic="..."` declaring a family once
+  for every declaration that names it.
+- **The strikethrough's height** (half the x-height) is provisional, and is not yet tried on paper.
+

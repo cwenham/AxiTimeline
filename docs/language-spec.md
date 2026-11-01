@@ -227,6 +227,33 @@ event "Germany invades Poland" 1939-09-01 time_label=day
 - A time label never claims more precision than the event's date has: `sec` on an event written to the minute gives `01:23`, and `hour` on a date written to the day gives the day, `1986-04-26`. Times are shown as written, without timezone conversion
 - Drawn in the event's font at three-quarters of its `font_size`, aligned with the label on the pole's side. Together the label and time label make up the flag (§8.2)
 
+### 3.12 Inline formatting (added 2026-11-01)
+
+``` text
+title "A **Short** History of *Computing*" subtitle="With ~~one~~ two mistakes corrected"
+person "**Alan Turing**" 1912-1954
+span "~~Analytical Engine~~ *EDSAC*" 1949-1958
+```
+
+- The text of an entity's label, the title and subtitle (§16.1), the credits' lines (§16.2) and a note's paragraphs and headings (§17) can use Markdown's inline formatting: `*italic*` or `_italic_`, `**bold**` or `__bold__`, `***bold italic***`, and `~~strikethrough~~` (two tildes, as on GitHub; a single `~` is text). Nothing else in Markdown is read (no links, code or headings), and tick labels, time labels and a graph's text are never formatted
+- Delimiters open and close by **CommonMark's rules** for emphasis (its "left-flanking" and "right-flanking" delimiter runs, the "rule of 3", and the nesting that follows from them), so formatting comes out as any CommonMark renderer would show it. In particular an underscore inside a word stays an underscore (`snake_case`), a `*` with spaces round it is a `*` (`2 * 3 * 4`), and a delimiter that closes nothing is drawn as written
+- A backslash before an ASCII punctuation character draws that character as written: `\*six\*` gives `*six*`. Any other backslash is drawn as itself. (A quoted string's own escapes come first: `\"` is a quote and `\\` a backslash, and every other backslash is kept, so `\*` reaches the formatting as written)
+- **Bold and italic are drawn in a real cut of the font's family, never faked** (settled 2026-11-01): a bold isn't drawn by doubling strokes, and an italic isn't drawn by slanting the upright. The built-in families are:
+
+  | Family | Regular | Bold | Italic | Bold italic |
+  |---|---|---|---|---|
+  | Hershey Serif | `HersheySerifMed` | `HersheySerifBold` | `HersheySerifMedItalic` | `HersheySerifBoldItalic` |
+  | Hershey Sans | `HersheySans1` | `HersheySansMed` | none | none |
+  | Hershey Script | `HersheyScript1` | `HersheyScriptMed` | none | none |
+  | EMS Nixish | `EMSNixish` | none | `EMSNixishItalic` | none |
+  | EMS Readability | `EMSReadability` | none | `EMSReadabilityItalic` | none |
+
+  The other built-in fonts, and custom fonts (§3.8), have no other cuts. Formatting is relative to the font given: in `HersheySerifBold`, `*text*` is `HersheySerifBoldItalic`, and `**text**` stays as it is
+- Where the family lacks the cut asked for, the text is drawn in the nearest cut it has (giving up italic first, then bold), with a **warning** naming the font and what it lacks: so `*text*` in the default `HersheySans1` is drawn upright, and `***text***` in it is drawn in `HersheySansMed`
+- A strikethrough is a single stroke in the text's pen, at half the font's x-height above the baseline, from the start of the first struck character's advance to the end of the last's, carrying on across struck spaces. It is part of the text's ink, so collisions keep clear of it, but a title's `font_fill=` (§16.1) doesn't hatch it
+- Formatting is measured as it is drawn: a bold word is measured in the bold cut, so layout and render still agree (§3.8), and a note wraps (§17.2) on the formatted text, so formatting can run from one line onto the next. A line's height allows for every cut it uses
+- An entity's identity (§5) is its label with the formatting removed: `"**Ada**"` redefines `"Ada"`. Messages quote labels as written, formatting included
+
 ## 4. `timeline` directive (top-level only)
 
 ``` text
@@ -623,7 +650,7 @@ title "A Colossal Waste of Time" blue
     illustration(crest.svg at=left)
 ```
 
-- The quoted string is the title's text, which can't be empty. A trailing pen keyword (§3.4) sets the pen for all of it, subtitle and illustration included. Default: `black`.
+- The quoted string is the title's text, which can't be empty, and can be formatted (§3.12). A trailing pen keyword (§3.4) sets the pen for all of it, subtitle and illustration included. Default: `black`.
 - `subtitle=` adds a second, smaller line under the title.
 - **`font_fill=`** hatches the insides of the title's letters with one of the fill patterns of §3.7, in the title's pen, clear of their counters (the holes in letters such as A, e and o). It is for an outline font, such as one converted with `axitime convert-font` (§3.8), whose letters are otherwise drawn hollow; `font_fill=solid` makes them look solid. A font whose glyphs aren't all closed outlines, such as every built-in one, draws its letters as single lines, so they have no insides, and `font_fill=` other than `none` on it is an error. `subtitle_font_fill=` does the same for the subtitle, and follows `font_fill` unless it is set: a subtitle in an outline font (the title's own, unless `subtitle_font=` says otherwise) is filled like the title, and one in a single-line font isn't filled.
 - `illustration(file.svg)` puts a drawing beside the text: `at=left` (the default, in the corner) or `at=right`, `gap=` from the text. By default it is as tall as the text, from the top of the title's capitals to the baseline of the last line (the subtitle's, if there is one). `height=` sets its height instead, and the text is centred against it. Its width follows its aspect ratio. Unlike an entity's illustration (§3.5), it isn't rounded to whole lanes.
