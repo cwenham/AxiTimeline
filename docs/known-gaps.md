@@ -132,8 +132,6 @@ Implemented 2026-11-01 and tried on a render (`examples/notes.axitl`). Still ope
 - **Spacing values** are provisional (in `LayoutStyle`, the parser and `NOTE_WIDTH_EMS` in `model.py`): a 5mm
   margin, 25mm clear of the title, credits and other notes, a default width of 30 ems, 0.5 of a line's size more
   above a paragraph after another, and the title's and credits' line and heading spacing (§16).
-- **Only left and right alignment.** Justified text (spaces stretched so both edges are straight) would suit
-  narration; centred text could suit a note under a date. Neither is planned until one is wanted.
 - **A note under a period, not a date.** A note anchored to a date is centred on it. Anchoring one to a range
   (centred on the period, or starting at its start) would suit a summary of the period.
 - **Notes beside each other keep the full clearance** (25mm by default), the same as from the title and credits.
