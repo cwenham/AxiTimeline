@@ -10,6 +10,13 @@ use <lib.scad>
 
 show_paper = true;  // in the assembly: the paper and rolls
 show_board = true;  // in the assembly: the board and AxiDraw
+cutaway = false;    // in the assembly: cut away the operator's left half (+x), to show the paper's path
+pen_at = [-40, 200]; // in the assembly: where the AxiDraw's pen is, [x, y]
+ink = [];           // in the assembly: a timeline drawn on the paper, as [[file, colour], ...] of SVGs whose
+                    // strokes are outlined; render_views.sh makes them
+ink_start_y = 570;  // where the start of the inked timeline is along the paper (y), as if one 250mm strip had
+                    // been drawn and moved on
+ink_top_x = 102.5;  // where the inked page's top edge is across the paper (x); the top is on the home side
 part = "assembly"; // [assembly, back_bracket_left, back_bracket_right, front_bracket_left, front_bracket_right, drive_motor_mount, drive_housing, dancer_guide_full, dancer_guide_plain, flag_slider, roller_half, dancer_half, drive_cone, tail_cone, tail_knob, motor_gear, spacers, rod_collar, pinch_block, pinch_arm, board_jaw, foot]
 
 // ======================================================================================================
@@ -431,12 +438,60 @@ module foot() {
 
 module both_sides() { children(); mirror([1, 0, 0]) children(); }
 
+// The AxiDraw's moving parts, simplified: the carriage on the bar, the arm through it, and the pen at its
+// front end with its tip on the paper at p = [x, y].
+module axidraw_carriage(p) {
+    color("dimgray") box([p[0] - 35, -70, 45], [p[0] + 35, 10, 75]);
+    color("gainsboro") box([p[0] - 12, p[1] - 320, 55], [p[0] + 12, p[1] + 25, 70]);
+    color("dimgray") box([p[0] - 14, p[1] - 12, 30], [p[0] + 14, p[1] + 25, 72]);
+    color("royalblue") { zcyl(p[0], p[1], 8, 95, 9); zcyl(p[0], p[1], 95, 105, 6); }
+    color("black") translate([p[0], p[1], 0.5]) cylinder(d1 = 1, d2 = 9, h = 7.5);
+}
+
+// The paper's path in the y-z plane, as points along its centre: off the supply roll, down round the back
+// dancer, over the back roller, across the board, over the front roller, round the front dancer and up onto
+// the take-up roll. The rolls are drawn 60 across.
+function arc(c, r, a0, a1, n = 24) = [for (i = [0 : n]) c + r * [cos(a0 + (a1 - a0) * i / n), sin(a0 + (a1 - a0) * i / n)]];
+paper_t = 0.4;
+function paper_path() = let(dz = (dancer_top + dancer_bottom) / 2, r = roller_d / 2 + paper_t / 2) concat(
+    arc(supply, 30, 90, 180),
+    arc([dancer_y_back, dz], r, 0, -180),
+    arc(back_roller, r, 180, 90),
+    arc(front_roller, r, 90, 0),
+    arc([dancer_y_front, dz], r, 0, -180),
+    arc(takeup, 30, 0, 90));
+
+module paper(t = paper_t) {
+    pts = paper_path();
+    rotate([90, 0, 90]) linear_extrude(height = paper_w, center = true)
+        for (i = [0 : len(pts) - 2]) hull() for (q = [pts[i], pts[i + 1]]) translate(q) circle(d = t, $fn = 8);
+}
+
+// The inked timeline on the flat part of the paper, from the front roller back to the pen. Each strip is
+// turned a quarter-turn onto the machine: its start leads towards the operator, its top edge on the home side.
+module inked() {
+    l0 = ink_start_y - front_roller[0];   // what of the timeline (along it) is between them
+    l1 = ink_start_y - pen_at[1];
+    for (f = ink) color(f[1]) translate([ink_top_x - 202.5, ink_start_y, paper_t]) rotate(-90)
+        linear_extrude(0.2) intersection() { import(f[0]); translate([l0, -1000]) square([l1 - l0, 2000]); }
+}
+
 module assembly() {
-    // the board and the AxiDraw's bar and legs (simplified)
+    // The cutaway draws its own paper, thicker and in red, so that its path shows edge-on.
+    if (cutaway) {
+        intersection() { assembly_all(); color("darkgray") box([-1000, -1000, -1000], [0, 1000, 1000]); }
+        if (show_paper) color("firebrick") translate([-paper_w / 4, 0, 0]) resize([paper_w / 2, 0, 0]) paper(3);
+    }
+    else assembly_all();
+}
+
+module assembly_all() {
+    // the board and the AxiDraw (simplified)
     if (show_board) {
         color("burlywood", 0.9) box([-board_w / 2, board_y0, -board_t], [board_w / 2, board_y1, 0]);
         color("lightgray") box([-330, -60, 7.5], [330, 0, 45]);
         color("lightgray") both_sides() box([250, axidraw_leg_y[0], 0], [265, axidraw_leg_y[1], 7.5]);
+        axidraw_carriage(pen_at);
     }
     // legs and feet
     color("silver") both_sides() for (yc = [leg_y_back, leg_y_front])
@@ -478,7 +533,7 @@ module assembly() {
     color("silver") for (p = [supply, takeup]) xcyl(p[0], p[1], -cone_tip_x, -(plate_out + 22), 8);
     color("orange") for (p = [supply, takeup]) translate([-(plate_out + 10), p[0], p[1]]) rotate([0, -90, 0]) tail_knob();
     // rolls between their cones (drawn 60 across), cones, gears and motors
-    if (show_paper) color("palegreen", 0.8) for (p = [supply, takeup]) xcyl(p[0], p[1], -paper_w / 2, paper_w / 2, 60);
+    if (show_paper) color("ivory") for (p = [supply, takeup]) xcyl(p[0], p[1], -paper_w / 2, paper_w / 2, 60);
     color("orange") for (p = [supply, takeup]) {
         translate([0, p[0], p[1]]) drive_cone();
         translate([0, p[0], p[1]]) mirror([1, 0, 0]) tail_cone();
@@ -492,8 +547,8 @@ module assembly() {
     color("silver") box([-500, rail[0] - rail_size / 2, rail[1] - rail_size / 2], [500, rail[0] + rail_size / 2, rail[1] + rail_size / 2]);
     color("orange") both_sides() { pinch_block(); pinch_arm(); }
     color("black") both_sides() xcyl(pinch_axle[0], pinch_axle[1], wheel_x - wheel_w / 2, wheel_x + wheel_w / 2, wheel_d);
-    // the paper (a thin sheet along its path, flat part only)
-    if (show_paper) color("seagreen", 0.6) box([-paper_w / 2, back_roller[0], 0], [paper_w / 2, front_roller[0], 0.3]);
+    // the paper along its whole path, and any timeline drawn on it
+    if (show_paper && !cutaway) { color("ivory") paper(); if (len(ink) > 0) inked(); }
 }
 
 // ======================================================================================================

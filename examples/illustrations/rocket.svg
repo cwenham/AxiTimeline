@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="12mm" height="40mm" viewBox="0 0 12 40">
+  <!-- A two-colour rocket for examples/flight.axitl, drawn with fill=solid pens=auto: its black and red each
+       hatched in a pen of their own. -->
+  <path fill="#000000" d="M 6 1 L 8 7 L 4 7 Z"/>
+  <path fill="none" stroke="#000000" stroke-width="0.3" d="M 4 7 L 8 7 L 8 31 L 4 31 Z"/>
+  <path fill="#c00000" d="M 4 13 L 8 13 L 8 16 L 4 16 Z M 4 22 L 8 22 L 8 24 L 4 24 Z"/>
+  <path fill="#000000" d="M 4 25 L 1 32 L 1 35 L 4 31 Z M 8 25 L 11 32 L 11 35 L 8 31 Z"/>
+  <path fill="none" stroke="#000000" stroke-width="0.3" d="M 4.5 31 L 7.5 31 L 8.2 35 L 3.8 35 Z"/>
+</svg>

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="40mm" height="16mm" viewBox="0 0 40 16">
+  <!-- A line drawing of a biplane, for the title of examples/flight.axitl. -->
+  <g fill="none" stroke="#000000" stroke-width="0.3">
+    <path d="M 3 8.5 C 8 6.5 28 7 34 8 L 37 4.5 L 39 4.5 L 38 10 L 34 10 C 28 11 8 11 3 9.5 Z"/>
+    <path d="M 8 2.5 L 22 2.5 L 22 3.5 L 8 3.5 Z"/>
+    <path d="M 8 10 L 22 10 L 22 11 L 8 11 Z"/>
+    <path d="M 10 3.5 L 10 10 M 20 3.5 L 20 10 M 10 3.5 L 20 10"/>
+    <path d="M 2 4 L 2 14 M 2 9 L 3 9"/>
+    <path d="M 12 11 L 11 13 M 14 11 L 11 13"/>
+    <path d="M 12.5 13 A 1.5 1.5 0 1 1 12.49 13 Z"/>
+    <path d="M 16 7.5 C 16 5.5 19 5.5 19 7.5"/>
+  </g>
+</svg>

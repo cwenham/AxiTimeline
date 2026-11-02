@@ -1,0 +1,78 @@
+// A showcase of most of the language: a title and credits with illustrations (§16), notes (§17), inline
+// formatting (§3.12), a two-colour illustration hatched in two pens (§3.5), fills, groups, and a background
+// graph of air passengers on a log scale (§15). Passenger numbers are approximate (ICAO, via the World Bank).
+timeline start=1900 end=2000 length=1m width=200 font=HersheySerifMed
+
+title "The Age of *Flight*" indigo
+    subtitle="From Kitty Hawk to the Moon, and the jet age in between"
+    font=HersheySerifBold font_size=11mm
+    subtitle_font=HersheySerifMedItalic
+    illustration(illustrations/biplane.svg at=left)
+
+credits max_height=14mm illustration(illustrations/badge.svg fill=solid pens=auto) {
+    heading "Drawn by AxiTimeline"
+    "examples/flight.axitl"
+    "Dates from Wikipedia"
+}
+
+note anchor=1920 edge=bottom width=150mm {
+    heading "About this timeline"
+    "**Aviators** are drawn above the line, wars and eras below it, and aircraft and spacecraft"
+    "are in *italic*. The pencil line behind it all is the number of airline passengers flown"
+    "each year, on a log scale: from 31 million in 1950 to 1.7 billion in 2000."
+}
+
+note anchor=end edge=top align=right font=HersheySerifMedItalic width=80mm {
+    "Sixty-six years separate a flight shorter than a 747's wingspan from footprints on the Moon."
+}
+
+^!!person "**Orville Wright**" 1871-1948 blue
+^!!person "**Wilbur Wright**" 1867-1912 blue
+^!person "**Louis Blériot**" 1872-1936 blue
+^person "**Amelia Earhart**" 1897-1937 violet
+^person "**Charles Lindbergh**" 1902-1974 violet
+^person "**Frank Whittle**" 1907-1996 green
+^person "**Yuri Gagarin**" 1934-1968 red
+^person "**Neil Armstrong**" 1930-2012 green
+^person "**Sally Ride**" 1951-2012 green
+
+v!span "First World War" 1914-1918 red fill=crosshatch
+v!span "Second World War" 1939-1945 red fill=crosshatch
+v-span "*Concorde* in service" 1976-2003 grey fill=diagonal
+
+v!group "Space Race" 1957-1975 orange fill=diagonal {
+  event "*Sputnik 1*" 1957-10-04 time_label=day
+  event "Gagarin orbits the Earth" 1961-04-12 time_label=day
+  event "*Apollo 11* lands" 1969-07-20 time_label=day illustration(illustrations/rocket.svg height=24mm fill=solid pens=auto)
+}
+
+!event "First powered flight" 1903-12-17 time_label=day
+event "Blériot flies the Channel" 1909-07-25
+event "Lindbergh flies the Atlantic" 1927-05-21
+event "First jet flight, *He 178*" 1939-08-27
+event "Sound barrier broken" 1947-10-14
+event "*Boeing 747* first flies" 1969-02-09
+event "*ISS*: first module launched" 1998-11-20
+
+graph "Airline passengers a year (approximate)" HB-pencil
+    unit=million
+    origin=30
+    y_scale=log
+    line=smooth
+    fill=diagonal
+    fill_pen=2H-pencil
+    fill_depth=3mm
+    height=70mm
+    value_scale=off {
+    1950    31
+    1955    68
+    1960   106
+    1965   177
+    1970   383
+    1975   534
+    1980   748
+    1985   896
+    1990  1025
+    1995  1304
+    2000  1674
+}

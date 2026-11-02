@@ -13,10 +13,16 @@ and putting them together.
 - `build.sh`: exports every part to `stl/` (not committed), laid flat for printing, and runs `check_fit.py`,
   which confirms each one fits the Prusa Core One's 250 × 220 × 270 bed and sits on it. A full build takes
   about ten minutes; `./build.sh foot board_jaw` builds just those.
+- `render_views.sh`: renders the assembly from four angles into `docs/images/transport-*.png`, for the
+  READMEs, with part of `examples/flight.axitl` drawn on the paper. It needs Inkscape as well, to turn the
+  pen strokes into shapes OpenSCAD can import (in `views/`, not committed), and takes about two minutes.
+  The AxiDraw's carriage, arm and pen in these views are simple blocks, not a model of the real thing.
 
 Tested with OpenSCAD 2021.01 on macOS (Intel).
 
-![The transport's assembly in OpenSCAD, seen from behind the AxiDraw](../../docs/images/transport-assembly.png)
+![The transport's assembly in OpenSCAD, seen from behind the AxiDraw, with a timeline part-drawn on the paper](../../docs/images/transport-assembly.png)
+
+![A cutaway from the operator's left, with the paper's path in red](../../docs/images/transport-cutaway.png)
 
 ## What to print
 
