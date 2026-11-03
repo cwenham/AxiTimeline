@@ -214,7 +214,8 @@ The plotter's travel, strip length and pen settings can be adjusted in `~/.confi
 [side][priority]keyword "Label" dates [pen] [key=value ...] [illustration(file.svg)]
 ```
 
-- **Entries:** `person`, `span` and `group` are bars in lanes. An `event` is a single moment on a pole. A group's
+- **Entries:** `person`, `span` and `group` sit in lanes: a person as a line from their name to their death, with
+  a stroke across each end, and spans and groups as bars. An `event` is a single moment on a pole. A group's
   members, in `{ }`, take its side, pen and settings unless they say otherwise.
 - **Dates:**
   - Write a date at any precision, from `1963` to `1963-11-22T12:30:00`.
@@ -224,8 +225,8 @@ The plotter's travel, strip length and pen settings can be adjusted in `~/.confi
 - **Pens** are named after what goes in the plotter: `red`, `blue` and so on, `HB-pencil` and other grades, and
   `fountain-blue`.
 - **Settings:**
-  - `fill=` shades bars: `diagonal`, `crosshatch`, `wave`, `dots` or `solid`. `fill_pen=` draws the fill in a
-    pen of its own: a soft pencil under a black outline, say.
+  - `fill=` shades the bars of spans and groups: `diagonal`, `crosshatch`, `wave`, `dots` or `solid`. `fill_pen=`
+    draws the fill in a pen of its own: a soft pencil under a black outline, say.
   - `font=` takes a built-in Hershey font, or your own SVG stroke font, and `font_size=` sets the size.
   - `time_label=` writes an event's date under its name.
 - **Title and credits:** `title "Text" subtitle="…"` goes in the top-left corner, and `credits { heading "…" "…" }`
@@ -255,7 +256,8 @@ The full rules are in [`docs/language-spec.md`](docs/language-spec.md). The othe
 [`formatting.axitl`](examples/formatting.axitl) each show one of the features above on its own,
 [`industrial.axitl`](examples/industrial.axitl) uses includes, groups and an illustration,
 [`chernobyl.axitl`](examples/chernobyl.axitl) is a timeline to the second, [`labels.axitl`](examples/labels.axitl)
-shows where labels go when they're longer than their bars, and [`crash-1929.axitl`](examples/crash-1929.axitl) and
+shows where labels go when they're longer than their bars, [`people.axitl`](examples/people.axitl) shows how people
+are drawn, ended and labelled, and [`crash-1929.axitl`](examples/crash-1929.axitl) and
 [`reactor-power.axitl`](examples/reactor-power.axitl) draw graphs under their timelines.
 
 ## Editor support

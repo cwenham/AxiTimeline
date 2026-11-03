@@ -221,6 +221,9 @@ class _Drawer:
     # -- bars --------------------------------------------------------------------------------------------------
 
     def bar(self, bar: PlacedBar) -> None:
+        if bar.is_line:
+            self.person(bar)
+            return
         st, e = self.style, bar.entity
         x0, x1, y0, y1 = bar.x0, bar.x1, bar.y0, bar.y1
         caps = bar.cap_start + bar.cap_end
@@ -249,6 +252,34 @@ class _Drawer:
                     fill_clear = Box(fx0, y0 - 1, fx1, y1 + 1)
                 for line in self.fill(e.fill, region):
                     self.add(e.fill_pen, Stage.BARS, cut_out(line, fill_clear))  # its own pen if it has one (§3.7)
+
+    def person(self, bar: PlacedBar) -> None:
+        """A person (§7.1): a line through the middle of the lane, from birth to death, with a stroke across each
+        end as tall as a bar. Where the life is open or clipped, that stroke is the torn edge instead (§3.6)."""
+        st, e = self.style, bar.entity
+        x0, x1, y0, y1 = bar.x0, bar.x1, bar.y0, bar.y1
+        caps = bar.cap_start + bar.cap_end
+        depth = min(self.layout.cap_depth_mm, 0.9 * (x1 - x0) / caps) if caps else 0.0
+        style = self.layout.document.timeline.open_end_style
+        birth = self.cap(x0, y0, y1, +1, depth, style) if bar.cap_start else [(x0, y0), (x0, y1)]
+        death = self.cap(x1, y0, y1, -1, depth, style) if bar.cap_end else [(x1, y0), (x1, y1)]
+        y = bar.line_y
+        a, b = _x_at(birth, y), _x_at(death, y)  # the line meets a torn edge where it crosses, not beyond
+        on_bar = bar.label_placement in (LabelPlacement.INSIDE, LabelPlacement.OVERRUN)
+        keep_clear = bar.label.box.padded(st.label_clearance) if on_bar else Box(0, 0, 0, 0)
+        if bar.label_placement is LabelPlacement.INSIDE:
+            # The name sits at one end of the line (the start, or the end near the paper's far end), and the line
+            # runs from the name to the other end, with no stub between the name and the stroke behind it.
+            if keep_clear.x0 - a <= b - keep_clear.x1:
+                a = keep_clear.x1
+            else:
+                b = keep_clear.x0
+        self.add(e.pen, Stage.BARS, cut_out(birth, keep_clear))
+        if b > a:
+            self.add(e.pen, Stage.BARS, cut_out([(a, y), (b, y)], keep_clear))
+        self.add(e.pen, Stage.BARS, cut_out(death, keep_clear))
+        self.add(e.pen, Stage.BARS, self.text(bar.label))
+        self.add(e.pen, Stage.BARS, ([p, q] for p, q in bar.leader_segments))
 
     def cap(self, x: float, y0: float, y1: float, inward: int, depth: float, style: OpenEndStyle) -> list[Point]:
         """The torn edge drawn where a bar is open or clipped (§3.6), from its top to its bottom."""
@@ -304,6 +335,14 @@ class _Drawer:
             for y in (0.0, L.width_mm):
                 along = [(across[0][0], y), (across[1][0], y)]
                 self.add(st.crop_pen, Stage.CROP_MARKS, [along, [(x, y - arm), (x, y + arm)]])
+
+
+def _x_at(points: list[Point], y: float) -> float:
+    """Where a line running top to bottom crosses height ``y``."""
+    for (xa, ya), (xb, yb) in zip(points, points[1:], strict=False):
+        if min(ya, yb) <= y <= max(ya, yb):
+            return xa if ya == yb else xa + (xb - xa) * (y - ya) / (yb - ya)
+    return points[0][0]
 
 
 def _length(points) -> float:

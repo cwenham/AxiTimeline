@@ -499,6 +499,19 @@ class _Builder:
                 ok = ok and illustration is not None
 
         p = self.params(param_nodes, _ENTITY_KEYS, kind.value)
+        if kind is Kind.PERSON:
+            # A person is drawn as a line, not a bar (§7.1), so it has no inside to fill. A warning rather than an
+            # error, since files written before 2026-11-03 may give one.
+            given = [key for key in ("fill", "fill_pen") if key in p]
+            if given:
+                self.sink.warning(
+                    "person-fill",
+                    f"a person is drawn as a line, not a bar, so it has nothing to fill; {' and '.join(f'{k}=' for k in given)} "
+                    f"{'is' if len(given) == 1 else 'are'} ignored",
+                    p[given[0]][1],
+                )
+                for key in given:
+                    del p[key]
         fill = Fill.NONE
         if "fill" in p:
             text, where = p["fill"]

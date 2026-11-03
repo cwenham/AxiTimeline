@@ -6,7 +6,7 @@ Status: working draft, reflecting all decisions taken in design discussion so fa
 
 This file (`docs/language-spec.md` in the AxiTimeline repo) is the **canonical copy** of this spec, and changes are made here alongside the code. The claude.ai artifact it began as is superseded.
 
-History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7). Added 2026-11-01: the title and credits (§16), outline fonts converted to SVG fonts (§3.8), `illustration(…)` on an indented continuation line (§3.10), and an illustration's filled shapes hatched and its colours drawn in pens of their own (§3.5). Added the same day: notes, paragraphs of free text on the top or bottom edge (§17), and a title's letters filled with `font_fill=` (§16.1).
+History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7). Added 2026-11-01: the title and credits (§16), outline fonts converted to SVG fonts (§3.8), `illustration(…)` on an indented continuation line (§3.10), and an illustration's filled shapes hatched and its colours drawn in pens of their own (§3.5). Added the same day: notes, paragraphs of free text on the top or bottom edge (§17), and a title's letters filled with `font_fill=` (§16.1). Revised 2026-11-03: a person is drawn as a line from its name to its death, not a bar (§7.1).
 
 ## 1. System overview
 
@@ -130,8 +130,9 @@ event "Apollo 11 lands" 1969-07-20 illustration(eagle.svg pens="#ff6600:orange #
 - An open entity's effective end, for lane-packing purposes, is simply the timeline's resolved `end` — no change to the packing algorithm; only the SVG generator's rendering of its far edge differs
 - The far edge of an open entity is drawn with a torn/interrupted cap instead of a flat end — style set once for the whole document via `timeline`'s `open_end_style=sawtooth` (default) or `open_end_style=sine`. A per-document default rather than a per-entity choice, since it's a "ran out of paper/data here" convention that should stay visually consistent across the whole piece
 - The same cap is drawn wherever a bar is clipped by the timeline window, at either end (§4.2)
+- A person (§7.1) has no bar to cap: the torn edge is drawn alone, as tall as a bar, in place of the stroke across its birth or death
 
-### 3.7 Fill (for banded entities — `person`, `span`, `group`)
+### 3.7 Fill (for spans and groups)
 
 ``` text
 !!span "Cold War" 1947-1991 grey fill=diagonal
@@ -139,7 +140,7 @@ event "Apollo 11 lands" 1969-07-20 illustration(eagle.svg pens="#ff6600:orange #
 
 - Named attribute (not positional, to stay unambiguous alongside `pen`): `fill=<style>`
 - Reserved styles: `none` (outline only, default), `solid` (in practice implemented as dense hatching — a pen plotter has no true flat-fill primitive, so this carries a real plot-time and pen-wear cost worth being aware of), `diagonal`, `crosshatch`, `wave`, `dots`
-- Applies uniformly to all three banded entity types, since they all render as the same kind of bar
+- Applies to spans and groups, which render as the same kind of bar. A person is drawn as a line (§7.1), so it has nothing to fill: `fill=` or `fill_pen=` on a person is ignored with a warning (not an error, since files written before 2026-11-03 may give one)
 - A fill pattern never draws through its bar's label (§7): hatching stops at the label's bounding box plus a small margin. A plotter can't knock a pattern out from behind ink after the fact, and text drawn over hatching is illegible
 - `fill_pen=<pen>` draws the pattern in a pen of its own (added 2026-10-24), so the outline and label can be dark ink for legibility and the fill a soft coloured pencil: `span "Cold War" 1947-1991 black fill=diagonal fill_pen=2H-pencil`. Default: the bar's own pen. A group passes it to its members as it does its pen (§9), and a group may give one only to pass on; elsewhere `fill_pen=` without `fill=` is an error
 - A fill pen that differs from its bar's pen is plotted straight after the axis pen, with graphs' pens (§15.10), so the fill goes down before the outlines and lettering drawn in the passes after it
@@ -354,24 +355,40 @@ Standard greedy interval-graph colouring, ordered by priority (higher priority =
 2.  Tie-break by start date, then original include order (determinism)
 3.  Assign each to the lowest-numbered lane with no time-range overlap on that side
 
-Applies to `person`, `span`, `group` — collectively called **banded entities**. `group` behaves exactly like `span` for this purpose (see §9). Each banded entity occupies exactly 1 lane, and a lane's physical thickness is `lane_height` (see §4).
+Applies to `person`, `span`, `group` — collectively called **banded entities**. `group` behaves exactly like `span` for this purpose (see §9). Each banded entity occupies exactly 1 lane, and a lane's physical thickness is `lane_height` (see §4). A person is packed exactly like a span, though it is drawn as a line rather than a bar (§7.1); in the rules below, a person's "bar" is the stretch of lane its line spans.
 
 **Bar labels** (revised 2026-10-12). A bar's label is drawn in a lane, vertically centred, in one of these places, tried in order:
 
 1. **Inside the bar**, if it fits: starting just inside the bar's start (clear of any open-end cap, §3.6).
 2. **Beside the bar**, in the same lane: just after the bar's end, or, where that would run off the far end of the paper, just before its start (§4.1). Only if that stretch of the lane is free.
-3. **Pulled out**: into the nearest free spot in the next three lanes outward, joined to the middle of the bar's outer edge by a **leader** at 45°. The leader points at the start of the label, level with the middle of its capitals, towards later dates where the label fits and otherwise towards earlier. The angle is always 45°, so a leader can never be mistaken for an event's pole (vertical) or a bar's edge (horizontal); together with the pen colour, that is how the reader matches a pulled-out label to its bar.
+3. **Pulled out**: into the nearest free spot in the next three lanes outward, joined to the middle of the bar's outer edge (or of a person's line, §7.1) by a **leader** at 45°. The leader points at the start of the label, level with the middle of its capitals, towards later dates where the label fits and otherwise towards earlier. The angle is always 45°, so a leader can never be mistaken for an event's pole (vertical) or a bar's edge (horizontal); together with the pen colour, that is how the reader matches a pulled-out label to its bar.
 4. Failing all three, the label runs past the end of its bar, the bar's outline broken around it, and a build warning is emitted.
 
 A label too long for its bar never pushes the bar outward: the bar takes the lowest lane free for the bar alone. For packing, a bar occupies its own extent plus a label inside or beside it. Pulled-out labels are placed only after every bar and every bar's illustration, so they take leftover space and never displace a bar. A label whose `font_size` won't fit inside `lane_height` (with a small margin) is a build warning.
 
 **Generalized for illustrations:** the same packing routine is used with a `height` parameter (number of lanes, not just 1) and a `start_search_at` parameter (search begins outward from a given lane rather than from 0) to place illustrations — see §3.5. This is the one case where a single entity spans multiple contiguous lanes.
 
+### 7.1 People are drawn as lines (added 2026-11-03)
+
+A timeline with many people drawn as closed bars was visually noisy, so a `person` is drawn as a line instead, and spans and groups stay as bars, which also keeps the two kinds apart at a glance:
+
+``` text
+|Isaac Newton ————————————|
+```
+
+- **Birth:** a stroke across the lane at the birth date, as tall as a bar would be (the lane less its inset top and bottom).
+- **The line:** through the middle of the lane, level with the middle of the name's capitals. With the name inside (§7, placement 1), the line runs from just after the name to the death date, with nothing between the birth stroke and the name; where the name is drawn at the far end instead (near the paper's end, §4.1), the line runs from the birth stroke to just before the name. With the name beside or pulled out, the line runs the whole life.
+- **Death:** a stroke across the lane at the death date, as tall as the birth stroke: the cross of the T.
+- **Open or clipped ends:** a life that is ongoing (§3.6), or that runs past either end of the timeline window (§4.2), has the torn edge in place of the stroke at that end, in the document's `open_end_style`. It reaches into the lane from the date, as a bar's cap does, and the line stops where it meets it.
+- **Label placement is unchanged** (§7): the name goes inside, beside or pulled out by the same rules as a bar's label. A pulled-out name's leader starts from the middle of the line. An overrunning name breaks the line and strokes around it, as it would a bar's outline.
+- **For everything else, a person's lane is its bar:** event flags keep clear of the whole stretch of lane, as of a bar (§8.2), and graphs' text keeps clear of it (§15.9). Only poles look at the ink itself: a pole crossing a person is broken around the line and the end strokes, not the whole lane (§8).
+- `fill=` and `fill_pen=` don't apply (§3.7).
+
 ## 8. Events — poles, not bands
 
 `event` entities are **not** placed via lane packing. They are drawn as a straight line ("pole") extending away from the baseline, with the label (and any time label, §3.11) at the far end ("flag").
 
-**Broken poles** (added 2026-10-12). A pole is never drawn through other ink. Wherever it would cross a bar (anywhere inside its outline, whatever its fill), a bar's label, an illustration, a tick label or another event's flag, it is interrupted with a small gap either side and resumes beyond. The stretch beside its own flag is never broken, so the flag stays attached to its pole. A broken pole is normal and not a warning; an author who wants the reader to be sure of an event's date gives it a time label (§3.11). The leader of a pulled-out bar label (§7) is broken by the same rule, except around its own bar and label. Lines may cross lines: a pole and a leader, or two leaders, cross without either being broken.
+**Broken poles** (added 2026-10-12). A pole is never drawn through other ink. Wherever it would cross a bar (anywhere inside its outline, whatever its fill), a person's line or the strokes across its ends (§7.1), a bar's label, an illustration, a tick label or another event's flag, it is interrupted with a small gap either side and resumes beyond. The stretch beside its own flag is never broken, so the flag stays attached to its pole. A broken pole is normal and not a warning; an author who wants the reader to be sure of an event's date gives it a time label (§3.11). The leader of a pulled-out bar label (§7) is broken by the same rule, except around its own bar and label. Lines may cross lines: a pole and a leader, or two leaders, cross without either being broken.
 
 ### 8.1 Pole length (base)
 
@@ -392,7 +409,7 @@ pole_length = max(outer_edge(B) for B in banded entities on same side,
 
 By default a flag points toward later dates; near the far end of the paper it points inward instead (§4.1).
 
-Group conflicting event labels (bounding-box overlap) into clusters via x-sweep. Bars (their whole outline, whatever their priority or fill: settled 2026-10-12), bar labels wherever they are placed and the leaders of pulled-out labels (§7), and illustrations are **fixed obstacles** in this check: an event flag overlapping any of them counts as a conflict to resolve, but only the event moves — the obstacle never does. Within each cluster:
+Group conflicting event labels (bounding-box overlap) into clusters via x-sweep. Bars (their whole outline, whatever their priority or fill: settled 2026-10-12; for a person, the stretch of lane its line spans, §7.1), bar labels wherever they are placed and the leaders of pulled-out labels (§7), and illustrations are **fixed obstacles** in this check: an event flag overlapping any of them counts as a conflict to resolve, but only the event moves — the obstacle never does. Within each cluster:
 
 1.  **Stagger by priority** — highest-priority event gets the tallest pole in the cluster; each subsequent (descending priority) steps down by at least one flag-height (its label plus any time label). A pole's length is never reduced below its §8.1 base/clearance floor — if a lower-priority event's clearance floor exceeds its staircase step, the floor wins. Poles are also lengthened where needed to lift a flag clear of a fixed obstacle.
 2.  **If staggering doesn't fully resolve it** — flip flag orientation (left/right of the pole tip) for cluster members, starting with the **lowest**-priority event first, rechecking after each flip, stopping as soon as the cluster is resolved. A flip that would point a flag off either end of the paper is never made (§4.1).
@@ -469,7 +486,7 @@ timeline ... tick_label_every=10   // override the derived n
 
 1.  Baseline + tick marks (auto-generated, first pen pass — see §10.4)
 2.  Backgrounds: graphs, with their shading, titles and value scales (§15)
-3.  Span / group fills
+3.  Bars, people's lines (§7.1), their labels, and span / group fills
 4.  Event poles + flags (on top of fills)
 5.  Illustrations (fine detail, and by this point nothing should be crossing into their footprint)
 6.  The title and credits, with their illustrations (§16), and notes (§17)
@@ -720,8 +737,9 @@ A **note** is free text, typically a paragraph or two, fixed to the top or botto
 ``` text
 note anchor=start {
     heading "About this timeline"
-    "People are drawn above the line and wars below it. Each bar runs from birth to death,"
-    "or from the start of a war to its end; a torn end means the story carries on."
+    "People are drawn above the line and wars below it. Each person's line runs from birth"
+    "to death, and each war's bar from its start to its end; a torn end means the story"
+    "carries on."
 
     "Dates are Gregorian throughout."
 }

@@ -33,13 +33,13 @@ def test_check_reports_the_title_and_credits(capsys):
 def test_check_reports_notes(capsys):
     assert main(["check", str(EXAMPLES / "notes.axitl")]) == EXIT_OK
     out = capsys.readouterr().out
-    assert "  note:     6 lines, " in out and " tall on the top edge, from 17.4cm to " in out
+    assert "  note:     7 lines, " in out and " tall on the top edge, from 17.4cm to " in out
     assert out.count("  note:     ") == 3
     assert "  note:     4 lines and an illustration, " in out
     assert main(["check", "--json", str(EXAMPLES / "notes.axitl")]) == EXIT_OK
     report = json.loads(capsys.readouterr().out)
     assert [(n["edge"], n["pen"], n["lines"]) for n in report["layout"]["notes"]] == [
-        ("top", "black", 6), ("bottom", "fountain-black", 4), ("bottom", "black", 2),
+        ("top", "black", 7), ("bottom", "fountain-black", 4), ("bottom", "black", 2),
     ]
     assert [Path(n["illustration"]).name if n["illustration"] else None for n in report["layout"]["notes"]] == [
         None, "badge.svg", None,

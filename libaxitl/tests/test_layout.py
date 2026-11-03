@@ -303,6 +303,14 @@ def test_a_pole_is_broken_around_the_bars_it_passes():
     assert segments_in_distance(r, e) == [(0.0, 3.25), (11.0, round(11 + FLAG_H, 3))]
 
 
+def test_a_pole_crossing_a_person_is_broken_only_around_the_line():
+    r = lay(T + '^!!person "big" 1900-1999\n^event "e" 1950\n')
+    e = event(r, "e")
+    # the lane runs 3–11mm from the baseline; its line is at 7mm, and the pole leaves 0.75mm either side
+    (a0, a1), (b0, _) = segments_in_distance(r, e)
+    assert (abs(a0), a1, b0) == (0.0, 6.25, 7.75)
+
+
 def test_flags_are_lifted_clear_of_bars_of_any_priority():
     r = lay(T + '^span "low" 1900-1999\n^!event "e" 1950\n')
     low, e = bar(r, "low"), event(r, "e")
@@ -368,6 +376,15 @@ def test_otherwise_it_is_pulled_out_with_a_45_degree_leader():
     assert ex - ax == pytest.approx(ay - ey) == pytest.approx(5.0)  # 45°, up to the middle of the next lane
     assert b.label.box.x0 == pytest.approx(ex + 0.5)  # pointing at the start of the label
     assert b.leader_segments == (b.leader,)  # nothing in the way
+
+
+def test_a_persons_leader_starts_from_its_line():
+    r = lay(T + f'^!span "Neighbour" 1952-1970\n^person "{LONG}" 1949-1950\n')
+    b = bar(r, LONG)
+    assert b.label_placement is LabelPlacement.PULLED_OUT
+    (ax, ay), (ex, ey) = b.leader
+    assert (ax, ay) == pytest.approx(((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2))
+    assert ex - ax == pytest.approx(ay - ey) == pytest.approx(8.0)  # 45°, from the line to the next lane's middle
 
 
 def test_it_is_pulled_out_leftwards_when_the_paper_ends():

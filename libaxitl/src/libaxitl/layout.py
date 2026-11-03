@@ -159,6 +159,28 @@ class PlacedBar:
         """Draw the open-end cap at the end (§3.6, §4.2)."""
         return self.open_end or self.clipped_end
 
+    @property
+    def is_line(self) -> bool:
+        """A person is drawn as a line through the middle of its lane, not a closed bar (§7.1)."""
+        return self.entity.kind is Kind.PERSON
+
+    @property
+    def line_y(self) -> float:
+        return (self.y0 + self.y1) / 2
+
+    def ink(self, cap_depth: float) -> list[Box]:
+        """Where the bar puts ink, for breaking poles around (§8): a span or group's whole rectangle, but only a
+        person's line and the strokes across each end of it, so a pole crosses a person's lane with one short gap."""
+        if not self.is_line:
+            return [Box(self.x0, self.y0, self.x1, self.y1)]
+        start = cap_depth if self.cap_start else 0.0
+        end = cap_depth if self.cap_end else 0.0
+        return [
+            Box(self.x0, self.line_y, self.x1, self.line_y),
+            Box(self.x0, self.y0, self.x0 + start, self.y1),
+            Box(self.x1 - end, self.y0, self.x1, self.y1),
+        ]
+
 
 @dataclass(frozen=True)
 class PlacedEvent:
@@ -939,7 +961,9 @@ class _Layout:
         later dates where it fits, otherwise towards earlier (§7)."""
         st, text, lanes = self.style, bar.text, self.lanes[bar.side]
         anchor_x = (bar.x0 + bar.x1) / 2
-        anchor_d = self.band(bar.side, bar.lane)[1] - st.bar_inset
+        d_in, d_out = self.band(bar.side, bar.lane)
+        # From the middle of a bar's outer edge, or of a person's line (§7.1).
+        anchor_d = (d_in + d_out) / 2 if bar.entity.kind is Kind.PERSON else d_out - st.bar_inset
         for lane in range(bar.lane + 1, min(bar.lane + st.max_pull_lanes, self.geom[bar.side].capacity - 1) + 1):
             end_d = sum(self.band(bar.side, lane)) / 2  # the lane's middle, where the label's capitals are centred
             rise = end_d - anchor_d
@@ -1451,7 +1475,8 @@ class _Layout:
 
         for bar in bars:
             if bar.side is ev.side:
-                block(Box(bar.x0, bar.y0, bar.x1, bar.y1))
+                for box in bar.ink(st.cap_depth):
+                    block(box)
                 block(bar.label.box)
         for ill in self.ills:
             if ill.side is ev.side:

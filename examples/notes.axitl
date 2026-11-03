@@ -17,8 +17,9 @@ credits max_height=16mm {
 
 note anchor=start {
     heading "About this timeline"
-    "People are drawn above the line and wars below it. Each bar runs from birth to death,"
-    "or from the start of a war to its end; a torn end means the story carries on."
+    "People are drawn above the line and wars below it. Each person's line runs from birth"
+    "to death, and each war's bar from its start to its end; a torn end means the story"
+    "carries on."
 
     "Dates are Gregorian throughout, and every event sits at the start of its day."
 }

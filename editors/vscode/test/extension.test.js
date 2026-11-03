@@ -104,7 +104,8 @@ test('a scale keeps the number typed and offers each unit', async () => {
 test('include names .axitl files and folders beside the document, but not the document itself', async () => {
   const items = await complete('include "|"');
   assert.deepStrictEqual(labels(items), [
-    'century.axitl', 'chernobyl.axitl', 'crash-1929.axitl', 'formatting.axitl', 'labels.axitl', 'notes.axitl', 'reactor-power.axitl', 'title-and-credits.axitl',
+    'century.axitl', 'chernobyl.axitl', 'crash-1929.axitl', 'flight.axitl', 'formatting.axitl',
+    'labels.axitl', 'notes.axitl', 'people.axitl', 'reactor-power.axitl', 'title-and-credits.axitl',
     'common/', 'data/', 'illustrations/',
   ]);
   assert.strictEqual(find(items, 'common/').command.command, 'editor.action.triggerSuggest');
@@ -115,7 +116,7 @@ test('include names .axitl files and folders beside the document, but not the do
 
 test('illustration names .svg files', async () => {
   const items = await complete('event "E" 1900 illustration(illustrations/|)');
-  assert.deepStrictEqual(labels(items), ['apple.svg', 'badge.svg']);
+  assert.deepStrictEqual(labels(items), ['apple.svg', 'badge.svg', 'biplane.svg', 'rocket.svg']);
   assert.strictEqual(items[0].insertText, 'apple.svg');
 });
 

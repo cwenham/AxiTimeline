@@ -55,6 +55,8 @@ def _inside_interval(p: Point, q: Point, box: Box) -> tuple[float, float] | None
 
 
 def _at(p: Point, q: Point, t: float) -> Point:
+    if t == 1.0:  # exactly q, so an uncut polyline isn't split by rounding where one segment meets the next
+        return q
     return (p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t)
 
 

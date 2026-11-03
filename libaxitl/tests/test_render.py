@@ -91,6 +91,43 @@ def test_a_bar_outline_is_closed_and_avoids_its_label():
     assert set(outline.points) == {(bar.x0, bar.y0), (bar.x0, bar.y1), (bar.x1, bar.y1), (bar.x1, bar.y0)}
 
 
+def test_a_person_is_a_line_from_the_name_to_death_with_a_stroke_across_each_end():
+    resolved, d = drawing(T + '^person "P" 1920-1950\n')
+    bar = resolved.bars[0]
+    label = bar.label.box.padded(0.75)
+    lines = [s.points for s in strokes(d, Stage.BARS) if len(s.points) == 2]
+    birth, line, death = lines[:3]
+    assert birth == ((bar.x0, bar.y0), (bar.x0, bar.y1))  # as tall as a bar
+    assert death == ((bar.x1, bar.y0), (bar.x1, bar.y1))
+    y = (bar.y0 + bar.y1) / 2
+    assert line == ((label.x1, y), (bar.x1, y))  # starts after the name: no stub between birth and name
+    assert not any(s.points[0] == s.points[-1] for s in strokes(d, Stage.BARS) if len(s.points) > 2)  # no box
+
+
+def test_a_person_with_a_label_beside_has_the_whole_line():
+    resolved, d = drawing(T + '^person "A long label for a short life" 1950-1951\n')
+    bar = resolved.bars[0]
+    y = (bar.y0 + bar.y1) / 2
+    assert ((bar.x0, y), (bar.x1, y)) in [s.points for s in strokes(d, Stage.BARS)]
+
+
+@pytest.mark.parametrize("style", ["sawtooth", "sine"])
+def test_an_open_or_clipped_life_ends_in_a_torn_edge(style):
+    resolved, d = drawing(T.replace("ticks=off", f"ticks=off open_end_style={style}") + '^person "P" 1850-\n')
+    bar = resolved.bars[0]
+    assert bar.cap_start and bar.cap_end
+    torn = [s for s in strokes(d, Stage.BARS) if len(s.points) > 5 and s.points[0][1] == bar.y0]
+    assert len(torn) == 2
+    for edge in torn:
+        assert edge.points[-1][1] == pytest.approx(bar.y1)
+        assert all(bar.x0 <= x <= bar.x0 + 1.5 + 1e-9 for x, _ in edge.points) or all(
+            bar.x1 - 1.5 - 1e-9 <= x <= bar.x1 for x, _ in edge.points
+        )
+    y = (bar.y0 + bar.y1) / 2
+    line = next(s for s in strokes(d, Stage.BARS) if len(s.points) == 2 and s.points[0][1] == s.points[1][1] == y)
+    assert bar.x1 - 1.5 - 1e-9 <= line.points[1][0] <= bar.x1  # meets the torn edge, doesn't poke through it
+
+
 def test_a_label_running_past_its_bar_breaks_the_outline():
     resolved, d = drawing(T + '^span "a label much longer than its bar" 1900-1902\n')
     bar = resolved.bars[0]
@@ -274,7 +311,7 @@ def test_strokes_are_all_finite():
 
 
 def test_a_bars_fill_is_drawn_in_its_fill_pen_and_plotted_before_other_pens():
-    resolved, d = drawing(T + 'span "S" 1910-1990 black fill=diagonal fill_pen=2H-pencil\nperson "P" 1920-1950 red fill=dots\n')
+    resolved, d = drawing(T + 'span "S" 1910-1990 black fill=diagonal fill_pen=2H-pencil\nspan "P" 1920-1950 red fill=dots\n')
     assert resolved.pens == ("black", "2H-pencil", "red")  # the fill pen straight after the axis pen
     bars = strokes(d, Stage.BARS)
     assert {s.pen for s in bars if s.pen != "red"} == {"black", "2H-pencil"}

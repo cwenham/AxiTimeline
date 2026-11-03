@@ -1,0 +1,46 @@
+// People drawn as lines (language spec §7.1): a stroke across the lane at birth, the name, a line to the
+// death date and a stroke across the lane there. A life still going, or running past either end of the
+// timeline, gets a torn edge instead of the stroke. Spans and groups stay as bars, for contrast.
+timeline start=1840 end=2026 length=60cm width=200 baseline=low
+
+// Born before the timeline starts: a torn edge at the start instead of a birth stroke
+^!!person "Charles Darwin" 1809-1882 green
+^!person "Charles Babbage" 1791-1871 blue
+^person "Isambard Kingdom Brunel" 1806-1859 grey
+
+^!!person "Florence Nightingale" 1820-1910 red
+^!person "Louis Pasteur" 1822-1895 indigo
+^person "James Clerk Maxwell" 1831-1879 blue
+^person "Thomas Edison" 1847-1931 orange
+^person "Nikola Tesla" 1856-1943 violet
+^!!person "Marie Curie" 1867-1934 red
+^!person "Albert Einstein" 1879-1955 blue
+^person "Emmy Noether" 1882-1935 green
+^person "Grace Hopper" 1906-1992 indigo
+^!person "Alan Turing" 1912-1954 black
+^person "Katherine Johnson" 1918-2020 orange
+^person "Richard Feynman" 1918-1988 violet
+^person "Rosalind Franklin" 1920-1958 red
+^person "Peter Higgs" 1929-2024 grey
+^person "Stephen Hawking" 1942-2018 blue
+
+// Still alive: a torn edge at the timeline's end
+^!person "David Attenborough" 1926- green
+^person "Tim Berners-Lee" 1955- indigo
+
+// Labels too long for the life: beside it, or pulled out with a leader from the line
+^person "Yuri Gagarin, the first person in space" 1934-1968 red
+^person "Henry Moseley" 1887-1915 grey
+^person "Emily Brontë" 1818-1848 violet
+^person "Frank Ramsey, philosopher and economist" 1903-1930 green
+vperson "Anne Frank, diarist of the Secret Annex" 1929-1945 orange
+
+// Events crossing people's lines: each pole has a short gap where it crosses a line
+^event "On the Origin of Species" 1859-11-24
+^!event "Apollo 11 lands" 1969-07-20 time_label=day
+^event "The World Wide Web" 1991-08-06
+
+// Spans below, still drawn as bars
+v!!span "First World War" 1914-1918 black fill=diagonal
+v!!span "Second World War" 1939-1945 black fill=diagonal
+v!span "Cold War" 1947-1991 grey

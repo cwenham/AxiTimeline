@@ -343,3 +343,12 @@ def test_a_fill_pen_and_how_a_group_passes_it_on():
 )
 def test_fill_pen_errors(line, code):
     assert code in error_codes(T + line)
+
+
+@pytest.mark.parametrize("params", ["fill=diagonal", "fill_pen=HB-pencil", "fill=solid fill_pen=HB-pencil"])
+def test_a_person_has_nothing_to_fill_so_fill_is_ignored_with_a_warning(params):
+    result = parse(T + f'person "P" 1900-1950 red {params}\n')
+    (warning,) = result.diagnostics
+    assert warning.code == "person-fill" and "ignored" in warning.message
+    (p,) = result.document.entities
+    assert (p.fill, p.fill_pen) == (Fill.NONE, "red")
