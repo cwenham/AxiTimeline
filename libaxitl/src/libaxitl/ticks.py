@@ -4,6 +4,9 @@ Ticks sit at round *time* intervals whose physical spacing lands near a target, 
 a reader recognises. Labels go on the smallest larger rung whose ticks are all ticks of the tick rung, and move
 further up the ladder if the label text would overlap at that spacing.
 
+On a timeline whose start is written in ka, Ma or Ga (§3.3), year ticks count back from 1950 instead, so they
+fall on round numbers of years before present and are labelled that way: ``66 Ma``, ``4.5 Ga``.
+
 All moments are whole seconds on the axis (see :mod:`libaxitl.dates`); the axis origin, 1970-01-01, is a
 midnight, so second, minute and hour ticks are simply multiples of their step.
 """
@@ -11,10 +14,12 @@ midnight, so second, minute and hour ticks are simply multiples of their step.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Callable
 
-from .dates import DateValue, Precision, civil_from_days, days_from_civil, days_in_month
+from .dates import (
+    PRESENT_YEAR, DateValue, Precision, ago_number, ago_unit_for, civil_from_days, days_from_civil, days_in_month,
+)
 
 _FIXED_SECONDS = {"second": 1, "minute": 60, "hour": 3600}
 _NOMINAL_SECONDS = {"second": 1, "minute": 60, "hour": 3600, "day": 86400, "month": 2629746, "year": 31556952}
@@ -32,8 +37,12 @@ _PRECISION = {
 class Rung:
     unit: str  # second, minute, hour, day, month or year
     n: int
+    ago: bool = False  # year ticks counted back from 1950 (round ka, Ma or Ga) rather than from 1 AD
 
     def __str__(self) -> str:
+        for size, word in ((10**9, "billion"), (10**6, "million")):
+            if self.n >= size and self.n % (size // 10) == 0:
+                return f"{ago_number(self.n, 'Ga' if size == 10**9 else 'Ma')} {word} years"
         return f"{self.n} {self.unit}{'' if self.n == 1 else 's'}"
 
     @property
@@ -79,13 +88,16 @@ class Rung:
         return out
 
     def _years(self, t0: int, t1: int) -> list[int]:
-        """Astronomical years whose *written* number (500BC, 1600) is a multiple of n.
+        """Astronomical years whose *written* number (500BC, 1600) is a multiple of n; or, counting back from
+        1950, whose number of years before it is.
 
         Written numbering keeps labels round on both sides of the BC/AD boundary. Since there is no year zero,
         the gap across that boundary is one year short of the others (100BC to 100 is 199 years).
         """
         y0 = civil_from_days(t0 // 86400)[0]
         y1 = civil_from_days(t1 // 86400)[0]
+        if self.ago:
+            return list(range(PRESENT_YEAR - (PRESENT_YEAR - y0) // self.n * self.n, y1 + 1, self.n))
         years = []
         if y0 <= 0:  # BC: written w = 1 - y, so later years have smaller w
             w = (1 - y0) // self.n * self.n
@@ -112,7 +124,7 @@ class Rung:
             return False
         if self.unit == "month":
             return (m - 1) % self.n == 0
-        return m == 1 and _written_year(y) % self.n == 0
+        return m == 1 and self._year_number(y) % self.n == 0
 
     def ordinal(self, t: int) -> int:
         """A count of this rung's ticks, for ``tick_label_every``: a tick is labelled when ordinal % n == 0."""
@@ -123,7 +135,11 @@ class Rung:
             return (d - 1) // self.n  # counts restart each month, so the 1st is always labelled
         if self.unit == "month":
             return (12 * y + m - 1) // self.n
-        return _written_year(y) // self.n
+        return self._year_number(y) // self.n
+
+    def _year_number(self, y: int) -> int:
+        """The number a year is counted by: years before 1950, or as written (1600, 500 for 500BC)."""
+        return PRESENT_YEAR - y if self.ago else _written_year(y)
 
 
 def _written_year(y: int) -> int:
@@ -166,9 +182,16 @@ def nearest_rung(ideal_seconds: float) -> Rung:
     return min(LADDER, key=lambda r: abs(math.log(r.nominal_seconds / ideal_seconds)))
 
 
-def label_text(t: int, precision: Precision) -> str:
-    """A tick label at the precision of its rung (§10.2): 1610, 1986-04, 1986-04-26, 14:00, 01:23, 01:23:44."""
+def label_text(t: int, precision: Precision, ago_step: int | None = None) -> str:
+    """A tick label at the precision of its rung (§10.2): 1610, 1986-04, 1986-04-26, 14:00, 01:23, 01:23:44.
+
+    With ``ago_step`` (the label rung's step in years, on a timeline counting back from 1950), years before 1950
+    in the unit that step reads best in: ``4550 Ma`` for 50-million-year steps, ``4.5 Ga`` for billions.
+    """
     value = DateValue.from_seconds(t, precision)
+    if ago_step is not None:
+        unit = ago_unit_for(ago_step)
+        return f"{ago_number(value.years_before_present, unit)} {unit}"
     if precision <= Precision.DAY:
         return str(value)
     clock = f"{value.hour:02d}:{value.minute:02d}"
@@ -204,18 +227,24 @@ def plan_ticks(
     label_every: int | None,
     measure: Callable[[str], float],
     min_gap_mm: float,
+    ago: bool = False,
 ) -> TickPlan:
-    rung = nearest_rung(target_mm / mm_per_second)
+    """Plan the baseline's ticks. ``ago`` counts year ticks back from 1950 and labels them in ka, Ma or Ga."""
+
+    def counted(r: Rung) -> Rung:
+        return replace(r, ago=True) if ago and r.unit == "year" else r
+
+    rung = counted(nearest_rung(target_mm / mm_per_second))
     times = rung.ticks(t0, t1)
 
-    def marks_for(is_labelled: Callable[[int], bool], precision: Precision) -> list[TickMark]:
+    def marks_for(is_labelled: Callable[[int], bool], precision: Precision, step: int | None) -> list[TickMark]:
         out = []
         for t in times:
             x = x_of(t)
             if not is_labelled(t):
                 out.append(TickMark(t, x, False, None))
                 continue
-            text = label_text(t, precision)
+            text = label_text(t, precision, step)
             width = measure(text)
             out.append(TickMark(t, x, True, text, x - width / 2, width))  # centred on its tick
         return out
@@ -241,13 +270,18 @@ def plan_ticks(
                     marks[inner[0]] = TickMark(n.seconds, n.x, True, None)
         return tuple(marks)
 
+    def ago_step(r: Rung) -> int | None:
+        return r.n if r.ago else None
+
     if label_every is not None:
-        marks = marks_for(lambda t: rung.ordinal(t) % label_every == 0, rung.precision)
+        step = rung.n * label_every if rung.ago else None
+        marks = marks_for(lambda t: rung.ordinal(t) % label_every == 0, rung.precision, step)
         return TickPlan(rung, None, keep_on_paper(marks), coarsened=False, crowded=overlaps(marks))
 
-    candidates = [r for r in LADDER if r.nominal_seconds > rung.nominal_seconds and rung.contains_all_ticks_of(r)]
+    candidates = [counted(r) for r in LADDER
+                  if r.nominal_seconds > rung.nominal_seconds and rung.contains_all_ticks_of(r)]
     for i, label_rung in enumerate(candidates):
-        marks = marks_for(label_rung.has_tick, label_rung.precision)
+        marks = marks_for(label_rung.has_tick, label_rung.precision, ago_step(label_rung))
         if not overlaps(marks):
             return TickPlan(rung, label_rung, keep_on_paper(marks), coarsened=i > 0, crowded=False)
-    return TickPlan(rung, None, tuple(marks_for(lambda t: False, rung.precision)), coarsened=True, crowded=False)
+    return TickPlan(rung, None, tuple(marks_for(lambda t: False, rung.precision, None)), coarsened=True, crowded=False)

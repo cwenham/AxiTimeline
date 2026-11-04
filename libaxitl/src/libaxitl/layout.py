@@ -44,7 +44,10 @@ from .units import Scale, format_number
 
 PHI = (1 + 5**0.5) / 2
 # Seconds in each scale unit. A year is the mean Gregorian year (365.2425 days), so mm/year is exact on average.
-SECONDS_PER_UNIT = {"year": 31556952, "day": 86400, "hour": 3600, "minute": 60, "second": 1}
+SECONDS_PER_UNIT = {
+    "Gyr": 31556952 * 10**9, "Myr": 31556952 * 10**6, "kyr": 31556952 * 10**3,
+    "year": 31556952, "day": 86400, "hour": 3600, "minute": 60, "second": 1,
+}
 AXIS_PEN = "black"
 
 
@@ -1409,7 +1412,7 @@ class _Layout:
 
         plan = plan_ticks(
             self.t0, self.t1, self.x, self.length, self.mm_per_second, self.t.ticks_mm, self.t.tick_label_every,
-            lambda s: text_for(s).width, st.tick_label_spacing,
+            lambda s: text_for(s).width, st.tick_label_spacing, ago=self.t.start.ago_unit is not None,
         )
         self.tick_interval = str(plan.rung)
         self.tick_label_interval = str(plan.label_rung) if plan.label_rung else None
@@ -1659,8 +1662,14 @@ def _union(boxes: list[Box]) -> Box:
 
 
 def _readable_scale(mm_per_second: float, span_seconds: int) -> Scale:
-    """A derived scale in the largest unit that the timeline spans at least two of."""
+    """A derived scale in the largest unit that the timeline spans at least two of. Over years, the rate moves
+    up to thousands, millions or billions of years while it is under 0.1mm a year, so it doesn't read as 0."""
     for unit in ("year", "day", "hour", "minute"):
         if span_seconds >= 2 * SECONDS_PER_UNIT[unit]:
+            if unit == "year":
+                for longer in ("kyr", "Myr", "Gyr"):
+                    if mm_per_second * SECONDS_PER_UNIT[unit] >= 0.1:
+                        break
+                    unit = longer
             return Scale(mm_per_second * SECONDS_PER_UNIT[unit], unit)
     return Scale(mm_per_second, "second")

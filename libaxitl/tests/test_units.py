@@ -49,3 +49,9 @@ def test_number_formatting_is_compact_and_has_no_negative_zero():
     assert format_number(1.25) == "1.25"
     assert format_number(-0.0001) == "0"
     assert format_number(2 / 3) == "0.667"
+
+
+def test_deep_time_scales():
+    assert str(parse_scale("2mm/Myr")) == "2mm/Myr"
+    assert parse_scale("0.5mm/gyr").unit == "Gyr"
+    assert parse_scale("10mm/kyr").unit == "kyr"

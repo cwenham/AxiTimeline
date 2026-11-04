@@ -267,7 +267,7 @@
           }
         },
         {
-          "match": "(?<![^\\s])(time_format)(=)(?:(decimal_year)(?=[\\s{}()]|$|//))?",
+          "match": "(?<![^\\s])(time_format)(=)(?:(decimal_year|ka|Ma|Ga)(?=[\\s{}()]|$|//))?",
           "captures": {
             "1": { "name": "entity.other.attribute-name.axitl" },
             "2": { "name": "punctuation.separator.key-value.axitl" },
@@ -337,8 +337,8 @@
       "name": "support.constant.pen.axitl"
     },
     "year-range": {
-      "comment": "Two bare years joined by -, or an open start. Two digits after the - are a month (1910-12 is December 1910), so that is left to #date.",
-      "match": "(?<![^\\s=])(\\d+)([Bb][Cc][Ee]?)?(-)(?:(?!\\d{2}(?:[\\s{}()]|$|//))(\\d+)([Bb][Cc][Ee]?)?)?(?=[\\s{}()]|$|//)",
+      "comment": "Two bare years (BC, or ka, Ma or Ga before present) joined by -, or an open start. Two digits after the - are a month (1910-12 is December 1910), so that is left to #date.",
+      "match": "(?<![^\\s=])(\\d+(?:\\.\\d+)?)([Bb][Cc][Ee]?|[KkMmGg][Aa])?(-)(?:(?!\\d{2}(?:[\\s{}()]|$|//))(\\d+(?:\\.\\d+)?)([Bb][Cc][Ee]?|[KkMmGg][Aa])?)?(?=[\\s{}()]|$|//)",
       "captures": {
         "1": { "name": "constant.numeric.date.axitl" },
         "2": { "name": "keyword.other.unit.era.axitl" },
@@ -348,8 +348,8 @@
       }
     },
     "date": {
-      "comment": "A date at any precision, or a range of them joined by /, or an open start ending in /.",
-      "match": "(?<![^\\s=])(\\d+)([Bb][Cc][Ee]?)?((?:-\\d{2}(?:-\\d{2}(?:[Tt]\\d{2}(?::\\d{2}(?::\\d{2})?)?(?:[Zz]|[+-]\\d{2}:\\d{2})?)?)?)?)(?:(/)(?:(\\d+)([Bb][Cc][Ee]?)?((?:-\\d{2}(?:-\\d{2}(?:[Tt]\\d{2}(?::\\d{2}(?::\\d{2})?)?(?:[Zz]|[+-]\\d{2}:\\d{2})?)?)?)?))?)?(?=[\\s{}()]|$|//)",
+      "comment": "A date at any precision (or in ka, Ma or Ga before present), or a range of them joined by /, or an open start ending in /.",
+      "match": "(?<![^\\s=])(\\d+(?:\\.\\d+)?)([Bb][Cc][Ee]?|[KkMmGg][Aa])?((?:-\\d{2}(?:-\\d{2}(?:[Tt]\\d{2}(?::\\d{2}(?::\\d{2})?)?(?:[Zz]|[+-]\\d{2}:\\d{2})?)?)?)?)(?:(/)(?:(\\d+(?:\\.\\d+)?)([Bb][Cc][Ee]?|[KkMmGg][Aa])?((?:-\\d{2}(?:-\\d{2}(?:[Tt]\\d{2}(?::\\d{2}(?::\\d{2})?)?(?:[Zz]|[+-]\\d{2}:\\d{2})?)?)?)?))?)?(?=[\\s{}()]|$|//)",
       "captures": {
         "1": { "name": "constant.numeric.date.axitl" },
         "2": { "name": "keyword.other.unit.era.axitl" },

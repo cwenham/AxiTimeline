@@ -7,6 +7,10 @@ makes the calendar arithmetic uniform; the written form always uses the BC suffi
 A date keeps the precision it was written at, because that precision decides what moment it stands for: the
 beginning of the period as a range start or a single point, the end of the period as a range end.
 
+Deep time (§3.3): ``66Ma``, ``4.6Ga`` and ``11.7ka`` are whole numbers of years before 1950, the "present" of
+the before-present convention, so they never move as the years pass. They are year-precision dates that remember
+how they were written, so they read back the same way.
+
 Timezones: a timestamp without one is a literal value on the axis. A timestamp with ``Z`` or an offset is
 converted to UTC, so ``14:00+03:00`` and ``11:00`` are the same moment. (Interpretation; see known-gaps.)
 """
@@ -15,7 +19,8 @@ from __future__ import annotations
 
 import datetime as _dt
 import re
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from decimal import Decimal, InvalidOperation
 from enum import IntEnum
 
 _MONTH_NAMES = (
@@ -30,10 +35,18 @@ _DATE = re.compile(
     r"(?:[Tt](?P<hour>\d{2})(?::(?P<minute>\d{2})(?::(?P<second>\d{2}))?)?"
     r"(?P<tz>[Zz]|[+-]\d{2}:\d{2})?)?)?)?$"
 )
+_AGO_YEAR = r"\d+(?:\.\d+)?(?i:ka|ma|ga)"
+_AGO = re.compile(r"^(?P<number>\d+(?:\.\d+)?)(?P<unit>(?i:ka|ma|ga))$")
 _BARE_YEAR = r"\d+(?i:bce?)?"
-_YEAR_RANGE = re.compile(rf"^({_BARE_YEAR})-({_BARE_YEAR})?$")
+_YEAR_RANGE = re.compile(rf"^({_AGO_YEAR}|{_BARE_YEAR})-({_AGO_YEAR}|{_BARE_YEAR})?$")
 
-DATE_FORMS = "1963, 1963-11, 1963-11-22, 1963-11-22T12:30:00 or 44BC-03-15"
+DATE_FORMS = "1963, 1963-11, 1963-11-22, 1963-11-22T12:30:00, 44BC-03-15 or 66Ma"
+
+PRESENT_YEAR = 1950
+"""The year that ka, Ma and Ga dates count back from: "before present" means before 1950."""
+
+AGO_UNITS = {"ka": 10**3, "Ma": 10**6, "Ga": 10**9}
+"""Thousands, millions and billions of years before :data:`PRESENT_YEAR`."""
 
 
 class DateError(ValueError):
@@ -87,6 +100,18 @@ def _written_year(year: int) -> str:
     return str(year) if year > 0 else f"{1 - year}BC"
 
 
+def ago_number(years_before: int, unit: str) -> str:
+    """``years_before`` 1950 in ``unit`` (ka, Ma or Ga) as a plain number: 66000000 in Ma is ``66``."""
+    value = Decimal(years_before) / AGO_UNITS[unit]
+    text = format(value.normalize(), "f")
+    return "0" if text in ("-0", "0") else text
+
+
+def ago_unit_for(years: int) -> str:
+    """The unit a step of ``years`` reads best in: Ga from a billion years, Ma from a million, ka below that."""
+    return "Ga" if years >= AGO_UNITS["Ga"] else "Ma" if years >= AGO_UNITS["Ma"] else "ka"
+
+
 @dataclass(frozen=True)
 class DateValue:
     """A date as written, at its own precision. ``year`` is astronomical (1 BC = 0)."""
@@ -99,6 +124,12 @@ class DateValue:
     second: int = 0
     precision: Precision = Precision.YEAR
     offset_minutes: int | None = None
+    ago_unit: str | None = field(default=None, compare=False)
+    """ka, Ma or Ga for a date written as years before 1950 (``66Ma``): only how it reads back, not when it is."""
+
+    @property
+    def years_before_present(self) -> int:
+        return PRESENT_YEAR - self.year
 
     def _local_start_seconds(self) -> int:
         return (
@@ -166,6 +197,8 @@ class DateValue:
 
     def __str__(self) -> str:
         """The date in the language's own syntax, at its own precision."""
+        if self.ago_unit is not None:
+            return ago_number(self.years_before_present, self.ago_unit) + self.ago_unit
         text = _written_year(self.year)
         if self.precision >= Precision.MONTH:
             text += f"-{self.month:02d}"
@@ -187,7 +220,9 @@ class DateValue:
         return text
 
     def describe(self) -> str:
-        """A human-readable form for messages, e.g. ``December 1910`` or ``15 March 44 BC``."""
+        """A human-readable form for messages, e.g. ``December 1910``, ``15 March 44 BC`` or ``66 Ma``."""
+        if self.ago_unit is not None:
+            return ago_number(self.years_before_present, self.ago_unit) + " " + self.ago_unit
         year = str(self.year) if self.year > 0 else f"{1 - self.year} BC"
         if self.precision is Precision.YEAR:
             return year
@@ -214,7 +249,10 @@ def time_label_text(value: DateValue, mode: str) -> str:
 
     Never more precise than the date as written, and shown as written (no timezone conversion): year to day
     give the date, hour to sec the time of day, and ``date`` the whole date with a space in place of the T.
+    A date written in ka, Ma or Ga is shown that way, with a space before its unit, whatever the mode.
     """
+    if value.ago_unit is not None:
+        return value.describe()
     if mode == "date":
         return str(value).replace("T", " ")
     precision = min(_TIME_LABEL_PRECISION[mode], value.precision)
@@ -245,6 +283,9 @@ class DateRange:
 
 def parse_date(text: str) -> DateValue:
     """Parse a single date in the language's date grammar."""
+    ago = _AGO.match(text)
+    if ago:
+        return _parse_ago(text, ago)
     m = _DATE.match(text)
     if not m:
         raise DateError(_explain_bad_date(text))
@@ -290,7 +331,26 @@ def parse_date(text: str) -> DateValue:
     return DateValue(year=year, precision=precision, offset_minutes=offset, **fields)
 
 
+def _parse_ago(text: str, m: re.Match[str]) -> DateValue:
+    unit = {u.lower(): u for u in AGO_UNITS}[m.group("unit").lower()]
+    years = Decimal(m.group("number")) * AGO_UNITS[unit]
+    if years != years.to_integral_value():
+        raise DateError(
+            f"'{text}' is {format(years.normalize(), 'f')} years before 1950, part of a year; "
+            f"dates in {unit} must come to a whole number of years"
+        )
+    return DateValue(year=PRESENT_YEAR - int(years), ago_unit=unit)
+
+
 def _explain_bad_date(text: str) -> str:
+    deep = re.match(r"^(\d+(?:\.\d+)?)\s*(k|m|g|b)(?:ya|yr|yrs|a)?(?:\s*(?:bp|ago))?$", text, re.IGNORECASE)
+    if deep and not _AGO.match(text):
+        unit = {"k": "ka", "m": "Ma", "g": "Ga", "b": "Ga"}[deep.group(2).lower()]
+        return f"'{text}': write years before 1950 as a number and ka, Ma or Ga, e.g. {deep.group(1)}{unit}"
+    if re.match(r"^\d+(?:\.\d+)?(?i:ka|ma|ga)-\d{2}(?:\D|$)", text):
+        return f"'{text}': a date in ka, Ma or Ga is a year, with no month or day"
+    if re.match(r"^\d+(?:\.\d+)?(?i:ka|ma|ga)(?i:bce?|ad|ce|bp)$", text):
+        return f"'{text}': ka, Ma and Ga already count back from 1950, so leave off the suffix after them"
     if re.match(r"^\d+(?i:ad|ce)\b", text):
         return f"'{text}': years are AD unless marked BC or BCE, so leave off the AD/CE suffix"
     if re.match(r"^\d+(?i:bce?)?-\d(?:\D|$)|^\d+(?i:bce?)?-\d{2}-\d(?:\D|$)", text):
@@ -319,7 +379,7 @@ def parse_when(text: str) -> DateValue | DateRange:
         first, second = m.group(1), m.group(2)
         if second is None:
             return DateRange(parse_date(first), None)
-        if re.fullmatch(r"\d{2}", second):
+        if re.fullmatch(r"\d{2}", second) and not _AGO.match(first):
             try:
                 return parse_date(text)
             except DateError as exc:

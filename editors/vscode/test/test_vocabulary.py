@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from libaxitl import graphdata, grammar, parser
+from libaxitl.dates import AGO_UNITS
 from libaxitl.fonts import BUILTIN_FONTS, DEFAULT_FONT
 from libaxitl.model import (
     Baseline, Edge, Fill, Horizontal, Kind, LineMode, NoteAnchor, OpenEndStyle, Side, TimeLabel, ValueScaleMode, YScale,
@@ -88,6 +89,7 @@ def test_values():
         assert values[key] == [m.value for m in enum], key
     assert values["value_scale"] == [m.value for m in ValueScaleMode if m is not ValueScaleMode.EVERY]
     assert values["separator"] == list(graphdata.SEPARATORS)
+    assert values["time_format"] == ["decimal_year", *AGO_UNITS]
     assert values["header"] == ["yes", "no"]
     assert values["at"] == values["align"] == [m.value for m in Horizontal]
     assert values["pens"] == ["auto"]
@@ -145,6 +147,11 @@ def test_grammar_highlights_exactly_the_pens():
     ("1910-12", False),  # December 1910, not 1910 to 1912 (language spec §3.3)
     ("1963-11-22", False),
     ("1953-04-01/", False),
+    ("4Ga-2.5Ga", True),
+    ("11.7ka-", True),
+    ("66Ma-2026", True),
+    ("66Ma", False),
+    ("4.6Ga/1969-07-20", False),
 ])
 def test_grammar_shows_a_year_range_separator_only_for_a_range(text, is_year_range):
     assert bool(re.fullmatch(rule("year-range"), text)) is is_year_range

@@ -1,0 +1,15 @@
+// Deep time in thousands of years (language spec §3.3.1): from the last interglacial to now.
+
+timeline start=130ka end=2026 length=1m width=210 time_label=date
+
+!!span "Last interglacial" 130ka-115ka red
+!!span "Last glacial period" 115ka-11.7ka blue
+!!span "Holocene" 11.7ka- green
+span "Last Glacial Maximum" 26.5ka-19ka blue fill=diagonal
+span "Younger Dryas" 12.9ka-11.7ka blue
+
+!event "Toba eruption" 74ka
+event "Lascaux paintings" 17ka
+!event "First farming" 11.5ka
+event "Farming reaches Britain" 6ka
+event "Moon landing" 1969-07-20 time_label=year

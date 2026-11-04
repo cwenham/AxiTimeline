@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable
 
-from .dates import DateError, parse_date
+from .dates import AGO_UNITS, PRESENT_YEAR, DateError, DateValue, parse_date
 from .diagnostics import Diagnostics, SourceLocation
 from .model import GraphPoint
 
@@ -59,7 +59,7 @@ def time_reader(time_format: str | None) -> Callable[[str], int]:
     """A function reading a time cell's text as seconds on the language's axis (§3.3), raising ValueError.
 
     Without a format, the language's own dates, allowing a space in place of the T before a time. With one, the
-    pattern of §15.2, or ``decimal_year``. Raises :class:`FormatError` for a pattern that names no year.
+    pattern of §15.2, ``decimal_year``, or ``ka``, ``Ma`` or ``Ga`` for an age before 1950. Raises :class:`FormatError` for a pattern that names no year.
     """
     if time_format is None:
         def language(text: str) -> int:
@@ -79,6 +79,14 @@ def time_reader(time_format: str | None) -> Callable[[str], int]:
             return start + round((value - year) * (end - start))
 
         return decimal
+    ago = {u.lower(): u for u in AGO_UNITS}.get(time_format.lower())
+    if ago is not None:
+        def before_present(text: str) -> int:
+            if not _NUMBER.match(text):
+                raise ValueError(f"'{text}' isn't a number of {ago} before 1950, such as 66.5")
+            return _fractional_year(PRESENT_YEAR - float(text) * AGO_UNITS[ago])
+
+        return before_present
 
     pattern, i = "", 0
     while i < len(time_format):
@@ -122,6 +130,14 @@ def time_reader(time_format: str | None) -> Callable[[str], int]:
             raise ValueError(f"'{text}' read with time_format=\"{time_format}\" isn't a real date ({exc})") from None
 
     return formatted
+
+
+def _fractional_year(value: float) -> int:
+    """The moment ``value`` (an astronomical year with a fraction, 1958.5) falls on, to the second."""
+    year = math.floor(value)
+    whole = DateValue(year)
+    start, end = whole.first_second(), whole.next_period_start()
+    return start + round((value - year) * (end - start))
 
 
 def number(text: str) -> float | None:

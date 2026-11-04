@@ -44,7 +44,8 @@ const keywords = {
 };
 
 const parameters = {
-  start: 'The first date the timeline shows (required), at any precision: `600BC`, `1986-04-25T14:00:00` (§3.3).',
+  start: 'The first date the timeline shows (required), at any precision: `600BC`, `1986-04-25T14:00:00` (§3.3). ' +
+    'Written in `ka`, `Ma` or `Ga`, such as `4.6Ga`, the ticks count back from 1950 and read `4500 Ma` (§3.3.1).',
   end:
     'The last date the timeline shows (required), or `now`: the moment it is built, truncated to the ' +
     'precision of `start` (§3.6).',
@@ -52,7 +53,8 @@ const parameters = {
     'The finished length along the roll (§4). Give this or `scale=`, not both. A bare number is ' +
     'millimetres; `cm` and `m` work too: `length=15m` (§14).',
   scale:
-    'An explicit rate: `5mm/year`, or per `day`, `hour`, `minute` or `second` (§4). ' +
+    'An explicit rate: `5mm/year`, or per `kyr`, `Myr` or `Gyr` (thousand, million and billion years), or per ' +
+    '`day`, `hour`, `minute` or `second` (§4). ' +
     'Give this or `length=`, not both.',
   width:
     'The finished width across the roll (required): `width=210`. A bare number is millimetres (§§4, 14).',
@@ -157,7 +159,8 @@ const graphParameters = {
   value_column: 'The column holding the values: a number counting from 1 (default 2), or a header name; quote ' +
     'a name with spaces, `"Adj Close"` (§15.2).',
   time_format: 'How the times are written, when not as the language writes dates: a pattern such as ' +
-    '`"MM/DD/YYYY"` or `"DD MMM YYYY"` (YYYY, MM, MMM, MMMM, DD, hh, mm, ss), or `decimal_year` (§15.2).',
+    '`"MM/DD/YYYY"` or `"DD MMM YYYY"` (YYYY, MM, MMM, MMMM, DD, hh, mm, ss), `decimal_year`, or `ka`, `Ma` or ' +
+    '`Ga` for an age before 1950 (§15.2).',
   missing: 'The text marking a gap in the data, such as `-999`, `.` or `***`. Blank cells are always gaps (§15.2).',
   origin: 'The value drawn on the baseline: `0` by default, a number, or `first` for the first value inside ' +
     'the timeline (§15.5).',
@@ -208,7 +211,7 @@ const values = {
   },
   time_label: {
     none: 'No time label (the default). Switches off one inherited from the timeline or a group.',
-    date: 'The date exactly as written, at its own precision: `1986-04-26 01:23:44`, `44BC-03-15`.',
+    date: 'The date exactly as written, at its own precision: `1986-04-26 01:23:44`, `44BC-03-15`, `66 Ma`.',
     year: 'The year: `1939`.',
     month: 'The year and month: `1939-09`.',
     day: 'The full date: `1939-09-01`.',
@@ -257,7 +260,12 @@ const values = {
     start: 'One value scale, near the start of the paper.',
   },
   value_marks: { auto: '3 to 5 round values within those the graph draws (the default).' },
-  time_format: { decimal_year: 'A fractional year, such as `1958.2027` (§15.2).' },
+  time_format: {
+    decimal_year: 'A fractional year, such as `1958.2027` (§15.2).',
+    ka: 'Thousands of years before 1950, such as `11.7` (§15.2).',
+    Ma: 'Millions of years before 1950, such as `66.5` (§15.2).',
+    Ga: 'Billions of years before 1950, such as `4.6` (§15.2).',
+  },
   at: {
     left: 'The illustration to the left of the text (the default for the title).',
     right: 'The illustration to the right of the text (the default for the credits and notes).',

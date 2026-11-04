@@ -96,7 +96,7 @@ test('font names get quotes when none were typed, and a closing quote only when 
 
 test('a scale keeps the number typed and offers each unit', async () => {
   const items = await complete('timeline scale=12|');
-  assert.deepStrictEqual(labels(items), ['12mm/year', '12mm/day', '12mm/hour', '12mm/minute', '12mm/second']);
+  assert.deepStrictEqual(labels(items), ['12mm/year', '12mm/kyr', '12mm/Myr', '12mm/Gyr', '12mm/day', '12mm/hour', '12mm/minute', '12mm/second']);
   const blank = await complete('timeline scale=|');
   assert.strictEqual(find(blank, '5mm/day').insertText.value, '${1:5}mm/day');
 });
@@ -104,8 +104,9 @@ test('a scale keeps the number typed and offers each unit', async () => {
 test('include names .axitl files and folders beside the document, but not the document itself', async () => {
   const items = await complete('include "|"');
   assert.deepStrictEqual(labels(items), [
-    'century.axitl', 'chernobyl.axitl', 'crash-1929.axitl', 'flight.axitl', 'formatting.axitl',
-    'labels.axitl', 'notes.axitl', 'people.axitl', 'reactor-power.axitl', 'title-and-credits.axitl',
+    'century.axitl', 'chernobyl.axitl', 'crash-1929.axitl', 'earth.axitl', 'flight.axitl', 'formatting.axitl',
+    'ice-age.axitl', 'labels.axitl', 'notes.axitl', 'people.axitl', 'reactor-power.axitl',
+    'title-and-credits.axitl',
     'common/', 'data/', 'illustrations/',
   ]);
   assert.strictEqual(find(items, 'common/').command.command, 'editor.action.triggerSuggest');

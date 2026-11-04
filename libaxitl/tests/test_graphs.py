@@ -6,6 +6,7 @@ import math
 import pytest
 
 from libaxitl import AxitlError, Box, Fill, RenderOptions, Stage, draw, layout, parse, parse_date, render
+from libaxitl.dates import DateValue
 from libaxitl.diagnostics import SourceLocation
 from libaxitl.geometry import segment_crosses
 from libaxitl.graphdata import FormatError, time_reader
@@ -565,3 +566,16 @@ def test_a_graphs_shading_is_drawn_in_its_fill_pen_and_plotted_early():
     assert L.pens == ("black", "HB-pencil", "4H-pencil", "red")
     line = set(L.graphs[0].line)
     assert all(s.pen == "HB-pencil" for s in d.strokes if s.points in line)  # the line keeps the graph's pen
+
+
+@pytest.mark.parametrize("fmt, text, years_before", [("Ma", "66", 66_000_000), ("ka", "11.7", 11_700),
+                                                     ("Ga", "4.6", 4_600_000_000), ("ma", "0", 0)])
+def test_ages_before_present(fmt, text, years_before):
+    assert time_reader(fmt)(text) == DateValue(1950 - years_before).first_second()
+
+
+def test_ages_before_present_may_have_any_fraction():
+    half = time_reader("ka")("0.0005")  # half a year before 1950
+    assert half == parse_date("1949-07-02T12:00:00").first_second()
+    with pytest.raises(ValueError, match="number of Ma"):
+        time_reader("Ma")("66Ma")

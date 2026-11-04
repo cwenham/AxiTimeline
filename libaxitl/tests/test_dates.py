@@ -195,3 +195,62 @@ def test_malformed_ranges(text):
 )
 def test_time_label_text(date, mode, text):
     assert time_label_text(parse_date(date), mode) == text
+
+
+# -- deep time (§3.3.1) ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text, year, written",
+    [
+        ("66Ma", 1950 - 66_000_000, "66Ma"),
+        ("4.6Ga", 1950 - 4_600_000_000, "4.6Ga"),
+        ("4.567Ga", 1950 - 4_567_000_000, "4.567Ga"),
+        ("11.7ka", 1950 - 11_700, "11.7ka"),
+        ("0ka", 1950, "0ka"),
+        ("66MA", 1950 - 66_000_000, "66Ma"),  # case-insensitive, read back in the usual case
+        ("4.60Ga", 1950 - 4_600_000_000, "4.6Ga"),
+    ],
+)
+def test_deep_time_counts_back_from_1950(text, year, written):
+    d = parse_date(text)
+    assert (d.year, d.precision, str(d)) == (year, Precision.YEAR, written)
+
+
+def test_deep_time_is_the_same_moment_as_its_calendar_year():
+    assert parse_date("66Ma") == parse_date("65998051BC")  # 1950 - 66,000,000 in astronomical years
+    assert parse_date("1ka").first_second() == parse_date("950").first_second()
+    assert parse_date("66Ma").describe() == "66 Ma"
+
+
+@pytest.mark.parametrize(
+    "text, message",
+    [
+        ("1.2345ka", "whole number of years"),
+        ("66Mya", "e.g. 66Ma"),
+        ("4.6Gyr", "e.g. 4.6Ga"),
+        ("66MaBP", "e.g. 66Ma"),
+        ("66MaBC", "leave off"),
+        ("66Ma-03", "no month or day"),
+    ],
+)
+def test_bad_deep_time(text, message):
+    with pytest.raises(DateError, match=message):
+        parse_date(text)
+
+
+def test_deep_time_ranges():
+    r = parse_when("4Ga-2.5Ga")
+    assert (r.start.year, r.end.year) == (1950 - 4_000_000_000, 1950 - 2_500_000_000)
+    assert r.end.last_second() == DateValue(1950 - 2_500_000_000 + 1).first_second() - 1  # the end of its year
+    assert str(r) == "4Ga-2.5Ga"
+    assert parse_when("11.7ka-").is_open
+    assert parse_when("66Ma-12").end.year == 12  # a range, since a deep-time year has no month
+    assert str(parse_when("66Ma/1969-07-20")) == "66Ma/1969-07-20"
+    with pytest.raises(DateError, match="before it starts"):
+        parse_when("2.5Ga-4Ga")
+
+
+def test_deep_time_labels_read_back_as_written():
+    for mode in ("date", "year", "sec"):
+        assert time_label_text(parse_date("66Ma"), mode) == "66 Ma"

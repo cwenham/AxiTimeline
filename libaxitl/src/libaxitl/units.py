@@ -14,8 +14,9 @@ from decimal import Decimal
 _LENGTH = re.compile(r"^(\d+(?:\.\d*)?|\.\d+)(mm|cm|m)?$")
 _FACTORS = {None: Decimal(1), "mm": Decimal(1), "cm": Decimal(10), "m": Decimal(1000)}
 
-_SCALE = re.compile(r"^(\d+(?:\.\d*)?|\.\d+)mm/(year|day|hour|minute|second)$")
-SCALE_UNITS = ("year", "day", "hour", "minute", "second")
+_SCALE = re.compile(r"^(\d+(?:\.\d*)?|\.\d+)mm/(year|day|hour|minute|second|(?i:kyr|myr|gyr))$")
+SCALE_UNITS = ("year", "kyr", "Myr", "Gyr", "day", "hour", "minute", "second")
+"""A year, then a thousand, a million and a billion years for deep time, then shorter units."""
 
 
 class UnitError(ValueError):
@@ -52,7 +53,8 @@ def parse_scale(text: str) -> Scale:
     if not m:
         units = ", ".join(f"mm/{u}" for u in SCALE_UNITS)
         raise UnitError(f"'{text}' is not a scale; write a rate in millimetres per time unit ({units}), e.g. 5mm/year")
-    return Scale(float(Decimal(m.group(1))), m.group(2))
+    unit = {u.lower(): u for u in SCALE_UNITS}[m.group(2).lower()]
+    return Scale(float(Decimal(m.group(1))), unit)
 
 
 def format_number(value: float, places: int = 3) -> str:

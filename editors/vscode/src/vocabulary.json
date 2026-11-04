@@ -68,12 +68,12 @@
     "origin": ["first"],
     "value_scale": ["off", "start"],
     "value_marks": ["auto"],
-    "time_format": ["decimal_year"],
+    "time_format": ["decimal_year", "ka", "Ma", "Ga"],
     "at": ["left", "right"],
     "align": ["left", "right"],
     "pens": ["auto"],
     "anchor": ["start", "middle", "end"],
     "edge": ["top", "bottom"]
   },
-  "scaleUnits": ["year", "day", "hour", "minute", "second"]
+  "scaleUnits": ["year", "kyr", "Myr", "Gyr", "day", "hour", "minute", "second"]
 }

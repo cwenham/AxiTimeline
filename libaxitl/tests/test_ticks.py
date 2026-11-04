@@ -142,3 +142,49 @@ def test_a_neighbour_gives_way_to_a_shifted_end_label():
     y1601 = next(m for m in p.marks if m.seconds == parse_date("1601").first_second())
     assert (y1601.major, y1601.label) == (True, None)
     assert [m.label for m in p.marks if m.label][:2] == ["1600", "1602"]
+
+
+# -- deep time (§3.3.1) ------------------------------------------------------------------------------------------
+
+
+def deep_plan(first, last, length, label_every=None):
+    t0, t1 = parse_date(first).first_second(), parse_date(last).next_period_start()
+    return plan_ticks(
+        t0, t1, lambda t: length * (t - t0) / (t1 - t0), length, length / (t1 - t0), 3.5, label_every,
+        lambda s: len(s) * 2.0, 1.0, ago=True,
+    )
+
+
+def test_deep_time_ticks_count_back_from_1950():
+    p = deep_plan("4.6Ga", "2026", 3000.0)
+    assert p.rung == Rung("year", 5_000_000, ago=True)
+    first = p.marks[0]
+    assert first.seconds == parse_date("4.6Ga").first_second()
+    assert all(DateValue.from_seconds(m.seconds, Precision.YEAR).years_before_present % 5_000_000 == 0
+               for m in p.marks)
+    labels = [m.label for m in p.marks if m.label]
+    assert labels[:3] == ["4600 Ma", "4550 Ma", "4500 Ma"] and labels[-1] == "0 Ma"
+
+
+@pytest.mark.parametrize(
+    "first, length, labels",
+    [
+        ("4.6Ga", 40.0, ["4 Ga", "2 Ga", "0 Ga"]),  # billion-year labels read in Ga
+        ("20ka", 2000.0, ["20 ka", "19.8 ka", "19.6 ka"]),  # steps under a million years read in ka
+    ],
+)
+def test_deep_time_labels_take_the_unit_of_their_step(first, length, labels):
+    p = deep_plan(first, "1950", length)
+    assert [m.label for m in p.marks if m.label][: len(labels)] == labels
+
+
+def test_deep_time_with_tick_label_every():
+    p = deep_plan("100Ma", "1950", 1000.0, label_every=4)  # 500,000-year ticks, every 4th labelled
+    assert p.rung == Rung("year", 500_000, ago=True)
+    assert [m.label for m in p.marks if m.label][:2] == ["100 Ma", "98 Ma"]
+
+
+def test_big_rungs_read_in_words():
+    assert str(Rung("year", 50_000_000)) == "50 million years"
+    assert str(Rung("year", 1_000_000_000)) == "1 billion years"
+    assert str(Rung("year", 5000)) == "5000 years"

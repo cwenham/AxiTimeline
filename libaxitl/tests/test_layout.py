@@ -418,3 +418,25 @@ def test_flags_clear_leaders_and_pulled_out_labels():
     b, e = bar(r, LONG), event(r, "Event")
     assert not segment_crosses(*b.leader, e.flag_box.padded(0.4))
     assert not e.flag_box.overlaps(b.label.box)
+
+
+def test_a_deep_time_timeline():
+    r = lay('timeline start=4.6Ga end=2026 length=3m width=210\nspan "Archean" 4Ga-2.5Ga\nevent "K-Pg" 66Ma\n')
+    assert r.time_to_position(parse_date("4.6Ga")) == 0.0
+    assert r.time_to_position(parse_date("2.3Ga")) == pytest.approx(1500.0, abs=0.01)
+    assert (str(r.scale), r.tick_interval) == ("0.652mm/Myr", "5 million years")
+    labels = [t.label.text for t in r.ticks if t.label]
+    assert labels[0] == "4600 Ma" and "66 Ma" not in labels and labels[-1] == "0 Ma"
+
+
+def test_a_calendar_start_keeps_calendar_ticks():
+    r = lay('timeline start=1000000BC end=2026 length=1m width=210\nevent "x" 66ka\n')
+    assert [t.label.text for t in r.ticks if t.label][0] == "1000000BC"
+
+
+@pytest.mark.parametrize(
+    "start, length, scale",
+    [("7000000BC", "5m", "0.714mm/kyr"), ("13.8Ga", "1m", "72.464mm/Gyr"), ("1900", "0.63m", "4.961mm/year")],
+)
+def test_derived_scale_moves_up_to_longer_years(start, length, scale):
+    assert str(lay(f"timeline start={start} end=2026 length={length} width=210\n").scale) == scale

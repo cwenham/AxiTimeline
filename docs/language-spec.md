@@ -6,7 +6,7 @@ Status: working draft, reflecting all decisions taken in design discussion so fa
 
 This file (`docs/language-spec.md` in the AxiTimeline repo) is the **canonical copy** of this spec, and changes are made here alongside the code. The claude.ai artifact it began as is superseded.
 
-History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7). Added 2026-11-01: the title and credits (§16), outline fonts converted to SVG fonts (§3.8), `illustration(…)` on an indented continuation line (§3.10), and an illustration's filled shapes hatched and its colours drawn in pens of their own (§3.5). Added the same day: notes, paragraphs of free text on the top or bottom edge (§17), and a title's letters filled with `font_fill=` (§16.1). Revised 2026-11-03: a person is drawn as a line from its name to its death, not a bar (§7.1).
+History: reconciled 2026-09-19, merging the units section (§14) that originated in the interpreter/CLI spec discussion. Revised 2026-10-12 after a full review pass: text-collision rules, paper-edge handling, clipping at the timeline window, event side selection, `now` reproducibility, removal of standalone illustrations, date-grammar tightening, day-scale ticks, and concrete defaults. Moved into the repo 2026-10-12, then amended the same day: fonts (§3.8), the `baseline` default (§4), event identity for duplicates (§5), broken poles with time labels (§§3.11, 8), flags kept clear of bars (§8.2), groups drawn like spans (§9), and bar labels placed beside their bars or pulled out (§7). Added 2026-10-24: backgrounds, starting with graphs (§15), and a separate pen for fills (§3.7). Added 2026-11-01: the title and credits (§16), outline fonts converted to SVG fonts (§3.8), `illustration(…)` on an indented continuation line (§3.10), and an illustration's filled shapes hatched and its colours drawn in pens of their own (§3.5). Added the same day: notes, paragraphs of free text on the top or bottom edge (§17), and a title's letters filled with `font_fill=` (§16.1). Revised 2026-11-03: a person is drawn as a line from its name to its death, not a bar (§7.1). Added 2026-11-04: deep-time dates in `ka`, `Ma` and `Ga` before 1950, with ticks and scales to match (§3.3.1).
 
 ## 1. System overview
 
@@ -54,6 +54,7 @@ One date format, usable anywhere a date is expected, with **freely mixable preci
 1963-11-22                  // year-month-day
 1963-11-22T12:30:00         // full datetime, to the second
 44BC-03-15                  // BC still works at day precision — the Ides of March, 44 BC
+66Ma                        // deep time: 66 million years before present (§3.3.1)
 ```
 
 - Bare numbers default to **AD**; BCE requires an explicit `BC` or `BCE` suffix (either accepted, case-insensitive), attached directly to the year component before any month/day: `509BC`, `44BC-03-15`
@@ -73,6 +74,23 @@ One date format, usable anywhere a date is expected, with **freely mixable preci
 - As a **range start**: beginning of its stated precision (a bare year → Jan 1, 00:00:00; a year-month → the 1st of that month)
 - As a **range end**: end of its stated precision (a bare year → Dec 31, 23:59:59) — this is what makes `1939-1945` still mean "the whole of both years," exactly as it always implicitly did
 - As a **single point** (an `event`'s date): beginning of its stated precision, for predictability
+
+#### 3.3.1 Deep time (added 2026-11-04)
+
+For geological, evolutionary and cosmic timelines, a year can be written as a number of thousands, millions or billions of years **before present**, with the geologists' suffixes `ka`, `Ma` and `Ga` attached directly to the number:
+
+``` text
+11.7ka                      // 11,700 years before present
+66Ma                        // 66 million years before present
+4.6Ga                       // 4.6 billion years before present
+```
+
+- **Present means 1950**, the convention of radiocarbon dating and of before-present dates generally. A fixed present keeps output deterministic: a file built next year plots exactly as it does today, which counting back from `now` would not. `66Ma` is therefore the year 65,998,051 BC, and `0ka` is 1950. At the scales these suffixes are for, the 76 years between 1950 and today don't show
+- Decimals are fine, so long as they come to a **whole number of years**: `4.567Ga` is 4,567,000,000 years, but `1.2345ka` (1,234.5 years) is an error. The suffixes are case-insensitive (`66MA` reads as `66Ma`), and nothing follows them: `66MaBP`, a month, or a day is an error. Other common spellings (`66Mya`, `4.6Gyr`) are errors that suggest the right form
+- A deep-time date has **year precision** and follows the year rules everywhere: as a range start it is the beginning of its year, as a range end the end of it. Two of them, or one and a bare year, make a range with `-`, oldest first: `span "Archean" 4Ga-2.5Ga`, `span "Holocene" 11.7ka-`, `span "Cenozoic" 66Ma-2026`. `/` works as for any date: `66Ma/1969-07-20`
+- They mix freely with calendar dates in the same file, since both land on the same axis. A date remembers which form it was written in, so a time label (§3.11) or message shows it back the same way
+- A timeline whose `start` is written this way is a **deep-time timeline**: its year ticks count back from 1950 and are labelled in `ka`, `Ma` or `Ga` (§10.2). A timeline whose `start` is a calendar year keeps calendar ticks, even when its entities use deep-time dates
+- `scale` has units for deep time: `mm/kyr`, `mm/Myr` and `mm/Gyr` (§4)
 
 Uncertain/approximate dates (e.g. "circa 1600") still get **no special date syntax** — use the plain date for positioning and encode the uncertainty as plain text in the entity's own label, e.g. `event "(c. 1600) Event happened around here" 1600`.
 
@@ -224,7 +242,7 @@ event "Germany invades Poland" 1939-09-01 time_label=day
 
 - An event's flag can carry a second, smaller line under its label giving the event's date or time: `time_label=none|date|year|month|day|hour|min|sec`. It lets the reader place an event exactly, which matters most when its pole is broken (§8) or it sits far from a labelled tick; whether an event needs one is left to the author (added 2026-10-12)
 - Settable on `timeline` (the document default), on a `group` (passed to the events inside it) and on an `event`, with the same inheritance-with-override pattern as `font` (§3.8). `time_label=none` switches off an inherited one. Default: `none`. Giving it on a `person` or `span` is a parse error, since they have no flag
-- Formats follow the tick labels (§10.2): `year` → `1939`, `month` → `1939-09`, `day` → `1939-09-01`; `hour`, `min` and `sec` give the time of day: `01:00`, `01:23`, `01:23:44`. `date` gives the date exactly as written, at its own precision, with a space in place of the `T`: `1986-04-26 01:23:44`, `44BC-03-15`
+- Formats follow the tick labels (§10.2): `year` → `1939`, `month` → `1939-09`, `day` → `1939-09-01`; `hour`, `min` and `sec` give the time of day: `01:00`, `01:23`, `01:23:44`. `date` gives the date exactly as written, at its own precision, with a space in place of the `T`: `1986-04-26 01:23:44`, `44BC-03-15`. An event dated in deep time (§3.3.1) gives its date as written with a space before the unit, `66 Ma`, whatever the precision asked for
 - A time label never claims more precision than the event's date has: `sec` on an event written to the minute gives `01:23`, and `hour` on a date written to the day gives the day, `1986-04-26`. Times are shown as written, without timezone conversion
 - Drawn in the event's font at three-quarters of its `font_size`, aligned with the label on the pole's side. Together the label and time label make up the flag (§8.2)
 
@@ -265,8 +283,8 @@ timeline start=600BC end=2026 length=15m width=210 baseline=low
 - `width` is **required**: it's the `W` that the golden-ratio baseline split resolves against, and the limit the per-side capacity checks measure against. There's no defensible default for it
 - Validating `width` against the plotter's actual travel envelope is the interpreter's job, not the language's — `.axitl` records the intent; `axitime check` is where a width the hardware can't reach should be flagged
 - Exactly one of `scale` or `length` (the finished length of the timeline along the roll, following §14's length convention — `15m`, `1500cm`, and `15000` are equivalent) must be given — mutually exclusive, and one is required (no sensible default for either)
-- `scale`'s unit is an explicit author choice matched to the document's typical content, independent of what precision any individual entity uses (§3.3): `mm/year`, `mm/day`, `mm/hour`, `mm/minute`, or `mm/second`
-- When `length` is given, `scale` is derived once, before layout, by dividing the physical length by the total span, both expressed in the same base unit (the timeline's internal canonical unit is seconds, per §3.3, converted to whatever unit `scale` would otherwise use for display): `scale = length_in_mm / total_span`. The computed scale is surfaced in the build log for sanity-checking before plotting. `length` is often the more natural choice for short, precise timelines, since a defensible mm-per-hour figure is hard to pick blind, whereas "I have 2 metres of paper" is usually already known
+- `scale`'s unit is an explicit author choice matched to the document's typical content, independent of what precision any individual entity uses (§3.3): `mm/year`, `mm/day`, `mm/hour`, `mm/minute`, or `mm/second`, and for deep time (§3.3.1) `mm/kyr`, `mm/Myr` and `mm/Gyr`, per thousand, million and billion years (`Myr`'s capital M matters to a reader, but the unit is accepted in any case). A year is the mean Gregorian year throughout
+- When `length` is given, `scale` is derived once, before layout, by dividing the physical length by the total span, both expressed in the same base unit (the timeline's internal canonical unit is seconds, per §3.3, converted to whatever unit `scale` would otherwise use for display): `scale = length_in_mm / total_span`. The computed scale is surfaced in the build log for sanity-checking before plotting, per year, or per thousand, million or billion years while the rate per year would be under 0.1mm (`0.652mm/Myr`, not `0mm/year`). `length` is often the more natural choice for short, precise timelines, since a defensible mm-per-hour figure is hard to pick blind, whereas "I have 2 metres of paper" is usually already known
 - Everything downstream (lane packing, event poles, label-collision resolution, strip-splitting for the physical plot) consumes whatever `scale` ends up being, whether it was typed directly or derived from `length` — no separate density-checking logic needed, since the existing label-collision fallback chain (§8.2) already catches an overly-dense result either way
 - `baseline` keyword: `high` / `middle` / `low`, describing where the baseline is physically drawn on the paper (not how much room it leaves). Default: `middle`
   - `low` → baseline near bottom edge → most content area is **above** it
@@ -452,8 +470,11 @@ tick_interval  = nearest value on the ladder:
   hours:    1, 2, 3, 6, 12
   days:     1, 2, 5, 10, 15   (day-of-month — see below)
   months:   1, 3, 6
-  years:    1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000, …
+  years:    1, 2, 5, 10, 20, 25, 50, 100, 200, 500, then 1, 2 and 5 times
+            each power of ten up to 5,000,000,000
 ```
+
+On a deep-time timeline (§3.3.1), year rungs count back from 1950 rather than from 1 AD, so a 50-million-year tick falls exactly 50, 100, 150 … million years before present. Their rhythm is otherwise the same; counting back from 1950 has no year zero to skip.
 
 Every rung is a quantity a reader recognises, and every rung divides exactly into *some* larger rung (2 years into 10, 20 years into 100, 15 minutes into 30) — not necessarily the very next one, which is what the labelling rule in §10.2 accounts for.
 
@@ -467,6 +488,7 @@ Every rung is a quantity a reader recognises, and every rung divides exactly int
 - n must also clear the label *text* width. After deriving n from the ladder, check whether labels would physically overlap at the resulting spacing; if so, walk further up the ladder (decades → 50s → centuries) until they clear, and emit a build warning noting the label interval was coarsened
 - Labelled ticks are drawn **longer** than unlabelled ones — standard major/minor ruler graduation
 - Label format follows the precision of the **label** rung, not the tick interval, using the same truncation principle as §3.3: labels on year rungs show `1610`; on month rungs `1986-04`; on day rungs `1986-04-26`; on minute rungs `01:23`. Monthly ticks whose labels have been coarsened to years therefore read `1987`, not `1987-01`
+- On a deep-time timeline (§3.3.1), year labels are years before present in the unit the **label** rung's step reads best in: `Ga` from a step of a billion years, `Ma` from a million, otherwise `ka`, with a space before the unit. Every label on the roll uses the same unit, as on a geological time chart: 50-million-year labels read `4550 Ma`, `4500 Ma`, …; billion-year labels `4 Ga`, `3 Ga`, …; 500-year labels `11.5 ka`, `11 ka`, …
 
 ### 10.3 Parameters (on `timeline`)
 
@@ -546,7 +568,7 @@ graph "Dow Jones Industrial Average" HB-pencil
 | `header=` | `yes`, `no` | `yes` | §15.2 |
 | `separator=` | `comma`, `semicolon`, `tab` | `comma` | §15.2 |
 | `time_column=`, `value_column=` | a column number or header name | `1`, `2` | §15.2 |
-| `time_format=` | a pattern, or `decimal_year` | the language's own dates | §15.2 |
+| `time_format=` | a pattern, `decimal_year`, or `ka`, `Ma`, `Ga` | the language's own dates | §15.2 |
 | `missing=` | the text that marks a gap | blank cells only | §§15.2, 15.3 |
 | `origin=` | a number, or `first` | `0` | §15.5 |
 | `y_scale=` | `linear`, `log` | `linear` | §15.5 |
@@ -581,7 +603,7 @@ graph "Global temperature anomaly, °C" H-pencil
 - With `header=yes`, the first row read names the columns and the data starts on the row after it. With `header=no`, every row read is data.
 - `time_column=` and `value_column=` say where the times and values are. A whole number is a position, counting from 1; anything else is a header name, matched exactly against the header cell with surrounding spaces trimmed. A name with spaces is quoted: `value_column="Adj Close"`. A name with `header=no`, or one the header doesn't have, is an error that lists the header's names. Other columns are ignored.
 - **Times** are written in the language's date syntax (§3.3), with one allowance for CSV: a space may stand in for the `T` before a time (`1986-04-26 01:23:44`, as many sources write it).
-- **`time_format=`** reads times written some other way. It is a pattern in which `YYYY` is the year, `MM` the month's number, `MMM` an English month abbreviation (`Oct`), `MMMM` a full English month name, `DD` the day, and `hh`, `mm` and `ss` the hour, minute and second. Every other character must appear as written. Numbers may have one digit or two, the year up to four; month names ignore case. BC years and two-digit years can't be read this way. So `time_format="MM/DD/YYYY"` reads `10/29/1929`, and `time_format="DD MMM YYYY"` reads `29 Oct 1929`. A time read with a pattern has the precision of the finest part the pattern names. `time_format=decimal_year` reads a fractional year, such as `1958.2027` in climate records, as that fraction of the way through the year, to the second.
+- **`time_format=`** reads times written some other way. It is a pattern in which `YYYY` is the year, `MM` the month's number, `MMM` an English month abbreviation (`Oct`), `MMMM` a full English month name, `DD` the day, and `hh`, `mm` and `ss` the hour, minute and second. Every other character must appear as written. Numbers may have one digit or two, the year up to four; month names ignore case. BC years and two-digit years can't be read this way. So `time_format="MM/DD/YYYY"` reads `10/29/1929`, and `time_format="DD MMM YYYY"` reads `29 Oct 1929`. A time read with a pattern has the precision of the finest part the pattern names. `time_format=decimal_year` reads a fractional year, such as `1958.2027` in climate records, as that fraction of the way through the year, to the second. `time_format=ka`, `Ma` or `Ga` reads an age before present (§3.3.1), as palaeoclimate records give it: with `time_format=Ma`, `66.5` is 66.5 million years before 1950. Ages may have any fraction, and are placed to the second as for `decimal_year`. Written in the language's own syntax, without a `time_format=`, a time can also be a deep-time date such as `66.5Ma`, but then it must come to a whole year.
 - **Values** are numbers, with an optional sign, decimal point and exponent (`-0.5`, `1.2e4`). Thousands separators and decimal commas are errors. A blank value cell, or one that matches `missing=` (spaces trimmed), is a gap (§15.6). A row with a value but no time is an error.
 - Errors and warnings about the data name the file and row (`dow-1928-1932.csv:57`), so `check` and the editor point at the line to fix.
 

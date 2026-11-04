@@ -1,0 +1,30 @@
+// Deep time (language spec §3.3.1): the history of the Earth, in years before present (1950).
+// Because start= is written in Ga, the ticks count back from 1950 and read in Ma.
+
+timeline start=4.6Ga end=2026 length=3m width=210 time_label=date
+
+title "The Earth" subtitle="4.6 billion years on three metres"
+
+!!span "Hadean" 4.6Ga-4Ga grey
+!!span "Archean" 4Ga-2.5Ga grey
+!!span "Proterozoic" 2.5Ga-538.8Ma grey
+!!span "Phanerozoic" 538.8Ma- grey
+
+!group "Phanerozoic eras" 538.8Ma-2026 blue {
+    span "Palaeozoic" 538.8Ma-251.9Ma
+    span "Mesozoic" 251.9Ma-66Ma
+    span "Cenozoic" 66Ma-
+}
+
+span "Cryogenian" 720Ma-635Ma indigo fill=diagonal
+
+!event "Earth forms" 4.54Ga
+event "Moon-forming impact" 4.5Ga
+event "Oldest zircons" 4.4Ga
+!event "Earliest evidence of life" 3.7Ga
+!event "Great Oxidation Event" 2.4Ga red
+event "First eukaryotes" 1.8Ga
+!event "Cambrian explosion" 538.8Ma red
+event "End-Permian extinction" 251.9Ma red
+!event "K-Pg extinction" 66Ma red
+event "Homo sapiens" 300ka
